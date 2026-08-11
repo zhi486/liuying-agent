@@ -1,0 +1,7 @@
+# Docker 构建忽略
+.docker/
+Dockerfile
+docker-compose.yml
+
+# 忽略 .env（含密钥），但保留 .env.example
+.env

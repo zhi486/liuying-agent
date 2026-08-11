@@ -1,0 +1,47 @@
+# Anaconda 环境配置 — AI 跑步伴侣 Python 后端
+# 创建环境：conda env create -f environment.yml
+# 更新环境：conda env update -f environment.yml --prune
+# 激活环境：conda activate healthy-agent
+
+name: healthy-agent
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # === Python 运行时 ===
+  - python=3.12
+
+  # === Web 框架 ===
+  - fastapi>=0.115
+  - uvicorn[standard]>=0.34
+  - starlette>=0.44
+
+  # === LLM API 客户端 ===
+  - httpx>=0.28
+  - pydantic>=2.10
+  - pydantic-settings>=2.7
+
+  # === 数据科学 ===
+  - numpy>=2.2
+  - pandas>=2.2
+  - scipy>=1.15
+
+  # === 异步任务 ===
+  - redis-py>=5.2
+  - celery>=5.4
+
+  # === 开发工具 ===
+  - pip
+  - pytest>=8.3
+  - pytest-asyncio>=0.25
+  - pytest-cov>=6.0
+  - black>=24.10
+  - isort>=5.13
+  - ruff>=0.9
+  - mypy>=1.14
+  - pre-commit>=4.1
+
+  # === pip 依赖（conda 不可用的包） ===
+  - pip:
+      - fish-audio-sdk>=1.0  # Fish Audio TTS API

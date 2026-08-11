@@ -1,0 +1,9 @@
+# Docker 构建用 requirements — 与 environment.yml 保持同步
+fastapi>=0.115
+uvicorn[standard]>=0.34
+httpx>=0.28
+pydantic>=2.10
+pydantic-settings>=2.7
+numpy>=2.2
+pandas>=2.2
+redis>=5.2

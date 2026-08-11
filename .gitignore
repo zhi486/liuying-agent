@@ -37,8 +37,7 @@ htmlcov/
 .docker/
 
 # === Secrets & Config ===
-*.env
-!env.example
+.env
 secrets/
 *.jks
 *.keystore
