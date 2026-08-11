@@ -1,6 +1,6 @@
 # AI 跑步伴侣 — 项目全生命周期追踪
 
-> 最后更新：2026-08-11 | 当前阶段：Phase 1 完成 → Phase 2 准备中
+> 最后更新：2026-08-11 | 当前阶段：Phase 1 完成 + 基础设施就绪
 
 ---
 
@@ -68,3 +68,47 @@
 - 创建 `core/engine/rules/` 下每条规则的独立类 + 单元测试
 - 实现 AndroidTtsEngine 和 FishAudioTtsEngine（复用用户已有 API Key）
 - 如能获取 Keep B5 实机，用 nRF Connect 扫描运动模式下的 BLE 服务
+
+---
+
+### 2026-08-11 会话 2 — 基础设施：Git / Docker / Anaconda
+
+**完成内容：**
+
+1. **Git 初始化**
+   - `git init` + 创建 `.gitignore`（Android + Python + Docker + Secrets）
+   - 创建 `.gitattributes` 跨平台换行符标准化（LF for Kotlin/Python, CRLF for PS1）
+   - 2 个提交：Phase 1 初始提交 → Docker/Conda 配置提交
+
+2. **Docker 化**
+   - `Dockerfile`：多阶段构建，Python 3.12-slim，非 root 用户运行，HEALTHCHECK
+   - `docker-compose.yml`：backend 服务 + 可选 Redis 缓存（profiles: cache）
+   - `.dockerignore` + `.env.example`：安全忽略 .env，提供配置模板
+   - 所有 LLM / Fish Audio 密钥通过环境变量注入
+
+3. **Anaconda Python 环境**
+   - 创建 `environment.yml`：Python 3.12 + FastAPI + NumPy/Pandas/Scipy + Pytest/Black/Ruff
+   - `conda env create` 成功，环境名 `healthy-agent`，位于 `D:\Anaconda_envs\healthy-agent\`
+   - 已验证核心包：FastAPI 0.135.1 / NumPy 2.2.6 / Pandas 2.3.3 / Fish Audio SDK 1.3.0
+
+4. **PyCharm 解释器配置修复**
+   - 问题：PyCharm 2025.2 缺少 `bin/info`，Conda 自动检测失败
+   - 解决：直接编辑 `jdk.table.xml` 注册 `Python 3.12 (healthy-agent)` SDK（CondaSdkFlavor）
+   - 项目 `misc.xml` 指向该 SDK
+   - 需重启 PyCharm 生效
+
+5. **Python 后端骨架**
+   - `backend/app/main.py`：FastAPI 入口 + CORS + lifespan
+   - `backend/app/api/health.py`：`/health` 探活接口
+   - `backend/app/api/coach.py`：`/api/v1/analyze` 占位（Phase 4 实现）
+   - `backend/app/core/config.py`：环境变量驱动配置（LLM Provider / Fish Audio）
+
+**关键决策：**
+1. 选择 Anaconda 而非 pip venv 管理 Python 环境（数据科学包依赖 C 扩展，conda 解析更好）
+2. Docker 镜像以 Python 后端为主，Android 构建用 Gradle wrapper 在宿主机运行
+3. PyCharm 解释器通过直接编辑 `jdk.table.xml` 注册，绕过 UI bug
+
+**下次建议：**
+- 重启 PyCharm 验证解释器切换成功
+- 可继续 Phase 2（规则引擎）或先完善 Python 后端（Phase 4 的 LLM API 接入）
+- 如需本地跑后端：`conda activate healthy-agent && cd backend && uvicorn app.main:app --reload`
