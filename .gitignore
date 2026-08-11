@@ -1,0 +1,49 @@
+# === Android / Gradle ===
+.gradle/
+build/
+*.apk
+*.aab
+*.dex
+*.class
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.iml
+*.ipr
+*.iws
+
+# === IDE ===
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === Python / Anaconda ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+env/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# === Docker ===
+.docker/
+
+# === Secrets & Config ===
+*.env
+!env.example
+secrets/
+*.jks
+*.keystore
+google-services.json
+
+# === OS ===
+*.log
+*.tmp

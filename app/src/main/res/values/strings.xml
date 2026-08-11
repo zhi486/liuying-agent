@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AI 跑步伴侣</string>
+    <string name="start_running">开始跑步</string>
+    <string name="stop_running">结束跑步</string>
+    <string name="pause_running">暂停</string>
+    <string name="resume_running">继续</string>
+    <string name="settings">设置</string>
+    <string name="history">历史记录</string>
+    <string name="channel_running">跑步进行中</string>
+    <string name="channel_description">显示跑步实时数据和状态</string>
+</resources>
