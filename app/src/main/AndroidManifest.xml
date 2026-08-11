@@ -10,6 +10,18 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- 蓝牙扫描需要位置权限（Android <12），maxSdkVersion=30 限制仅旧版本生效 -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+
+    <!-- 声明 BLE 硬件特性 -->
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="false" />
+
+    <!-- 身体传感器（心率等，Android 14+ health 前台服务必需） -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
 
     <!-- 前台服务（跑步保活） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

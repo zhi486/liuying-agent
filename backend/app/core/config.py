@@ -13,8 +13,8 @@ class AppConfig:
     port: int = 8000
     debug: bool = False
 
-    # LLM API（支持多种后端）
-    llm_provider: str = "anthropic"  # anthropic | openai | ollama
+    # LLM API（支持多种后端，默认 Anthropic — 户外可用，不依赖家庭 PC）
+    llm_provider: str = "anthropic"  # anthropic | ollama | openai
     llm_api_key: str = field(default_factory=lambda: os.getenv("LLM_API_KEY", ""))
     llm_model: str = "claude-sonnet-5"
     llm_base_url: str = field(

@@ -25,7 +25,11 @@ import com.healthyagent.running.ui.theme.*
  * 跑步主界面 — 大数字深色仪表盘风格
  */
 @Composable
-fun RunningScreen(viewModel: RunningViewModel) {
+fun RunningScreen(
+    viewModel: RunningViewModel,
+    onOpenHistory: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
     val runState by viewModel.runState.collectAsState()
 
@@ -40,6 +44,8 @@ fun RunningScreen(viewModel: RunningViewModel) {
             sensorStatus = uiState.sensorStatus,
             deviceName = uiState.deviceName,
             elapsedSeconds = uiState.elapsedSeconds,
+            onOpenHistory = onOpenHistory,
+            onOpenSettings = onOpenSettings,
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -114,6 +120,8 @@ private fun StatusBar(
     sensorStatus: ConnectionState,
     deviceName: String,
     elapsedSeconds: Long,
+    onOpenHistory: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -147,13 +155,28 @@ private fun StatusBar(
             )
         }
 
-        // 设备名称
-        if (deviceName.isNotEmpty()) {
-            Text(
-                text = deviceName,
-                color = TextSecondary,
-                fontSize = 13.sp,
-            )
+        // 设备名称 + 历史按钮
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (deviceName.isNotEmpty()) {
+                Text(
+                    text = deviceName,
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+            TextButton(
+                onClick = onOpenHistory,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text("历史", color = PrimaryAccent, fontSize = 13.sp)
+            }
+            TextButton(
+                onClick = onOpenSettings,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+            ) {
+                Text("⚙", color = PrimaryAccent, fontSize = 16.sp)
+            }
         }
     }
 }

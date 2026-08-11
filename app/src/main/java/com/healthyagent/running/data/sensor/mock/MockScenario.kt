@@ -80,6 +80,23 @@ sealed class MockScenario(val name: String) {
     }
 
     /**
+     * 快速测试场景：配速 10:00/km（极快速度累加距离），约 30 秒到 1 公里
+     * 心率逐渐上升 + 步频稳定，适合快速验证语音播报、分段记录等全链路功能
+     */
+    data object SPEED_TEST : MockScenario("快速测试") {
+        override fun pointAt(elapsedSec: Long): ScenarioPoint {
+            // 心率从 110 缓慢上升到 140，模拟真实跑步感觉
+            val hr = 110 + (elapsedSec / 5).toInt().coerceIn(0, 30)
+            return ScenarioPoint(
+                elapsedSec = elapsedSec,
+                hr = hr,
+                cadence = 175,
+                paceSecPerKm = 10.0   // 约 360 km/h 级别速度，纯粹为测试距离累加
+            )
+        }
+    }
+
+    /**
      * 步频骤降场景：模拟长距离后期疲劳导致的步频下降
      */
     data object CADENCE_DROP : MockScenario("步频骤降") {
@@ -93,7 +110,7 @@ sealed class MockScenario(val name: String) {
             return ScenarioPoint(
                 elapsedSec = elapsedSec,
                 hr = 140 + (minutes / 2).toInt().coerceIn(0, 20),
-                cadence = cadence,
+                cadence = cadence.toInt(),
                 paceSecPerKm = 360.0
             )
         }

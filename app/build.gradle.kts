@@ -44,6 +44,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -77,7 +78,7 @@ dependencies {
     implementation("io.insert-koin:koin-android:$koinVersion")
     implementation("io.insert-koin:koin-androidx-compose:$koinVersion")
 
-    // Room 持久化
+    // Room 持久化没反应
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
@@ -86,11 +87,12 @@ dependencies {
     // DataStore 偏好设置
     implementation("androidx.datastore:datastore-preferences:1.1.2")
 
-    // 网络：Retrofit + OkHttp
+    // 网络：Retrofit + OkHttp + kotlinx-serialization
     val retrofitVersion = "2.11.0"
     implementation("com.squareup.retrofit2:retrofit:$retrofitVersion")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
 
     // Timber 日志
     implementation("com.jakewharton.timber:timber:5.0.1")
