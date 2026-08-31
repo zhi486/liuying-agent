@@ -31,3 +31,11 @@
 *.apk binary
 *.aab binary
 *.jar binary
+
+# React / TypeScript - Unix 换行符
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.json text eol=lf
