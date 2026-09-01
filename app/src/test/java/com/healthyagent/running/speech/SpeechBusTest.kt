@@ -1,12 +1,14 @@
 package com.healthyagent.running.speech
 
 import com.healthyagent.running.core.model.RuleTrigger
-import com.healthyagent.running.core.model.RunConfig
+import com.healthyagent.running.core.model.CoachMessage
 import com.healthyagent.running.core.model.Severity
 import com.healthyagent.running.core.model.SpeechPriority
+import com.healthyagent.running.testing.FakeTtsEngine
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -14,36 +16,6 @@ import org.junit.Test
  * SpeechBus 单元测试 — 使用假 TTS 引擎验证仲裁逻辑
  */
 class SpeechBusTest {
-
-    private class FakeTtsEngine : TtsEngine {
-        val spokenTexts = mutableListOf<String>()
-        var shouldFail = false
-        var stopCount = 0
-            private set
-
-        @Volatile
-        override var isSpeaking: Boolean = false
-
-        fun markSpeaking() { isSpeaking = true }
-        fun markDone() { isSpeaking = false }
-
-        override suspend fun speak(text: String, priority: SpeechPriority): Result<Unit> {
-            if (shouldFail) return Result.failure(RuntimeException("模拟 TTS 失败"))
-            isSpeaking = true
-            spokenTexts.add(text)
-            isSpeaking = false
-            return Result.success(Unit)
-        }
-
-        override fun stop() {
-            stopCount++
-            isSpeaking = false
-        }
-
-        override fun shutdown() {
-            isSpeaking = false
-        }
-    }
 
     private fun makeTrigger(
         ruleId: String = "test",
@@ -59,7 +31,7 @@ class SpeechBusTest {
     @Test
     fun `基本播报 — 正常触发 TTS`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = true, ttsMinIntervalSec = 4))
+        val bus = SpeechBus(fakeTts, SpeechPolicy(enabled = true, minIntervalSec = 4))
 
         bus.enqueue(makeTrigger(text = "播报1"))
         assertEquals(1, fakeTts.spokenTexts.size)
@@ -69,7 +41,7 @@ class SpeechBusTest {
     @Test
     fun `ttsEnabled=false — 不播报`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = false))
+        val bus = SpeechBus(fakeTts, SpeechPolicy(enabled = false, minIntervalSec = 4))
 
         bus.enqueue(makeTrigger())
         assertTrue(fakeTts.spokenTexts.isEmpty())
@@ -78,7 +50,7 @@ class SpeechBusTest {
     @Test
     fun `去重 — 4s 内相同文本不重复播报`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = true, ttsMinIntervalSec = 4))
+        val bus = SpeechBus(fakeTts, SpeechPolicy(enabled = true, minIntervalSec = 4))
 
         bus.enqueue(makeTrigger(text = "播报A"))
         bus.enqueue(makeTrigger(text = "播报A"))
@@ -88,7 +60,7 @@ class SpeechBusTest {
     @Test
     fun `去重 — 不同文本可以播报`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = true, ttsMinIntervalSec = 4))
+        val bus = SpeechBus(fakeTts, SpeechPolicy(enabled = true, minIntervalSec = 4))
 
         bus.enqueue(makeTrigger(text = "播报A"))
         bus.enqueue(makeTrigger(text = "播报B"))
@@ -98,7 +70,7 @@ class SpeechBusTest {
     @Test
     fun `优先级 — URGENT 打断当前播报`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = true, ttsMinIntervalSec = 4))
+        val bus = SpeechBus(fakeTts, SpeechPolicy(enabled = true, minIntervalSec = 4))
 
         // 模拟正在播放
         fakeTts.markSpeaking()
@@ -110,7 +82,7 @@ class SpeechBusTest {
     @Test
     fun `优先级 — 同优先级不打断`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = true, ttsMinIntervalSec = 0))
+        val bus = SpeechBus(fakeTts, SpeechPolicy(enabled = true, minIntervalSec = 0))
 
         // 先播放一个 NORMAL
         bus.enqueue(makeTrigger(text = "播报1", priority = SpeechPriority.APP))
@@ -122,7 +94,7 @@ class SpeechBusTest {
     @Test
     fun `stop — 停止当前播报`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = true))
+        val bus = SpeechBus(fakeTts)
 
         bus.stop()
         assertEquals(1, fakeTts.stopCount)
@@ -131,9 +103,48 @@ class SpeechBusTest {
     @Test
     fun `shutdown — 关闭引擎和清理`() = runTest {
         val fakeTts = FakeTtsEngine()
-        val bus = SpeechBus(fakeTts, RunConfig(ttsEnabled = true))
+        val bus = SpeechBus(fakeTts)
 
         bus.shutdown()
         assertFalse(fakeTts.isSpeaking)
+    }
+
+    @Test
+    fun `成功播报后发布具有稳定 ID 的消息`() = runTest {
+        val fakeTts = FakeTtsEngine()
+        val bus = SpeechBus(
+            ttsEngine = fakeTts,
+            newMessageId = { "coach-1" },
+            nowMillis = { 42L },
+        )
+
+        bus.enqueue(makeTrigger(text = "稳住节奏", priority = SpeechPriority.COACH))
+
+        assertEquals(
+            CoachMessage("coach-1", "稳住节奏", SpeechPriority.COACH, 42L),
+            bus.latestMessage.value,
+        )
+    }
+
+    @Test
+    fun `播报失败不发布消息`() = runTest {
+        val fakeTts = FakeTtsEngine().apply { shouldFail = true }
+        val bus = SpeechBus(fakeTts)
+
+        bus.enqueue(makeTrigger(text = "不会上屏"))
+
+        assertNull(bus.latestMessage.value)
+    }
+
+    @Test
+    fun `新会话清除上一条消息但不关闭引擎`() = runTest {
+        val fakeTts = FakeTtsEngine()
+        val bus = SpeechBus(fakeTts, newMessageId = { "coach-1" })
+        bus.enqueue(makeTrigger(text = "上一场消息"))
+
+        bus.resetSession()
+
+        assertNull(bus.latestMessage.value)
+        assertEquals(0, fakeTts.shutdownCount)
     }
 }

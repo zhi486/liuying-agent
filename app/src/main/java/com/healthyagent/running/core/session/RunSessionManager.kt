@@ -87,6 +87,7 @@ class RunSessionManager {
     fun pause() {
         if (_currentState == RunState.RUNNING) {
             _currentState = RunState.PAUSED
+            currentSession = currentSession?.copy(runState = RunState.PAUSED)
         }
     }
 
@@ -94,6 +95,7 @@ class RunSessionManager {
     fun resume() {
         if (_currentState == RunState.PAUSED) {
             _currentState = RunState.RUNNING
+            currentSession = currentSession?.copy(runState = RunState.RUNNING)
         }
     }
 

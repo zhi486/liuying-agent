@@ -97,7 +97,7 @@ val appModule = module {
 
     // ── Phase 2: SpeechBus ──
     single {
-        SpeechBus(ttsEngine = get(), config = get())
+        SpeechBus(ttsEngine = get())
     }
 
     // ── Phase 3: 数据库 ──

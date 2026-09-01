@@ -1,75 +1,85 @@
 package com.healthyagent.running.speech
 
+import com.healthyagent.running.core.model.CoachMessage
 import com.healthyagent.running.core.model.RuleTrigger
-import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.SpeechPriority
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import java.util.UUID
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * 语音播报仲裁总线
- *
- * 负责规则触发 → TTS 播报之间的排队、去重、冷却和优先级打断。
- * 纯 Kotlin + Coroutines，不依赖 Android SDK，可 JVM 单测。
- */
+data class SpeechPolicy(
+    val enabled: Boolean,
+    val minIntervalSec: Int,
+)
+
+/** 规则触发与 TTS 之间的去重、优先级和消息发布总线。 */
 class SpeechBus(
     private val ttsEngine: TtsEngine,
-    private val config: RunConfig,
+    initialPolicy: SpeechPolicy = SpeechPolicy(enabled = true, minIntervalSec = 4),
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val newMessageId: () -> String = { UUID.randomUUID().toString() },
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    /** 文本去重：text → 上次播报时间戳 */
     private val speakHistory = mutableMapOf<String, Long>()
-
-    /** 当前正在播放的优先级 */
+    private val _latestMessage = MutableStateFlow<CoachMessage?>(null)
     private var currentPriority: SpeechPriority? = null
+    private var policy = initialPolicy
 
-    /**
-     * 提交一条规则触发结果到播报队列
-     *
-     * @param trigger 规则触发结果
-     */
+    val latestMessage: StateFlow<CoachMessage?> = _latestMessage.asStateFlow()
+
+    fun configure(policy: SpeechPolicy) {
+        require(policy.minIntervalSec >= 0)
+        this.policy = policy
+    }
+
+    fun resetSession() {
+        speakHistory.clear()
+        _latestMessage.value = null
+    }
+
     suspend fun enqueue(trigger: RuleTrigger) {
-        if (!config.ttsEnabled) return
+        val activePolicy = policy
+        if (!activePolicy.enabled) return
 
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         val lastSpoken = speakHistory[trigger.speakText]
-
-        // 去重：同一文本在最小间隔内不重复播报
-        if (lastSpoken != null && (now - lastSpoken) < config.ttsMinIntervalSec * 1000L) {
+        if (lastSpoken != null && now - lastSpoken < activePolicy.minIntervalSec * 1000L) {
             return
         }
 
-        // 优先级打断：同优先级或更低优先级不打断当前播报
-        val current = currentPriority
-        if (current != null && trigger.ttsPriority.level >= current.level) {
+        val activePriority = currentPriority
+        if (activePriority != null && trigger.ttsPriority.level >= activePriority.level) {
             return
         }
 
-        // URGENT 打断当前播报
         if (trigger.ttsPriority == SpeechPriority.URGENT && ttsEngine.isSpeaking) {
             ttsEngine.stop()
         }
 
         currentPriority = trigger.ttsPriority
-        val result = ttsEngine.speak(trigger.speakText, trigger.ttsPriority)
-
-        result.onSuccess {
-            speakHistory[trigger.speakText] = now
+        try {
+            val result = runCatching {
+                ttsEngine.speak(trigger.speakText, trigger.ttsPriority).getOrThrow()
+            }
+            if (result.isSuccess) {
+                speakHistory[trigger.speakText] = now
+                _latestMessage.value = CoachMessage(
+                    id = newMessageId(),
+                    text = trigger.speakText,
+                    priority = trigger.ttsPriority,
+                    timestampMillis = now,
+                )
+            }
+        } finally {
+            currentPriority = null
         }
-
-        currentPriority = null
     }
 
-    /** 停止所有播报并清空状态 */
     fun stop() {
         ttsEngine.stop()
         currentPriority = null
     }
 
-    /** 释放资源 */
     fun shutdown() {
         ttsEngine.shutdown()
         currentPriority = null

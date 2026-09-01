@@ -117,6 +117,20 @@ class RunSessionManagerTest {
     }
 
     @Test
+    fun `暂停和继续同步当前会话状态`() {
+        val manager = RunSessionManager()
+        manager.startSession(config)
+
+        manager.pause()
+        assertEquals(RunState.PAUSED, manager.currentState)
+        assertEquals(RunState.PAUSED, manager.currentSession?.runState)
+
+        manager.resume()
+        assertEquals(RunState.RUNNING, manager.currentState)
+        assertEquals(RunState.RUNNING, manager.currentSession?.runState)
+    }
+
+    @Test
     fun `resume — 恢复后 onFrame 正常工作`() {
         val manager = RunSessionManager()
         manager.startSession(config)
