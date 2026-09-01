@@ -1,0 +1,12 @@
+{
+  "contractVersion": 1,
+  "type": "event",
+  "id": "00000000-0000-4000-8000-000000000007",
+  "sentAt": "2026-08-26T12:00:08Z",
+  "payload": {
+    "name": "permission.result",
+    "requestId": "00000000-0000-4000-8000-000000000009",
+    "kind": "runningSensors",
+    "granted": true
+  }
+}

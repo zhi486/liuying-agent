@@ -1,0 +1,10 @@
+{
+  "contractVersion": 1,
+  "type": "hello",
+  "id": "00000000-0000-4000-8000-00000000000A",
+  "sentAt": "2026-08-26T12:00:00Z",
+  "payload": {
+    "buildId": "liuying-web-2026.08.26",
+    "supportedContractVersions": [1]
+  }
+}

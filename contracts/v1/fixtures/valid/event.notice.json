@@ -1,0 +1,11 @@
+{
+  "contractVersion": 1,
+  "type": "event",
+  "id": "00000000-0000-4000-8000-000000000008",
+  "sentAt": "2026-08-26T12:00:09Z",
+  "payload": {
+    "name": "notice",
+    "code": "SENSOR_RECONNECTED",
+    "message": "手环已重新连接"
+  }
+}

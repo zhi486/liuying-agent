@@ -1,0 +1,64 @@
+{
+  "contractVersion": 1,
+  "type": "snapshot",
+  "id": "00000000-0000-4000-8000-000000000003",
+  "sentAt": "2026-08-26T12:00:02Z",
+  "payload": {
+    "revision": 7,
+    "generatedAt": "2026-08-26T12:00:02Z",
+    "connection": {
+      "state": "connected",
+      "deviceName": "Mock-KeepB5",
+      "batteryPercent": 86
+    },
+    "session": {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "state": "running",
+      "startedAt": "2026-08-26T11:53:56Z",
+      "targetPaceSecPerKm": 360,
+      "targetDistanceMeters": 5000
+    },
+    "metrics": {
+      "heartRate": 142,
+      "paceSecPerKm": 362,
+      "cadence": 171,
+      "strideLengthCm": 90,
+      "distanceMeters": 1234.5,
+      "elapsedSeconds": 366,
+      "hrZone": "z3",
+      "isDataFresh": true
+    },
+    "latestCoachMessage": {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "text": "节奏很稳，保持轻松呼吸。",
+      "priority": "coach",
+      "timestampMillis": 1787745602000
+    },
+    "settings": {
+      "targetPaceSecPerKm": 360,
+      "targetDistanceKm": 5,
+      "maxHeartRate": 190,
+      "ttsEnabled": true,
+      "ttsMinIntervalSec": 30,
+      "llmEnabled": false,
+      "mockScenario": "EASY_RUN",
+      "coachTone": "balanced",
+      "fishReferenceId": "default",
+      "fishApiKeyConfigured": false,
+      "llmApiKeyConfigured": false,
+      "themePreference": "system",
+      "motionPreference": "system"
+    },
+    "permissions": {
+      "bluetooth": "granted",
+      "bodySensors": "granted",
+      "runningSensors": "granted"
+    },
+    "theme": "night",
+    "motionPolicy": "reduced",
+    "safetyState": {
+      "level": "normal",
+      "message": null
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "contractVersion": 1,
+  "type": "result",
+  "id": "00000000-0000-4000-8000-000000000004",
+  "sentAt": "2026-08-26T12:00:06Z",
+  "payload": {
+    "status": "accepted",
+    "data": null
+  }
+}
