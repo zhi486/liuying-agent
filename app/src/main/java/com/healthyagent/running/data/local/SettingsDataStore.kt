@@ -6,128 +6,115 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.healthyagent.running.core.model.CoachTone
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-/**
- * 用户设置持久化管理器 — DataStore Preferences 封装
- *
- * 提供类型安全的读写接口 + Flow 实时订阅。
- */
-class SettingsDataStore(private val context: Context) {
+/** DataStore Preferences 的原子设置仓库。 */
+class SettingsDataStore(
+    private val dataStore: DataStore<Preferences>,
+) : SettingsRepository {
 
-    // ── 读 ──
+    constructor(context: Context) : this(context.settingsDataStore)
 
-    val targetPaceSecPerKm: Flow<Double?>
-        get() = context.dataStore.data.map { it[KEY_TARGET_PACE] }
+    override val settings: Flow<SettingsSnapshot> = dataStore.data.map(::toSnapshot)
 
-    val targetDistanceKm: Flow<Double?>
-        get() = context.dataStore.data.map { it[KEY_TARGET_DISTANCE] }
+    val targetPaceSecPerKm: Flow<Double?> = settings.map { it.targetPaceSecPerKm }
+    val targetDistanceKm: Flow<Double?> = settings.map { it.targetDistanceKm }
+    val maxHeartRate: Flow<Int> = settings.map { it.maxHeartRate }
+    val ttsEnabled: Flow<Boolean> = settings.map { it.ttsEnabled }
+    val ttsMinIntervalSec: Flow<Int> = settings.map { it.ttsMinIntervalSec }
+    val llmEnabled: Flow<Boolean> = settings.map { it.llmEnabled }
+    val mockScenario: Flow<String> = settings.map { it.mockScenario }
+    val fishApiKey: Flow<String> = settings.map { it.fishApiKey }
+    val fishReferenceId: Flow<String> = settings.map { it.fishReferenceId }
+    val llmApiKey: Flow<String> = settings.map { it.llmApiKey }
 
-    val maxHeartRate: Flow<Int>
-        get() = context.dataStore.data.map { it[KEY_MAX_HR] ?: DEFAULT_MAX_HR }
+    override suspend fun current(): SettingsSnapshot = toSnapshot(dataStore.data.first())
 
-    val ttsEnabled: Flow<Boolean>
-        get() = context.dataStore.data.map { it[KEY_TTS_ENABLED] ?: true }
+    override suspend fun update(patch: SettingsPatch) {
+        val errors = patch.validate()
+        require(errors.isEmpty()) { "设置更新无效：${errors.joinToString()}" }
 
-    val ttsMinIntervalSec: Flow<Int>
-        get() = context.dataStore.data.map { it[KEY_TTS_INTERVAL] ?: DEFAULT_TTS_INTERVAL }
-
-    val llmEnabled: Flow<Boolean>
-        get() = context.dataStore.data.map { it[KEY_LLM_ENABLED] ?: false }
-
-    val mockScenario: Flow<String>
-        get() = context.dataStore.data.map { it[KEY_MOCK_SCENARIO] ?: "EASY_RUN" }
-
-    val fishApiKey: Flow<String>
-        get() = context.dataStore.data.map { it[KEY_FISH_API_KEY] ?: "" }
-
-    val fishReferenceId: Flow<String>
-        get() = context.dataStore.data.map {
-            it[KEY_FISH_REFERENCE_ID] ?: DEFAULT_FISH_REFERENCE_ID
-        }
-
-    val llmApiKey: Flow<String>
-        get() = context.dataStore.data.map { it[KEY_LLM_API_KEY] ?: "" }
-
-    // ── 写（suspend） ──
-
-    suspend fun setTargetPace(secPerKm: Double?) {
-        context.dataStore.edit { prefs ->
-            if (secPerKm != null) prefs[KEY_TARGET_PACE] = secPerKm
-            else prefs.remove(KEY_TARGET_PACE)
-        }
-    }
-
-    suspend fun setTargetDistance(km: Double?) {
-        context.dataStore.edit { prefs ->
-            if (km != null) prefs[KEY_TARGET_DISTANCE] = km
-            else prefs.remove(KEY_TARGET_DISTANCE)
+        dataStore.edit { preferences ->
+            when (val value = patch.targetPaceSecPerKm) {
+                NullableSettingUpdate.Unchanged -> Unit
+                NullableSettingUpdate.Clear -> preferences.remove(KEY_TARGET_PACE)
+                is NullableSettingUpdate.Set -> preferences[KEY_TARGET_PACE] = value.value
+            }
+            when (val value = patch.targetDistanceKm) {
+                NullableSettingUpdate.Unchanged -> Unit
+                NullableSettingUpdate.Clear -> preferences.remove(KEY_TARGET_DISTANCE)
+                is NullableSettingUpdate.Set -> preferences[KEY_TARGET_DISTANCE] = value.value
+            }
+            patch.maxHeartRate?.let { preferences[KEY_MAX_HR] = it }
+            patch.ttsEnabled?.let { preferences[KEY_TTS_ENABLED] = it }
+            patch.ttsMinIntervalSec?.let { preferences[KEY_TTS_INTERVAL] = it }
+            patch.llmEnabled?.let { preferences[KEY_LLM_ENABLED] = it }
+            patch.mockScenario?.let { preferences[KEY_MOCK_SCENARIO] = it }
+            patch.coachTone?.let { preferences[KEY_COACH_TONE] = it.name }
+            patch.fishApiKey?.let { preferences[KEY_FISH_API_KEY] = it }
+            patch.fishReferenceId?.let { preferences[KEY_FISH_REFERENCE_ID] = it }
+            patch.llmApiKey?.let { preferences[KEY_LLM_API_KEY] = it }
+            patch.themePreference?.let { preferences[KEY_THEME_PREFERENCE] = it.name }
+            patch.motionPreference?.let { preferences[KEY_MOTION_PREFERENCE] = it.name }
         }
     }
 
-    suspend fun setMaxHeartRate(hr: Int) {
-        context.dataStore.edit { it[KEY_MAX_HR] = hr }
-    }
+    @Deprecated("使用 current()")
+    suspend fun loadAll(): SettingsSnapshot = current()
 
-    suspend fun setTtsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_TTS_ENABLED] = enabled }
-    }
+    suspend fun setTargetPace(secPerKm: Double?) = update(
+        SettingsPatch(
+            targetPaceSecPerKm = secPerKm?.let { NullableSettingUpdate.Set(it) }
+                ?: NullableSettingUpdate.Clear,
+        ),
+    )
 
-    suspend fun setTtsMinInterval(sec: Int) {
-        context.dataStore.edit { it[KEY_TTS_INTERVAL] = sec }
-    }
+    suspend fun setTargetDistance(km: Double?) = update(
+        SettingsPatch(
+            targetDistanceKm = km?.let { NullableSettingUpdate.Set(it) }
+                ?: NullableSettingUpdate.Clear,
+        ),
+    )
 
-    suspend fun setLlmEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_LLM_ENABLED] = enabled }
-    }
+    suspend fun setMaxHeartRate(hr: Int) = update(SettingsPatch(maxHeartRate = hr))
 
-    suspend fun setMockScenario(scenario: String) {
-        context.dataStore.edit { it[KEY_MOCK_SCENARIO] = scenario }
-    }
+    suspend fun setTtsEnabled(enabled: Boolean) = update(SettingsPatch(ttsEnabled = enabled))
 
-    suspend fun setFishApiKey(key: String) {
-        context.dataStore.edit { it[KEY_FISH_API_KEY] = key }
-    }
+    suspend fun setTtsMinInterval(sec: Int) = update(SettingsPatch(ttsMinIntervalSec = sec))
 
-    suspend fun setFishReferenceId(refId: String) {
-        context.dataStore.edit { it[KEY_FISH_REFERENCE_ID] = refId }
-    }
+    suspend fun setLlmEnabled(enabled: Boolean) = update(SettingsPatch(llmEnabled = enabled))
 
-    suspend fun setLlmApiKey(key: String) {
-        context.dataStore.edit { it[KEY_LLM_API_KEY] = key }
-    }
+    suspend fun setMockScenario(scenario: String) = update(SettingsPatch(mockScenario = scenario))
 
-    // ── 全量读取（用于初始化 RunConfig） ──
+    suspend fun setFishApiKey(key: String) = update(SettingsPatch(fishApiKey = key))
 
-    suspend fun loadAll(): SettingsSnapshot {
-        val prefs = context.dataStore.data
-        var snapshot = SettingsSnapshot()
-        // 收集第一条（当前值）作为快照
-        prefs.collect { p ->
-            snapshot = SettingsSnapshot(
-                targetPaceSecPerKm = p[KEY_TARGET_PACE],
-                targetDistanceKm = p[KEY_TARGET_DISTANCE],
-                maxHeartRate = p[KEY_MAX_HR] ?: DEFAULT_MAX_HR,
-                ttsEnabled = p[KEY_TTS_ENABLED] ?: true,
-                ttsMinIntervalSec = p[KEY_TTS_INTERVAL] ?: DEFAULT_TTS_INTERVAL,
-                llmEnabled = p[KEY_LLM_ENABLED] ?: false,
-                mockScenario = p[KEY_MOCK_SCENARIO] ?: "EASY_RUN",
-                fishApiKey = p[KEY_FISH_API_KEY] ?: "",
-                fishReferenceId = p[KEY_FISH_REFERENCE_ID] ?: DEFAULT_FISH_REFERENCE_ID,
-                llmApiKey = p[KEY_LLM_API_KEY] ?: "",
-            )
-            return@collect // 只取第一条
-        }
-        return snapshot
-    }
+    suspend fun setFishReferenceId(refId: String) = update(SettingsPatch(fishReferenceId = refId))
+
+    suspend fun setLlmApiKey(key: String) = update(SettingsPatch(llmApiKey = key))
+
+    private fun toSnapshot(preferences: Preferences): SettingsSnapshot = SettingsSnapshot(
+        targetPaceSecPerKm = preferences[KEY_TARGET_PACE],
+        targetDistanceKm = preferences[KEY_TARGET_DISTANCE],
+        maxHeartRate = preferences[KEY_MAX_HR] ?: DEFAULT_MAX_HR,
+        ttsEnabled = preferences[KEY_TTS_ENABLED] ?: true,
+        ttsMinIntervalSec = preferences[KEY_TTS_INTERVAL] ?: DEFAULT_TTS_INTERVAL,
+        llmEnabled = preferences[KEY_LLM_ENABLED] ?: false,
+        mockScenario = preferences[KEY_MOCK_SCENARIO] ?: "EASY_RUN",
+        coachTone = preferences[KEY_COACH_TONE].toEnumOrDefault(CoachTone.BALANCED),
+        fishApiKey = preferences[KEY_FISH_API_KEY] ?: "",
+        fishReferenceId = preferences[KEY_FISH_REFERENCE_ID] ?: DEFAULT_FISH_REFERENCE_ID,
+        llmApiKey = preferences[KEY_LLM_API_KEY] ?: "",
+        themePreference = preferences[KEY_THEME_PREFERENCE].toEnumOrDefault(ThemePreference.SYSTEM),
+        motionPreference = preferences[KEY_MOTION_PREFERENCE].toEnumOrDefault(MotionPreference.SYSTEM),
+    )
 
     companion object {
         private val KEY_TARGET_PACE = doublePreferencesKey("target_pace")
@@ -137,29 +124,20 @@ class SettingsDataStore(private val context: Context) {
         private val KEY_TTS_INTERVAL = intPreferencesKey("tts_interval")
         private val KEY_LLM_ENABLED = booleanPreferencesKey("llm_enabled")
         private val KEY_MOCK_SCENARIO = stringPreferencesKey("mock_scenario")
+        private val KEY_COACH_TONE = stringPreferencesKey("coach_tone")
         private val KEY_FISH_API_KEY = stringPreferencesKey("fish_api_key")
         private val KEY_FISH_REFERENCE_ID = stringPreferencesKey("fish_reference_id")
         private val KEY_LLM_API_KEY = stringPreferencesKey("llm_api_key")
+        private val KEY_THEME_PREFERENCE = stringPreferencesKey("theme_preference")
+        private val KEY_MOTION_PREFERENCE = stringPreferencesKey("motion_preference")
 
         const val DEFAULT_MAX_HR = 180
         const val DEFAULT_TTS_INTERVAL = 4
-        /** LIUYING 声音克隆参考 ID（来自 chatbot 项目） */
+
+        /** LIUYING 声音克隆参考 ID。 */
         const val DEFAULT_FISH_REFERENCE_ID = "79b9954c15f24deeab2319ec5f44f3b0"
     }
 }
 
-/**
- * 设置快照 — 用于一次性读取所有设置（初始化 RunConfig 时使用）
- */
-data class SettingsSnapshot(
-    val targetPaceSecPerKm: Double? = null,
-    val targetDistanceKm: Double? = null,
-    val maxHeartRate: Int = SettingsDataStore.DEFAULT_MAX_HR,
-    val ttsEnabled: Boolean = true,
-    val ttsMinIntervalSec: Int = SettingsDataStore.DEFAULT_TTS_INTERVAL,
-    val llmEnabled: Boolean = false,
-    val mockScenario: String = "EASY_RUN",
-    val fishApiKey: String = "",
-    val fishReferenceId: String = SettingsDataStore.DEFAULT_FISH_REFERENCE_ID,
-    val llmApiKey: String = "",
-)
+private inline fun <reified T : Enum<T>> String?.toEnumOrDefault(default: T): T =
+    this?.let { value -> enumValues<T>().firstOrNull { it.name == value } } ?: default

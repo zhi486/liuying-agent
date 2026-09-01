@@ -3,17 +3,17 @@ package com.healthyagent.running.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthyagent.running.ai.LlmConfig
-import com.healthyagent.running.data.local.SettingsDataStore
+import com.healthyagent.running.data.local.NullableSettingUpdate
+import com.healthyagent.running.data.local.SettingsPatch
+import com.healthyagent.running.data.local.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * 设置页 ViewModel — DataStore 双向绑定
- */
+/** 迁移期 Compose 设置页的聚合状态适配器。 */
 class SettingsViewModel(
-    private val settings: SettingsDataStore,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _targetPaceMin = MutableStateFlow("6")
@@ -47,106 +47,103 @@ class SettingsViewModel(
     val llmApiKey: StateFlow<String> = _llmApiKey.asStateFlow()
 
     init {
-        loadSettings()
-    }
-
-    private fun loadSettings() {
         viewModelScope.launch {
-            settings.targetPaceSecPerKm.collect { pace ->
-                if (pace != null) {
+            settingsRepository.settings.collect { snapshot ->
+                snapshot.targetPaceSecPerKm?.let { pace ->
                     _targetPaceMin.value = (pace / 60).toInt().toString()
                     _targetPaceSec.value = (pace % 60).toInt().toString()
                 }
-            }
-        }
-        viewModelScope.launch {
-            settings.targetDistanceKm.collect { dist ->
-                _targetDistance.value = dist?.toString() ?: ""
-            }
-        }
-        viewModelScope.launch {
-            settings.maxHeartRate.collect { hr ->
-                _maxHeartRate.value = hr.toString()
-            }
-        }
-        viewModelScope.launch {
-            settings.ttsEnabled.collect { _ttsEnabled.value = it }
-        }
-        viewModelScope.launch {
-            settings.ttsMinIntervalSec.collect { _ttsMinInterval.value = it.toString() }
-        }
-        viewModelScope.launch {
-            settings.llmEnabled.collect { _llmEnabled.value = it }
-        }
-        viewModelScope.launch {
-            settings.mockScenario.collect { _mockScenario.value = it }
-        }
-        viewModelScope.launch {
-            settings.fishApiKey.collect { _fishApiKey.value = it }
-        }
-        viewModelScope.launch {
-            settings.llmApiKey.collect {
-                _llmApiKey.value = it
-                LlmConfig.apiKey = it  // 同步到 AnthropicLlmClient
+                _targetDistance.value = snapshot.targetDistanceKm?.toString() ?: ""
+                _maxHeartRate.value = snapshot.maxHeartRate.toString()
+                _ttsEnabled.value = snapshot.ttsEnabled
+                _ttsMinInterval.value = snapshot.ttsMinIntervalSec.toString()
+                _llmEnabled.value = snapshot.llmEnabled
+                _mockScenario.value = snapshot.mockScenario
+                _fishApiKey.value = snapshot.fishApiKey
+                _llmApiKey.value = snapshot.llmApiKey
+                LlmConfig.apiKey = snapshot.llmApiKey
             }
         }
     }
-
-    // ── 写入 ──
 
     fun setTargetPace(min: String, sec: String) {
         _targetPaceMin.value = min
         _targetPaceSec.value = sec
         val totalSec = (min.toDoubleOrNull() ?: 0.0) * 60 + (sec.toDoubleOrNull() ?: 0.0)
+        val update = when {
+            min.isBlank() && sec.isBlank() -> NullableSettingUpdate.Clear
+            totalSec in 120.0..1200.0 -> NullableSettingUpdate.Set(totalSec)
+            else -> return
+        }
         viewModelScope.launch {
-            settings.setTargetPace(if (totalSec > 0) totalSec else null)
+            settingsRepository.update(SettingsPatch(targetPaceSecPerKm = update))
         }
     }
 
     fun setTargetDistance(km: String) {
         _targetDistance.value = km
+        val value = km.toDoubleOrNull()
+        val update = when {
+            km.isBlank() -> NullableSettingUpdate.Clear
+            value != null && value in 0.1..200.0 -> NullableSettingUpdate.Set(value)
+            else -> return
+        }
         viewModelScope.launch {
-            settings.setTargetDistance(km.toDoubleOrNull())
+            settingsRepository.update(SettingsPatch(targetDistanceKm = update))
         }
     }
 
     fun setMaxHeartRate(hr: String) {
         _maxHeartRate.value = hr
+        val value = hr.toIntOrNull()?.takeIf { it in 80..240 } ?: return
         viewModelScope.launch {
-            hr.toIntOrNull()?.let { settings.setMaxHeartRate(it) }
+            settingsRepository.update(SettingsPatch(maxHeartRate = value))
         }
     }
 
     fun setTtsEnabled(enabled: Boolean) {
         _ttsEnabled.value = enabled
-        viewModelScope.launch { settings.setTtsEnabled(enabled) }
+        viewModelScope.launch {
+            settingsRepository.update(SettingsPatch(ttsEnabled = enabled))
+        }
     }
 
     fun setTtsMinInterval(sec: String) {
         _ttsMinInterval.value = sec
+        val value = sec.toIntOrNull()?.takeIf { it in 0..300 } ?: return
         viewModelScope.launch {
-            sec.toIntOrNull()?.let { settings.setTtsMinInterval(it) }
+            settingsRepository.update(SettingsPatch(ttsMinIntervalSec = value))
         }
     }
 
     fun setLlmEnabled(enabled: Boolean) {
         _llmEnabled.value = enabled
-        viewModelScope.launch { settings.setLlmEnabled(enabled) }
+        viewModelScope.launch {
+            settingsRepository.update(SettingsPatch(llmEnabled = enabled))
+        }
     }
 
     fun setMockScenario(scenario: String) {
         _mockScenario.value = scenario
-        viewModelScope.launch { settings.setMockScenario(scenario) }
+        viewModelScope.launch {
+            settingsRepository.update(SettingsPatch(mockScenario = scenario))
+        }
     }
 
     fun setFishApiKey(key: String) {
         _fishApiKey.value = key
-        viewModelScope.launch { settings.setFishApiKey(key) }
+        if (key.length > 512) return
+        viewModelScope.launch {
+            settingsRepository.update(SettingsPatch(fishApiKey = key))
+        }
     }
 
     fun setLlmApiKey(key: String) {
         _llmApiKey.value = key
-        LlmConfig.apiKey = key  // 即时生效
-        viewModelScope.launch { settings.setLlmApiKey(key) }
+        if (key.length > 512) return
+        LlmConfig.apiKey = key
+        viewModelScope.launch {
+            settingsRepository.update(SettingsPatch(llmApiKey = key))
+        }
     }
 }

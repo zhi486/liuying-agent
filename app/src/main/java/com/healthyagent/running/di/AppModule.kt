@@ -19,6 +19,7 @@ import com.healthyagent.running.core.session.RunSessionManager
 import com.healthyagent.running.data.local.AppDatabase
 import com.healthyagent.running.data.local.RunSessionDao
 import com.healthyagent.running.data.local.SettingsDataStore
+import com.healthyagent.running.data.local.SettingsRepository
 import com.healthyagent.running.data.repository.RoomRunRepository
 import com.healthyagent.running.data.repository.RunRepository
 import com.healthyagent.running.data.sensor.SensorDataSource
@@ -85,13 +86,10 @@ val appModule = module {
     // ── Phase 2: TTS（双层：本地 Android TTS + Fish Audio 云端声音克隆）──
     single<TtsEngine> {
         val local = AndroidTtsEngine(androidContext())
-        val settings = get<SettingsDataStore>()
-        // 从 DataStore 同步读取 Fish Audio 配置（首次启动返回默认值）
-        val apiKey = runBlocking { settings.fishApiKey.first() }
-        val refId = runBlocking { settings.fishReferenceId.first() }
+        val settings = runBlocking { get<SettingsRepository>().current() }
         val cloud = FishAudioTtsEngine(
-            apiKey = apiKey,
-            referenceId = refId,
+            apiKey = settings.fishApiKey,
+            referenceId = settings.fishReferenceId,
             context = androidContext(),
         )
         CompositeTtsEngine(local = local, cloud = cloud)
@@ -111,6 +109,7 @@ val appModule = module {
     single {
         SettingsDataStore(androidContext())
     }
+    single<SettingsRepository> { get<SettingsDataStore>() }
 
     single<RunSessionDao> {
         get<AppDatabase>().runSessionDao()

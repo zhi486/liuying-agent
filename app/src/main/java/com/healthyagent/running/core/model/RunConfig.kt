@@ -18,4 +18,6 @@ data class RunConfig(
     val ttsMinIntervalSec: Int = 4,
     /** 是否启用 LLM 深度分析 */
     val llmEnabled: Boolean = false,
+    /** 教练表达风格 */
+    val coachTone: CoachTone = CoachTone.BALANCED,
 )
