@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
 describe('App', () => {
-  it('renders the local Liuying shell', () => {
+  it('渲染流萤三屏应用外壳', async () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: '流萤' })).toBeInTheDocument();
-    expect(screen.getByText('正在唤醒你的跑步伴侣')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '跑步' })).toBeVisible();
+    expect(screen.getByRole('navigation', { name: '主要导航' })).toBeVisible();
   });
 });
