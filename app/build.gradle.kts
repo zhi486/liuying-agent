@@ -62,6 +62,7 @@ android {
     }
 
     sourceSets["main"].assets.srcDir(generatedWebAssets)
+    sourceSets["test"].resources.srcDir(rootProject.file("contracts"))
 }
 
 dependencies {
