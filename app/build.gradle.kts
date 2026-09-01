@@ -6,6 +6,18 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val webUiOverride = providers.gradleProperty("webUiEnabled").orNull?.let { raw ->
+    raw.toBooleanStrictOrNull()
+        ?: throw GradleException("webUiEnabled 只能是 true 或 false，实际为：$raw")
+}
+val frontendDir = rootProject.layout.projectDirectory.dir("frontend")
+val generatedWebAssets = layout.buildDirectory.dir("generated/webAssets")
+val corepackExecutable = if (System.getProperty("os.name").startsWith("Windows")) {
+    "corepack.cmd"
+} else {
+    "corepack"
+}
+
 android {
     namespace = "com.healthyagent.running"
     compileSdk = 34
@@ -23,6 +35,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            buildConfigField("boolean", "WEB_UI_ENABLED", (webUiOverride ?: false).toString())
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -30,6 +43,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            buildConfigField("boolean", "WEB_UI_ENABLED", (webUiOverride ?: true).toString())
         }
     }
 
@@ -46,6 +60,8 @@ android {
         compose = true
         buildConfig = true
     }
+
+    sourceSets["main"].assets.srcDir(generatedWebAssets)
 }
 
 dependencies {
@@ -103,4 +119,60 @@ dependencies {
     testImplementation("app.cash.turbine:turbine:1.2.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+}
+
+val installFrontendDependencies by tasks.registering(Exec::class) {
+    workingDir(frontendDir.asFile)
+    commandLine(corepackExecutable, "pnpm", "install", "--frozen-lockfile")
+    inputs.files(
+        frontendDir.file(".node-version"),
+        frontendDir.file(".npmrc"),
+        frontendDir.file("package.json"),
+        frontendDir.file("pnpm-lock.yaml"),
+        frontendDir.file("pnpm-workspace.yaml"),
+    )
+    outputs.dir(frontendDir.dir("node_modules"))
+}
+
+val checkFrontend by tasks.registering(Exec::class) {
+    dependsOn(installFrontendDependencies)
+    workingDir(frontendDir.asFile)
+    commandLine(corepackExecutable, "pnpm", "run", "check")
+    inputs.dir(frontendDir.dir("scripts"))
+    inputs.dir(frontendDir.dir("src"))
+    inputs.files(
+        frontendDir.file(".prettierignore"),
+        frontendDir.file(".prettierrc.json"),
+        frontendDir.file("eslint.config.mjs"),
+        frontendDir.file("index.html"),
+        frontendDir.file("package.json"),
+        frontendDir.file("tsconfig.app.json"),
+        frontendDir.file("tsconfig.json"),
+        frontendDir.file("tsconfig.node.json"),
+        frontendDir.file("vite.config.ts"),
+        frontendDir.file("vitest.config.ts"),
+    )
+}
+
+val verifyFrontendBundle by tasks.registering(Exec::class) {
+    dependsOn(checkFrontend)
+    workingDir(frontendDir.asFile)
+    commandLine(corepackExecutable, "pnpm", "run", "verify:bundle")
+}
+
+val syncWebAssets by tasks.registering(Sync::class) {
+    dependsOn(verifyFrontendBundle)
+    from(frontendDir.dir("dist"))
+    into(generatedWebAssets.map { it.dir("web") })
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(syncWebAssets)
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    if (name == "testDebugUnitTest") {
+        dependsOn(syncWebAssets)
+        systemProperty("web.assets.dir", generatedWebAssets.get().asFile.absolutePath)
+    }
 }
