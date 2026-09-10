@@ -11,8 +11,10 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 class PreparedVoicePlayer(
@@ -84,6 +86,7 @@ class PreparedVoicePlayer(
             return operation.terminal.get()!!.result
         } finally {
             cleanup(operation)
+            withContext(NonCancellable) { operation.cleanupCompleted.await() }
         }
     }
 
@@ -114,22 +117,26 @@ class PreparedVoicePlayer(
     private fun cleanup(operation: Operation) {
         val resources = synchronized(lock) {
             val outcome = operation.terminal.get() ?: return
-            if (operation.settingUp || operation.cleaned) return
-            operation.cleaned = true
-            if (active === operation) active = null
+            if (operation.settingUp || operation.cleanupClaimed) return
+            operation.cleanupClaimed = true
             Triple(operation.player, operation.lease,
                 operation.started && outcome.kind in setOf(TtsEventKind.CANCELLED, TtsEventKind.PLAYBACK_TIMEOUT))
         }
         // start 可能同步回调或重入 stop，必须等它返回后在锁外释放。
         try {
-            if (resources.third) resources.first?.let { runCatching { it.stop() } }
-        } finally {
-            try { resources.first?.let { runCatching { it.release() } } } finally {
-                resources.second?.let {
-                    runCatching { it.release() }
-                    record(DiagnosticEvent.AudioFocusEvent(operation.provider, AudioFocusResult.RELEASED))
+            try {
+                if (resources.third) resources.first?.let { runCatching { it.stop() } }
+            } finally {
+                try { resources.first?.let { runCatching { it.release() } } } finally {
+                    resources.second?.let {
+                        runCatching { it.release() }
+                        record(DiagnosticEvent.AudioFocusEvent(operation.provider, AudioFocusResult.RELEASED))
+                    }
                 }
             }
+        } finally {
+            synchronized(lock) { if (active === operation) active = null }
+            operation.cleanupCompleted.complete(Unit)
         }
     }
 
@@ -139,10 +146,11 @@ class PreparedVoicePlayer(
     private class Operation(val provider: TtsProvider) {
         val terminal = AtomicReference<Outcome?>(null)
         val completion = CompletableDeferred<Outcome>()
+        val cleanupCompleted = CompletableDeferred<Unit>()
         var player: AudioPlayerPort? = null
         var lease: AudioFocusLease? = null
         var settingUp = true
         var started = false
-        var cleaned = false
+        var cleanupClaimed = false
     }
 }

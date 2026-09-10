@@ -80,6 +80,43 @@ class PreparedVoicePlayerTest {
         fixture.assertCleaned(stopCalls = 1)
     }
 
+    @Test fun `旧端口停止阻塞时旧播放等待清理且新播放不能提前启动`() = runTest {
+        val fixture = Fixture()
+        val stopEntered = CountDownLatch(1)
+        val allowStop = CountDownLatch(1)
+        val first = async { fixture.play() }
+        runCurrent()
+        fixture.ports.single().onStop = {
+            stopEntered.countDown()
+            check(allowStop.await(5, TimeUnit.SECONDS))
+        }
+        val stopping = async(Dispatchers.Default) { fixture.player.stop() }
+        var next: kotlinx.coroutines.Deferred<Result<Unit>>? = null
+        try {
+            assertTrue(stopEntered.await(5, TimeUnit.SECONDS))
+            runCurrent()
+            next = async { fixture.play() }
+            runCurrent()
+            assertEquals(Triple(false, 1, 1), Triple(first.isCompleted, fixture.ports.size, fixture.leases.size))
+            assertTrue(next.await().isFailure)
+            assertEquals(0, fixture.ports.single().releases)
+            assertEquals(0, fixture.leases.single().releases)
+        } finally {
+            allowStop.countDown()
+            stopping.await()
+            first.join()
+            next?.cancel()
+            next?.join()
+        }
+        assertTrue(first.isCancelled)
+        fixture.assertCleaned(stopCalls = 1)
+        fixture.onStart = { it.listener.onCompletion() }
+        assertTrue(fixture.play().isSuccess)
+        assertEquals(listOf(1, 0), fixture.ports.map { it.stops })
+        assertEquals(listOf(1, 1), fixture.ports.map { it.releases })
+        assertEquals(listOf(1, 1), fixture.leases.map { it.releases })
+    }
+
     @Test fun `同步完成须等start返回才清理`() = runTest {
         val fixture = Fixture()
         fixture.onStart = { port -> port.listener.onCompletion() }
@@ -224,6 +261,7 @@ class PreparedVoicePlayerTest {
         var starting = false
         var cleanedWhileStarting = false
         var throwOnRelease = false
+        var onStop: () -> Unit = {}
         var startResult = Result.success(Unit)
         override fun start(file: File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener): Result<Unit> {
             this.listener = listener
@@ -232,7 +270,11 @@ class PreparedVoicePlayerTest {
             starting = true
             try { onStart(this); return startResult } finally { starting = false }
         }
-        override fun stop() { stops++; cleanedWhileStarting = cleanedWhileStarting || starting }
+        override fun stop() {
+            stops++
+            cleanedWhileStarting = cleanedWhileStarting || starting
+            onStop()
+        }
         override fun release() {
             releases++
             cleanedWhileStarting = cleanedWhileStarting || starting
