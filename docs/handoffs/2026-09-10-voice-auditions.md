@@ -70,3 +70,35 @@
 16:03：用户回复“方便”后，km-whole只播放一次。播放前USB为device、活动跑步0、小样SHA256一致；实机用例9.097秒、1/1通过（status=0，非跳过），结果`km-whole-20260910-160338.txt`，结束后主App恢复前台。这次播放只用本地文件，未再请求Fish。
 
 最新人工验收：用户确认“可以可以，很满意，很自然”。完整公里数字读法与鼓励衔接通过，作为正式在线整句的自然度基准。无需重播或重新生成小样，允许进入已批准的生产Task 2—7与13句固定音频制作；此反馈不表示正式语音策略已安装。
+
+## 生产实施进度（Task 2已通过，Task 3开工）
+
+试听与已批准计划提交3aeb23b，Task 1独立审查通过。Task 2新增SpeechRequest/Delivery、TtsEngine兼容入口、14条BundledVoiceCatalog与KilometerSpeechFormatter，并接入真实KmSplitRule；文件名为`${ruleId}.mp3`，未知ID不可误匹配，goal_achieved保留独立身份。提交8fd9208、b449097、b288791。前端83/83、全量JVM536/536（b449097）通过；独立审查发现110/1010组合数缺“一”，补2项真实红灯后最小修复，Formatter+Rules定向38/38、前端83/83通过，复审确认修复。最后新增2项后尚未重跑全量，不声称538全量通过。
+
+当前进入Task 3：独立文件播放器、焦点清理与APK内置资源校验。执行台账`.superpowers/sdd/2026-09-10-online-whole-offline-core-voice/progress.md`为恢复入口，已完成Task 1/2不要重新派发。生产DI仍是旧链路，13句资源尚未生成，手机正式包未动、未重播试听，离线新策略尚未可用。
+
+Task 3最新状态：独立播放器与AndroidBundledVoiceStore已提交42a4544，定向31/31、JVM558/558、前端83/83。独立审查发现清理未完成时可能提前返回/放行下一播放；新增latch红灯（预期false/1/1，实际true/2/2）后以e42b96e修复，等待真实清理完成才返回并释放active，定向26/26、前端83/83，复审通过。该新增用例后尚未重跑全量，不宣称559全量通过。内置来源诊断新增bundled，旧wire值保持。
+
+目前进入Task 4限时在线准备/离线路由，BASE e42b96e，Task1—3均完成不要重做。清单最终schema为version=1和entries，每条ruleId/text/fileName/sha256/duration（秒Double），严格拒绝未知字段；真实14MP3仍属Task6未制作。手机未动、生产DI未换，离线新策略仍未安装。
+
+Task 4最新状态：05d0519限时路由已实现，定向42/42、全量580/580、前端83/83。覆盖8/15秒含AI2秒、实际阻塞假HTTP的显式cancel、迟到隔离、URGENT零网络、公里失败静默、目标达成本地、禁读历史cache及取消状态。新增preparation_timeout/skipped_offline诊断。随后发现无句号核心直接接称呼黏连，35e11b1最小插入句间标点，RED后22/22、前端83/83，独立复审通过；最后3项新增后未全量，不声称583全量通过。
+
+当前从35e11b1进入Task5可取消AI后句、Bus/Coordinator/DI正式接线，由/root/implement_task5执行。Task1—4完成不可重派；Task6音频制作及Task7安装未开始。新引擎旧text-only入口受控失败，必须接typed请求；旧FishVoiceLiveTest直接消费者也将适配并保留allow保护。至本检查点未操作手机、未增加真实Fish/AI请求，13句固定音频尚未生成。
+
+## 最新检查点：Task 5完成，Task 6制作中
+
+Task5提交494be97：可取消Anthropic后句、typed SpeechBus实际文本/未播放终态、同公里单事件、URGENT原文、本地/在线生产DI均接通；无AndroidTtsEngine回退构造，生产Fish每事件readCache=false。全量JVM595/595、前端83/83和androidTest编译通过，无真实HTTP或手机测试。设置使用AtomicReference与同步回调即时更新，健康/GPS配置仍按现有跑步冻结。
+
+独立审查发现旧Flow快照可能晚于同步设置接纳而回滚静音/Fish配置；3bd18fa用专用Mutex统一设置写入/读取/接纳，Flow只触发锁内重读。两项闸门测试确定性RED后Coordinator45/45、前端83/83 GREEN，定向复审通过。末次新增2项后未做全量，不声称597全量已跑。
+
+当前Task1—5均complete，Task6由/root/implement_task6从BASE3bd18fa制作真实内置资源：只新增已批准13句并复用core，不操作手机；Task7安装与真机路由验收尚未开始。手机仍旧正式包，不能用代码已移除系统回退推定已安装。恢复以本计划台账及Task6报告/代理状态为准；不要重派已完成任务或重播小样。
+
+## 最新检查点：Task 6完成，Task 7验收中
+
+ef96386已封装14个固定MP3与严格清单：13个新Fish请求各1次全部成功，core原字节复用，合计32.293419秒/529580字节，均48kHz单声道。客户端尝试记录和生成报告不等同服务端计费账单；不重复请求已成功文件。真实规则目录10条+4种会话事件覆盖，资源缺失RED后GREEN2/2；JVM599/599、前端83/83、androidTest编译及主APK构建通过。APK15条目、14hash/schema及暂存字节审计通过，独立规格/质量审查通过。
+
+当前/root/implement_task7仅补真机无声路由和明确allow的内置试听测试并最终构建；controller负责最终审查、备份与覆盖安装、设备执行、人工交互。手机只读检查仍旧主包40ac56...944f、数据库quick_check=ok、1条/active0/2430路线点，尚未安装或播放。ignored check-voice-release-device.mjs的--inspect已通过、--backup未执行；check-voice-release-apk.ps1的BOM/语法已通过，待最终APK完成后实际扫描。Task1—6不要重做，恢复读本计划台账与Task7报告/代理状态。
+
+Task7代码检查点bf101e4：新增VoicePolicyInstrumentedTest（默认5无声、显式allowBundledVoicePreview=true才试听APK内hr_rapid_rise），全量JVM599/599、前端83/83、两个APK构建及原签名验证通过；独立规格/质量测试门通过，尚未真机执行。主APK31136C1EDF97C6F5CF3AE9983376A4D84887151E79032D865433CFF22B9776E4，测试包128F20087FE7AF1106C846486F47B626DBF0F6A3FAD69E686332859EC5C7EFD1；后续修复重建会使这些hash过期，安装须重新核对。
+
+最终只读APK审计发现classes3.dex包含已授权配置中的参考声线ID；安全定位为SettingsDataStore.kt:138的默认常量，261f422基线已有，不是新资源生成带入，也不是Fish API密钥。该项纳入最终全范围审查/统一处置，未输出配置实际值，安装暂停。手机随后USB断开，--settings-check只读检查未能执行，没有读取或改写手机配置；重新连接后应确认参考配置已经持久化，去掉默认字面量不应破坏既有配置。当前未备份、未安装、未播放；原样本与13条已成功生成资产不要重做。
