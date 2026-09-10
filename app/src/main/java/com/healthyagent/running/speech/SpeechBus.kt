@@ -8,6 +8,7 @@ import com.healthyagent.running.diagnostics.DiagnosticLogger
 import com.healthyagent.running.diagnostics.NoOpDiagnosticLogger
 import com.healthyagent.running.diagnostics.SpeechOutcomeReason
 import java.util.UUID
+import kotlin.time.TimeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +35,7 @@ class SpeechBus(
     private val newMessageId: () -> String = { UUID.randomUUID().toString() },
     private val diagnosticLogger: DiagnosticLogger = NoOpDiagnosticLogger,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
     private data class FinishedTerminalKey(
         val sessionGeneration: Long,
@@ -156,7 +158,7 @@ class SpeechBus(
                     val speech = ScheduledSpeech(
                         operationId = ++activeOperationId,
                         sessionGeneration = sessionGeneration,
-                        request = request,
+                        request = request.copy(preparationAcceptedAt = timeSource.markNow()),
                         acceptedAtMillis = now,
                     )
                     activeSpeech = speech
@@ -189,6 +191,7 @@ class SpeechBus(
                 return@synchronized null
             }
 
+            val acceptedRequest = request.copy(preparationAcceptedAt = timeSource.markNow())
             record(trigger, SpeechOutcomeReason.SESSION_STATUS_SCHEDULED)
             if (currentPriority == SpeechPriority.URGENT) {
                 pendingSessionStatus?.let {
@@ -197,7 +200,7 @@ class SpeechBus(
                 pendingSessionStatus = PendingSessionStatus(
                     revision = revision,
                     sessionGeneration = sessionGeneration,
-                    request = request,
+                    request = acceptedRequest,
                 )
                 null
             } else {
@@ -205,7 +208,7 @@ class SpeechBus(
                 val speech = ScheduledSpeech(
                     operationId = ++activeOperationId,
                     sessionGeneration = sessionGeneration,
-                    request = request,
+                    request = acceptedRequest,
                     acceptedAtMillis = now,
                     sessionStatusRevision = revision,
                 )

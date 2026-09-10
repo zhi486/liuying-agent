@@ -1,5 +1,7 @@
 package com.healthyagent.running.speech
 
+import kotlin.time.TimeSource
+
 import com.healthyagent.running.core.model.RuleTrigger
 import com.healthyagent.running.core.model.Severity
 import com.healthyagent.running.core.model.SpeechPriority
@@ -38,7 +40,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `紧急事件零网络直接播放对应固定原文`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val result = fixture.engine.speak(request("hr_z5_danger", SpeechPriority.URGENT, companion = true)).getOrThrow()
         assertEquals(SpeechDelivery("心率过高，请立即放慢", true), result)
         assertEquals(0, fixture.onlineCalls)
@@ -49,7 +51,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `公里在线失败保持静默但同优先级目标达成本地播放`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.client.synthesis = { throw IOException("网络失败") }
         assertEquals(SpeechDelivery("真实公里数据", false), fixture.engine.speak(request("km_split", SpeechPriority.SPLIT)).getOrThrow())
         assertTrue(fixture.opened.isEmpty())
@@ -60,7 +62,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `在线只合成固定核心和可选后句组成的一个文本`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.companion = { "一起继续吧。" }
         val result = fixture.engine.speak(request(companion = true)).getOrThrow()
         assertEquals(listOf("跑步已暂停。一起继续吧。"), fixture.client.texts)
@@ -71,7 +73,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `无句末标点的固定核心与陪伴后句之间补句号`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.companion = { "  开拓者，我会陪着你。  " }
         val result = fixture.engine.speak(request("hr_too_low", companion = true)).getOrThrow()
         val expected = "心率偏低，可以适当加快。开拓者，我会陪着你。"
@@ -81,7 +83,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `空白陪伴后句不向固定核心增加句号`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.companion = { " \n\t " }
         val result = fixture.engine.speak(request("hr_too_low", companion = true)).getOrThrow()
         assertEquals(listOf("心率偏低，可以适当加快"), fixture.client.texts)
@@ -91,7 +93,7 @@ class VoicePolicyTtsEngineTest {
     @Test
     fun `六种句末标点不重复添加且核心不trim`() = runTest {
         for (ending in "。！？.!?") {
-            val fixture = Fixture()
+            val fixture = Fixture(testScheduler.timeSource)
             fixture.companion = { "陪着你。" }
             val original = request("km_split", companion = true)
             val core = "  真实公里数据$ending"
@@ -103,7 +105,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `缺少在线配置固定事件回本地公里静默未知规则不猜本地`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.configured = false
         assertTrue(fixture.engine.speak(request()).getOrThrow().played)
         assertFalse(fixture.engine.speak(request("km_split")).getOrThrow().played)
@@ -113,7 +115,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `本地资源缺失受控失败文本兼容入口不猜固定规则`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.localFile = null
         assertTrue(fixture.engine.speak(request("hr_z5_danger", SpeechPriority.URGENT)).isFailure)
         assertTrue(fixture.engine.speak("心率过高，请立即放慢", SpeechPriority.URGENT).isFailure)
@@ -122,7 +124,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `普通准备在7999未结束8000取消网络后回本地`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val late = CompletableDeferred<File>()
         fixture.client.synthesis = { withContext(NonCancellable) { late.await() } }
         val result = async { fixture.engine.speak(request()) }
@@ -143,7 +145,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `公里准备在14999未结束15000静默并隔离迟到结果`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val late = CompletableDeferred<File>()
         fixture.client.synthesis = { withContext(NonCancellable) { late.await() } }
         val result = async { fixture.engine.speak(request("km_split")) }
@@ -162,7 +164,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `AI两秒期限到后仍合成核心且总准备限制包含AI`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val lateAi = CompletableDeferred<String>()
         fixture.companion = { withContext(NonCancellable) { lateAi.await() } }
         fixture.client.synthesis = { delay(6_001); File("online.mp3") }
@@ -185,7 +187,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `AI失败只省略后句在线播放失败不得本地重播`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.companion = { throw IOException("私密AI错误") }
         fixture.playback = { Result.failure(IOException("播放失败")) }
         assertTrue(fixture.engine.speak(request(companion = true)).isFailure)
@@ -195,7 +197,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `AI服务自身超时仍保留核心合成机会`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.companion = { withTimeout(500) { delay(1_000); "不会返回" } }
         assertTrue(fixture.engine.speak(request(companion = true)).getOrThrow().played)
         assertEquals(listOf("跑步已暂停。"), fixture.client.texts)
@@ -205,7 +207,7 @@ class VoicePolicyTtsEngineTest {
     @Test
     fun `获得文件后的播放不受8秒或15秒准备期限限制`() = runTest {
         for (rule in listOf("session_paused", "km_split")) {
-            val fixture = Fixture()
+            val fixture = Fixture(testScheduler.timeSource)
             val completion = CompletableDeferred<Result<Unit>>()
             val prepareMillis = if (rule == "km_split") 14_999L else 7_999L
             fixture.client.synthesis = { delay(prepareMillis); File("online.mp3") }
@@ -229,7 +231,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `父取消及时取消不可取消的网络且迟到异常不回退`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val late = CompletableDeferred<File>()
         fixture.client.synthesis = { withContext(NonCancellable) { late.await() } }
         val result = async { fixture.engine.speak(request()) }
@@ -247,7 +249,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `父取消播放时立即清除播报状态并等待旧播放器自身结束`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val late = CompletableDeferred<Result<Unit>>()
         fixture.playback = { withContext(NonCancellable) { late.await() } }
         val result = async { fixture.engine.speak(request()) }
@@ -268,7 +270,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `停止旧请求后紧急播放可立即进入旧清理不能关闭它`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val late = CompletableDeferred<File>()
         val completed = CompletableDeferred<Result<Unit>>()
         fixture.client.synthesis = { withContext(NonCancellable) { late.await() } }
@@ -291,7 +293,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `新操作自动使旧播放失效关闭引擎后不再创建资源`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val late = CompletableDeferred<Result<Unit>>()
         fixture.playback = { withContext(NonCancellable) { late.await() } }
         val old = async { fixture.engine.speak(request()) }
@@ -311,7 +313,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `准备超时和离线公里有准确诊断且不暴露原文或网络异常`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         fixture.client.synthesis = { delay(20_000); File("late.mp3") }
         fixture.engine.speak(request("km_split"))
         val kinds = fixture.events.filterIsInstance<DiagnosticEvent.TtsProviderEvent>().map { it.kind.name }
@@ -326,7 +328,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `每次在线操作独享client旧结果不会取消新请求`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val first = Client()
         val second = Client()
         val oldGate = CompletableDeferred<File>()
@@ -352,7 +354,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `阻塞execute在截止时收到显式取消而调用方不等迟到HTTP`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val call = BlockingCall()
         fixture.clientFactory = { OkHttpFishSynthesisClient("fixture", "fixture", temporaryFolder.root, call, readCache = false) }
         val result = async { fixture.engine.speak(request()) }
@@ -375,7 +377,7 @@ class VoicePolicyTtsEngineTest {
 
     @Test
     fun `阻塞execute在父取消时立即收到显式取消`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(testScheduler.timeSource)
         val call = BlockingCall()
         fixture.clientFactory = { OkHttpFishSynthesisClient("fixture", "fixture", temporaryFolder.root, call, readCache = false) }
         val result = async { fixture.engine.speak(request()) }
@@ -398,7 +400,7 @@ class VoicePolicyTtsEngineTest {
     private fun request(rule: String = "session_paused", priority: SpeechPriority = SpeechPriority.APP, companion: Boolean = false) =
         SpeechRequest(RuleTrigger(rule, Severity.INFO, "真实公里数据", priority), companionEnabled = companion)
 
-    private class Fixture {
+    private class Fixture(timeSource: TimeSource) {
         val opened = mutableListOf<String>()
         val players = mutableListOf<Player>()
         val events = mutableListOf<DiagnosticEvent>()
@@ -424,6 +426,7 @@ class VoicePolicyTtsEngineTest {
                 override suspend fun awaitIdle() = Unit
                 override suspend fun flush() = Unit
             },
+            timeSource = timeSource,
         )
     }
 

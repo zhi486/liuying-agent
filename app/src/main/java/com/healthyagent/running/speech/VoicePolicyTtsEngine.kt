@@ -8,6 +8,8 @@ import com.healthyagent.running.diagnostics.SafeDiagnosticSummary
 import com.healthyagent.running.diagnostics.TtsEventKind
 import com.healthyagent.running.diagnostics.TtsProvider
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -25,6 +27,7 @@ class VoicePolicyTtsEngine(
     private val companionTextSource: CompanionTextSource,
     private val playerFactory: () -> VoiceFilePlayer,
     private val diagnosticLogger: DiagnosticLogger,
+    private val timeSource: TimeSource = TimeSource.Monotonic,
 ) : TtsEngine {
     private val lock = Any()
     private var active: Operation? = null
@@ -41,6 +44,8 @@ class VoicePolicyTtsEngine(
     override suspend fun speak(request: SpeechRequest): Result<SpeechDelivery> {
         val context = currentCoroutineContext()
         context.ensureActive()
+        val acceptedRequest = if (request.preparationAcceptedAt != null) request
+            else request.copy(preparationAcceptedAt = timeSource.markNow())
         val operation = Operation(Job(context[Job]))
         val previous = synchronized(lock) {
             if (closed) {
@@ -57,7 +62,7 @@ class VoicePolicyTtsEngine(
                 val core = bundled?.text ?: request.trigger.speakText
                 val urgent = request.trigger.ttsPriority == SpeechPriority.URGENT
                 val kilometer = ruleId == "km_split"
-                val online = if (urgent) null else prepareOnline(operation, request, core, kilometer)
+                val online = if (urgent) null else prepareOnline(operation, acceptedRequest, core, kilometer)
                 currentCoroutineContext().ensureActive()
                 val prepared = online ?: run {
                     if (kilometer) {
@@ -100,6 +105,10 @@ class VoicePolicyTtsEngine(
     }
 
     private suspend fun prepareOnline(operation: Operation, request: SpeechRequest, core: String, kilometer: Boolean): Prepared? {
+        if (remainingPreparationMillis(request, kilometer) == 0L) {
+            record(TtsEventKind.PREPARATION_TIMEOUT)
+            return null
+        }
         try {
             val client = onlineFactory()
             synchronized(lock) { operation.client = client }
@@ -109,10 +118,12 @@ class VoicePolicyTtsEngine(
                 return null
             }
             record(TtsEventKind.ATTEMPTED)
-            val prepared = withTimeoutOrNull(if (kilometer) 15_000L else 8_000L) {
+            val prepared = withTimeoutOrNull(remainingPreparationMillis(request, kilometer)) {
                 val companion = if (request.companionEnabled) {
                     try {
-                        withTimeoutOrNull(2_000L) { awaitPreparation { companionTextSource.create(request) } }
+                        withTimeoutOrNull(minOf(2_000L, remainingPreparationMillis(request, kilometer))) {
+                            awaitPreparation { companionTextSource.create(request) }
+                        }
                     } catch (_: CancellationException) {
                         currentCoroutineContext().ensureActive()
                         null
@@ -120,11 +131,14 @@ class VoicePolicyTtsEngine(
                         null
                     }
                 } else null
+                if (remainingPreparationMillis(request, kilometer) == 0L) return@withTimeoutOrNull null
                 val suffix = companion?.trim().orEmpty()
                 val separator = if (suffix.isNotEmpty() && core.lastOrNull() !in setOf('。', '！', '？', '.', '!', '?')) "。" else ""
                 val text = core + separator + suffix
                 val file = awaitPreparation(onCancel = client::cancel) { client.synthesize(text) }
+                if (remainingPreparationMillis(request, kilometer) == 0L) return@withTimeoutOrNull null
                 prepareAudio(operation, Prepared(file, text, VoiceAudioSource.ONLINE))
+                    .takeIf { remainingPreparationMillis(request, kilometer) > 0L }
             }
             if (prepared == null) {
                 runCatching { client.cancel() }
@@ -139,6 +153,12 @@ class VoicePolicyTtsEngine(
             record(TtsEventKind.FAILED, error)
             return null
         }
+    }
+
+    private fun remainingPreparationMillis(request: SpeechRequest, kilometer: Boolean): Long {
+        val limit = (if (kilometer) 15_000L else 8_000L).milliseconds
+        return (limit - checkNotNull(request.preparationAcceptedAt).elapsedNow()).inWholeMilliseconds
+            .coerceIn(0L, limit.inWholeMilliseconds)
     }
 
     private suspend fun prepareAudio(operation: Operation, prepared: Prepared): Prepared {

@@ -1,6 +1,7 @@
 package com.healthyagent.running.di
 
 import android.os.Build
+import android.os.SystemClock
 import com.healthyagent.running.ai.AnthropicCompanionTextSource
 import com.healthyagent.running.coordinator.PausedHeartRateMonitor
 import com.healthyagent.running.core.engine.RuleCatalog
@@ -42,6 +43,9 @@ import com.healthyagent.running.ui.running.RunningViewModel
 import com.healthyagent.running.ui.settings.SettingsViewModel
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.AbstractLongTimeSource
+import kotlin.time.DurationUnit
+import kotlin.time.TimeSource
 import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -57,6 +61,12 @@ val appModule = module {
     }
     single<AudioFocusController> {
         AndroidAudioFocusController(androidContext())
+    }
+    // 包括手机休眠的经过时间；不改变 UI 时间戳或去重的墙上时钟。
+    single<TimeSource> {
+        object : AbstractLongTimeSource(DurationUnit.NANOSECONDS) {
+            override fun read(): Long = SystemClock.elapsedRealtimeNanos()
+        }
     }
     single {
         PausedHeartRateMonitor()
@@ -130,12 +140,13 @@ val appModule = module {
             companionTextSource = AnthropicCompanionTextSource(),
             playerFactory = { PreparedVoicePlayer({ AndroidAudioPlayerPort() }, focus, logger) },
             diagnosticLogger = logger,
+            timeSource = get(),
         )
     }
 
     // ── Phase 2: SpeechBus ──
     single {
-        SpeechBus(ttsEngine = get(), diagnosticLogger = get())
+        SpeechBus(ttsEngine = get(), diagnosticLogger = get(), timeSource = get())
     }
 
     // ── Phase 3: 数据库 ──

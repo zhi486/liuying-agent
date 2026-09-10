@@ -56,6 +56,7 @@ class SpeechBusTest {
                 }
             }, logger) },
             logger,
+            timeSource = testScheduler.timeSource,
         )
         val bus = newBus(engine, logger)
         bus.enqueue(trigger("session_paused", "跑步已暂停。"))
@@ -655,6 +656,7 @@ class SpeechBusTest {
         newMessageId = { "message" },
         diagnosticLogger = logger,
         dispatcher = StandardTestDispatcher(testScheduler),
+        timeSource = testScheduler.timeSource,
     )
 
     private fun trigger(

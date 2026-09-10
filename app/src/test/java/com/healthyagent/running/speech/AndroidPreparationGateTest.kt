@@ -1,5 +1,7 @@
 package com.healthyagent.running.speech
 
+import kotlin.time.TimeSource
+
 import com.healthyagent.running.testing.FakeDiagnosticLogger
 import java.io.File
 import com.healthyagent.running.core.model.RuleTrigger
@@ -23,7 +25,7 @@ import org.junit.Test
 class AndroidPreparationGateTest {
     @Test fun `真实Android端口在媒体准备中取消后不得启动且准备不拿焦点`() = runTest {
         for (cancelCaller in listOf(false, true)) {
-            val fixture = Fixture()
+            val fixture = Fixture(timeSource = testScheduler.timeSource)
             val result = async { fixture.engine.speak(request()) }
             runCurrent()
             assertEquals(1, fixture.platforms.single().preparations)
@@ -46,7 +48,7 @@ class AndroidPreparationGateTest {
 
     @Test fun `7999或14999毫秒取得文件但媒体准备跨界则取消在线并本地或跳过`() = runTest {
         for ((rule, deadline) in listOf("session_paused" to 8_000L, "km_split" to 15_000L)) {
-            val fixture = Fixture(fileDelay = deadline - 1)
+            val fixture = Fixture(timeSource = testScheduler.timeSource, fileDelay = deadline - 1)
             val result = async { fixture.engine.speak(request(rule)) }
             runCurrent()
             advanceTimeBy(deadline - 1)
@@ -76,7 +78,7 @@ class AndroidPreparationGateTest {
 
     @Test fun `prepare失败允许固定回退公里跳过而实际开播后错误不重播`() = runTest {
         for (rule in listOf("session_paused", "km_split")) {
-            val fixture = Fixture()
+            val fixture = Fixture(timeSource = testScheduler.timeSource)
             val result = async { fixture.engine.speak(request(rule)) }
             runCurrent()
             fixture.platforms.single().callback.onError(1, 2)
@@ -85,7 +87,7 @@ class AndroidPreparationGateTest {
             assertEquals(0, fixture.platforms.first().starts)
             assertEquals(1, fixture.platforms.first().releases)
         }
-        val fixture = Fixture()
+        val fixture = Fixture(timeSource = testScheduler.timeSource)
         val result = async { fixture.engine.speak(request()) }
         runCurrent()
         fixture.platforms.single().callback.onPrepared()
@@ -100,9 +102,9 @@ class AndroidPreparationGateTest {
     }
 
     @Test fun `实际prepared后启动才开始60秒且真实PolicyPlayerBus超时诊断一致`() = runTest {
-        val fixture = Fixture(fileDelay = 7_000)
+        val fixture = Fixture(timeSource = testScheduler.timeSource, fileDelay = 7_000)
         val bus = SpeechBus(fixture.engine, diagnosticLogger = fixture.logger,
-            dispatcher = StandardTestDispatcher(testScheduler))
+            dispatcher = StandardTestDispatcher(testScheduler), timeSource = testScheduler.timeSource)
         bus.enqueue(request())
         runCurrent()
         advanceTimeBy(7_999)
@@ -129,9 +131,9 @@ class AndroidPreparationGateTest {
 
     @Test fun `URGENT抢占媒体准备只播本地且总关闭连URGENT也不启动`() = runTest {
         for (disable in listOf(false, true)) {
-            val fixture = Fixture()
+            val fixture = Fixture(timeSource = testScheduler.timeSource)
             val bus = SpeechBus(fixture.engine, diagnosticLogger = fixture.logger,
-                dispatcher = StandardTestDispatcher(testScheduler))
+                dispatcher = StandardTestDispatcher(testScheduler), timeSource = testScheduler.timeSource)
             bus.enqueue(request())
             runCurrent()
             if (disable) bus.configure(SpeechPolicy(false, 0))
@@ -152,7 +154,7 @@ class AndroidPreparationGateTest {
     }
 
     @Test fun `仅有Key无声线时固定本地公里静默且没有在线请求`() = runTest {
-        val fixture = Fixture(settings = SettingsSnapshot(fishApiKey = "fixture-key"))
+        val fixture = Fixture(timeSource = testScheduler.timeSource, settings = SettingsSnapshot(fishApiKey = "fixture-key"))
         assertTrue(fixture.engine.speak(request()).getOrThrow().played)
         assertFalse(fixture.engine.speak(request("km_split")).getOrThrow().played)
         assertTrue(fixture.engine.speak(request("goal_achieved", SpeechPriority.SPLIT)).getOrThrow().played)
@@ -161,7 +163,7 @@ class AndroidPreparationGateTest {
     }
 
     @Test fun `本地媒体准备挂起在60秒受控失败且无焦点清理一次`() = runTest {
-        val fixture = Fixture(settings = SettingsSnapshot(), bundledReady = false)
+        val fixture = Fixture(timeSource = testScheduler.timeSource, settings = SettingsSnapshot(), bundledReady = false)
         val result = async { fixture.engine.speak(request()) }
         runCurrent()
         advanceTimeBy(59_999)
@@ -185,7 +187,7 @@ class AndroidPreparationGateTest {
     }
 
     @Test fun `真实平台实际播放中取消与迟到终态只停止释放一次`() = runTest {
-        val fixture = Fixture()
+        val fixture = Fixture(timeSource = testScheduler.timeSource)
         val result = async { fixture.engine.speak(request()) }
         runCurrent()
         val platform = fixture.platforms.single()
@@ -210,6 +212,7 @@ class AndroidPreparationGateTest {
         SpeechRequest(RuleTrigger(rule, Severity.INFO, "第一公里，用时六分整，配速每公里六分整。", priority))
 
     private class Fixture(
+        timeSource: TimeSource,
         fileDelay: Long = 0,
         settings: SettingsSnapshot = SettingsSnapshot(fishApiKey = "fixture-key", fishReferenceId = "fixture-reference"),
         bundledReady: Boolean = true,
@@ -242,6 +245,7 @@ class AndroidPreparationGateTest {
                 }
             }, logger) },
             logger,
+            timeSource = timeSource,
         )
     }
 
