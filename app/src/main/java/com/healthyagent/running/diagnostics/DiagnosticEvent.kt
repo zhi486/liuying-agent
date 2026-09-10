@@ -22,7 +22,7 @@ enum class SafeDiagnosticSummary(val text: String) {
     DIAGNOSTIC_IO_FAILED("诊断日志写入失败"),
 }
 
-enum class TtsProvider { ANDROID, FISH, COMPOSITE }
+enum class TtsProvider { ANDROID, FISH, COMPOSITE, BUNDLED }
 enum class TtsEventKind { ATTEMPTED, SKIPPED_MISSING_CONFIG, INITIALIZATION_FAILED, COMPLETED, FAILED, LOCAL_FALLBACK, PLAYBACK_TIMEOUT, CANCELLED }
 enum class AudioFocusResult { GRANTED, DENIED, RELEASED }
 enum class DiagnosticBleLifecycle { STOPPED, RUNNING, PAUSED }
