@@ -11,10 +11,11 @@ import com.healthyagent.running.core.engine.rules.HrZone5Rule
 import com.healthyagent.running.core.engine.rules.KmSplitRule
 import com.healthyagent.running.core.engine.rules.PaceDeviationRule
 import com.healthyagent.running.core.engine.rules.StartTooFastRule
+import kotlin.time.TimeSource
 
 object RuleCatalog {
-    fun defaultRules(): List<Rule> = listOf(
-        HrZone5Rule(),
+    fun defaultRules(timeSource: TimeSource = TimeSource.Monotonic): List<Rule> = listOf(
+        HrZone5Rule(timeSource),
         HrRapidRiseRule(),
         HrTooLowRule(),
         CadenceDropRule(),

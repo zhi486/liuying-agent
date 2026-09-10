@@ -379,6 +379,7 @@ class AppCoordinator(
         cancelPipeline()
         analysisManager.cancel()
         sessionManager.pause()
+        ruleEngine.onPause()
         enqueueSessionStatus(SessionSpeechEvent.PAUSED)
         (sensorDataSource as? RunLifecycleAwareSensor)?.onRunPaused(frozenElapsed)
         updateSnapshot { current ->

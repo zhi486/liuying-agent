@@ -12,6 +12,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TestTimeSource
 
 /**
  * 11 条跑步规则单元测试
@@ -56,10 +58,21 @@ class RulesTest {
     // ==================== 规则 1: HrZone5Rule ====================
 
     @Test
-    fun `HrZone5Rule — 连续 10 秒 Z5 触发`() {
+    fun `HrZone5Rule — 十帧同时到达不代表持续十秒`() {
         val rule = HrZone5Rule()
         val frames = (1..10).map { makeFrame(it.toLong(), hr = 170, hrZone = HrZone.Z5) }
-        val ctx = RuleContext(recentFrames = frames)
+        assertNull(rule.evaluate(RuleContext(recentFrames = frames), config))
+    }
+
+    @Test
+    fun `HrZone5Rule — 连续 10 秒 Z5 触发`() {
+        val clock = TestTimeSource()
+        val rule = HrZone5Rule(clock)
+        val ctx = RuleContext(recentFrames = listOf(makeFrame(0, hr = 170, hrZone = HrZone.Z5)))
+        repeat(10) {
+            assertNull(rule.evaluate(ctx, config))
+            clock += 1.seconds
+        }
         val trigger = rule.evaluate(ctx, config)
         assertNotNull(trigger)
         assertEquals("hr_z5_danger", trigger!!.ruleId)

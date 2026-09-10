@@ -8,8 +8,8 @@ import com.healthyagent.running.core.model.SpeechPriority
 /**
  * 规则接口 — 每条跑步指导规则实现此接口
  *
- * Rule 类本身无状态，冷却管理由 [RuleEngine] 统一处理。
- * evaluate() 只做条件判断，不检查冷却。
+ * 普通规则的冷却由 [RuleEngine] 处理；需逐帧观察的规则可自行维护单调计时，
+ * 并将 cooldownMs 设为 0，避免叠加外层门禁。
  */
 interface Rule {
     /** 规则唯一标识 */
@@ -29,6 +29,9 @@ interface Rule {
      * @return 触发结果（包含播报文本），条件不满足返回 null
      */
     fun evaluate(ctx: RuleContext, config: RunConfig): RuleTrigger?
+
+    /** 暂停只打断连续性；专用冷却保留到下次新跑步。 */
+    fun onPause() {}
 
     /** 重置规则内部状态（在新跑步会话开始前调用），默认空实现 */
     fun reset() {}

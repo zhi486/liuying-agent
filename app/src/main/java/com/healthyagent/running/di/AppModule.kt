@@ -107,7 +107,7 @@ val appModule = module {
     // ── Phase 2: 规则引擎 ──
     single {
         RuleEngine(
-            rules = RuleCatalog.defaultRules(),
+            rules = RuleCatalog.defaultRules(get<TimeSource>()),
             initialConfig = get(),
             diagnosticLogger = get(),
         )

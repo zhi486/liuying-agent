@@ -8,6 +8,7 @@ import com.healthyagent.running.ai.LlmClient
 import com.healthyagent.running.core.engine.Rule
 import com.healthyagent.running.core.engine.RuleCatalog
 import com.healthyagent.running.core.engine.RuleEngine
+import com.healthyagent.running.core.engine.rules.HrZone5Rule
 import com.healthyagent.running.core.model.CoachTone
 import com.healthyagent.running.core.model.ConnectionState
 import com.healthyagent.running.core.model.DeviceInfo
@@ -81,9 +82,43 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TestTimeSource
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppCoordinatorTest {
+    @Test
+    fun `短暂停后必须重新连续十秒才产生高心率事件`() = runTest {
+        val clock = TestTimeSource()
+        val sensor = FakeSensorDataSource()
+        val logger = FakeDiagnosticLogger()
+        val engine = RuleEngine(listOf(HrZone5Rule(clock)), RunConfig(), diagnosticLogger = logger)
+        val coordinator = createCoordinator(FakeRunRepository(), sensor, ruleEngine = engine)
+        coordinator.startRun()
+        runCurrent()
+        suspend fun highAt(second: Int) {
+            sensor.emitSample(SampleType.HEART_RATE, 170.0, second * 1000L)
+            sensor.emitTick(second * 1000L)
+            runCurrent()
+        }
+        for (second in 0..9) {
+            highAt(second)
+            clock += 1.seconds
+        }
+        coordinator.pauseRun()
+        runCurrent()
+        coordinator.resumeRun()
+        runCurrent()
+        for (second in 10..19) {
+            highAt(second)
+            assertTrue(logger.events.filterIsInstance<DiagnosticEvent.RuleTriggered>().isEmpty())
+            clock += 1.seconds
+        }
+        highAt(20)
+        assertEquals(listOf("hr_z5_danger"), logger.events.filterIsInstance<DiagnosticEvent.RuleTriggered>().map { it.ruleId })
+        coordinator.close()
+    }
+
     @Test
     fun `开跑前手动连接仅准备手环且不建记录计时或播报`() = runTest {
         val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.DISCONNECTED)

@@ -90,6 +90,11 @@ class RuleEngine(
     /** 获取当前分段索引 */
     fun currentSplitIndex(): Int = lastSplitIndex
 
+    /** 暂停不等于新会话，保留各规则的冷却。 */
+    fun onPause() {
+        rules.forEach { it.onPause() }
+    }
+
     /** 重置引擎状态（新跑步会话开始前调用） */
     fun reset() {
         lastTriggerTimes.clear()
