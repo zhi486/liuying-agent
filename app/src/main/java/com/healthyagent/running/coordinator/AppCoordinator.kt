@@ -104,6 +104,7 @@ class AppCoordinator(
     private var ruleContext = RuleContext()
     private val recentTriggerTexts = mutableListOf<String>()
     private val persistenceMutex = Mutex()
+    private val settingsAcceptanceMutex = Mutex()
     private val restoreJob: Deferred<Boolean>
     private var segmentBaseElapsedSeconds = 0L
     private var segmentBaseElapsedMillis = 0L
@@ -213,10 +214,9 @@ class AppCoordinator(
     }
 
     suspend fun querySettings(): CommandOutcome = runCatching {
-        settingsRepository.current()
+        refreshPersistedSettings()
     }.fold(
         onSuccess = { settings ->
-            acceptPersistedSettings(settings)
             CommandOutcome.AcceptedWithData(settingsResult(settings))
         },
         onFailure = {
@@ -230,11 +230,12 @@ class AppCoordinator(
         }
 
         return runCatching {
-            settingsRepository.update(patch)
-            settingsRepository.current()
+            settingsAcceptanceMutex.withLock {
+                settingsRepository.update(patch)
+                settingsRepository.current().also(::acceptPersistedSettings)
+            }
         }.fold(
             onSuccess = { settings ->
-                acceptPersistedSettings(settings)
                 CommandOutcome.AcceptedWithData(settingsResult(settings))
             },
             onFailure = {
@@ -602,10 +603,15 @@ class AppCoordinator(
 
     private fun observeSettings() {
         scope.launch {
-            settingsRepository.settings.collect { settings ->
-                acceptPersistedSettings(settings)
+            settingsRepository.settings.collect {
+                refreshPersistedSettings()
             }
         }
+    }
+
+    // Flow可能携带已经过期的快照；只把它当通知，在同一临界区重新读取并接纳。
+    private suspend fun refreshPersistedSettings(): SettingsSnapshot = settingsAcceptanceMutex.withLock {
+        settingsRepository.current().also(::acceptPersistedSettings)
     }
 
     @Synchronized
@@ -932,9 +938,7 @@ class AppCoordinator(
 
     private suspend fun restoreActiveSession(): Boolean {
         val restoredConfig = runCatching {
-            val settings = settingsRepository.current()
-            pendingLlmApiKey = settings.llmApiKey
-            settings.toRunConfig()
+            refreshPersistedSettings().toRunConfig()
         }.getOrDefault(pendingRunConfig)
         return runCatching { repository.getActiveSession() }
             .fold(

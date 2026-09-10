@@ -62,6 +62,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
@@ -907,6 +909,81 @@ class AppCoordinatorTest {
         assertEquals(0, voice.focusRequests)
         assertNull(coordinator.snapshot.value.latestCoachMessage)
         assertEquals(2, voice.clients.size)
+    }
+
+    @Test
+    fun `旧Flow快照晚于关闭返回时不得重新打开语音`() = runTest {
+        val settings = DelayedSettingsRepository(SettingsSnapshot())
+        val voice = VoiceFixture()
+        val bus = SpeechBus(voice.engine, dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = bus,
+            settingsRepository = settings, onVoiceSettingsChanged = voice.settings::set)
+        assertTrue(settings.oldSnapshotCaptured.isCompleted)
+        coordinator.startRun()
+        runCurrent()
+        coordinator.updateSettings(SettingsPatch(ttsEnabled = false))
+        assertEquals(false, voice.settings.get().ttsEnabled)
+        val generation = bus.sessionGenerationToken()
+
+        settings.releaseOldSnapshot.complete(Unit)
+        runCurrent()
+
+        assertEquals(false, voice.settings.get().ttsEnabled)
+        assertEquals(generation, bus.sessionGenerationToken())
+        coordinator.pauseRun()
+        runCurrent()
+        voice.clients.single().gate.complete(voice.file)
+        runCurrent()
+        assertEquals(1, voice.clients.size)
+        assertEquals(0, voice.focusRequests)
+        assertNull(coordinator.snapshot.value.latestCoachMessage)
+    }
+
+    @Test
+    fun `旧Flow快照不得回滚新Fish配置或取消更新后登记的状态播报`() = runTest {
+        val settings = DelayedSettingsRepository(SettingsSnapshot())
+        val voice = VoiceFixture()
+        val bus = SpeechBus(voice.engine, dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = bus,
+            settingsRepository = settings, onVoiceSettingsChanged = voice.settings::set)
+        assertTrue(settings.oldSnapshotCaptured.isCompleted)
+        coordinator.startRun()
+        runCurrent()
+        coordinator.updateSettings(SettingsPatch(fishApiKey = "new-test-key", fishReferenceId = "new-test-voice"))
+        coordinator.pauseRun()
+        runCurrent()
+        val paused = voice.clients.last()
+        val generation = bus.sessionGenerationToken()
+
+        settings.releaseOldSnapshot.complete(Unit)
+        runCurrent()
+
+        assertEquals("new-test-key", voice.settings.get().fishApiKey)
+        assertEquals("new-test-voice", voice.settings.get().fishReferenceId)
+        assertEquals(generation, bus.sessionGenerationToken())
+        assertEquals(0, paused.cancelCalls)
+        voice.clients.first().gate.complete(voice.file)
+        paused.gate.complete(voice.file)
+        runCurrent()
+        voice.ports.single().listener.onCompletion()
+        runCurrent()
+        assertEquals("跑步已暂停。", coordinator.snapshot.value.latestCoachMessage?.text)
+    }
+
+    private class DelayedSettingsRepository(initial: SettingsSnapshot) : SettingsRepository {
+        private val backing = FakeSettingsRepository(initial)
+        val oldSnapshotCaptured = CompletableDeferred<Unit>()
+        val releaseOldSnapshot = CompletableDeferred<Unit>()
+        override val settings: Flow<SettingsSnapshot> = flow {
+            emit(backing.current())
+            val oldSnapshot = backing.current()
+            oldSnapshotCaptured.complete(Unit)
+            releaseOldSnapshot.await()
+            emit(oldSnapshot)
+            awaitCancellation()
+        }
+        override suspend fun current() = backing.current()
+        override suspend fun update(patch: SettingsPatch) = backing.update(patch)
     }
 
     @Test
