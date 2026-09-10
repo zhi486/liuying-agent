@@ -30,6 +30,62 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpeechBusTest {
     @Test
+    fun `typed引擎返回实际本地文本而非未播陪伴句`() = runTest {
+        val tts = DeliveryTtsEngine(SpeechDelivery("固定核心。", true))
+        val bus = newBus(tts)
+        bus.enqueue(trigger("session_started", "固定核心。未播陪伴句。"))
+        runCurrent()
+        assertEquals("固定核心。", bus.latestMessage.value?.text)
+        assertEquals(1, tts.typedCalls)
+    }
+
+    @Test
+    fun `公里未播放仍显示核心但不记成功或去重历史`() = runTest {
+        val logger = FakeDiagnosticLogger()
+        val tts = DeliveryTtsEngine(SpeechDelivery("公里核心。", false))
+        val bus = newBus(tts, logger, minIntervalSec = 4)
+        val request = trigger("km_split", "公里核心。", SpeechPriority.SPLIT)
+        bus.enqueue(request)
+        runCurrent()
+        assertEquals("公里核心。", bus.latestMessage.value?.text)
+        assertFalse(outcomes(logger).any { it.reason == SpeechOutcomeReason.TTS_SUCCESS })
+        bus.enqueue(request)
+        runCurrent()
+        assertEquals(2, tts.typedCalls)
+    }
+
+    @Test
+    fun `本地播放失败只保留目录核心而不显示未播陪伴句`() = runTest {
+        val tts = object : TtsEngine {
+            override val isSpeaking = false
+            override suspend fun speak(text: String, priority: SpeechPriority): Result<Unit> = error("只允许typed入口")
+            override suspend fun speak(request: SpeechRequest): Result<SpeechDelivery> =
+                Result.failure(IllegalStateException("本地音频损坏"))
+            override fun stop() = Unit
+            override fun shutdown() = Unit
+        }
+        val logger = FakeDiagnosticLogger()
+        val bus = newBus(tts, logger)
+        bus.enqueue(SpeechRequest(trigger("session_paused", "跑步已暂停。未播陪伴句。"), true))
+        runCurrent()
+        assertEquals("跑步已暂停。", bus.latestMessage.value?.text)
+        assertEquals(SpeechOutcomeReason.TTS_FAILURE, outcomes(logger).single().reason)
+    }
+
+    private class DeliveryTtsEngine(val delivery: SpeechDelivery) : TtsEngine {
+        var typedCalls = 0
+        override val isSpeaking = false
+        override suspend fun speak(text: String, priority: SpeechPriority): Result<Unit> =
+            Result.success(Unit)
+        override suspend fun speak(request: SpeechRequest): Result<SpeechDelivery> {
+            typedCalls++
+            return Result.success(delivery)
+        }
+        override fun stop() = Unit
+        override fun shutdown() = Unit
+    }
+
+    @Test
     fun `Fake 的迟到 helper 只命中已完成队首且不会完成后续请求`() = runTest {
         val tts = FakeTtsEngine()
         val first = async { tts.speak("A", SpeechPriority.APP) }

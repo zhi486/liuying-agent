@@ -10,6 +10,7 @@ import com.healthyagent.running.data.sensor.SensorDataSource
 import com.healthyagent.running.diagnostics.DiagnosticLogger
 import com.healthyagent.running.speech.AudioFocusController
 import com.healthyagent.running.speech.TtsEngine
+import com.healthyagent.running.speech.VoicePolicyTtsEngine
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -26,7 +27,7 @@ class AppModuleSmokeTest {
         val koin = GlobalContext.get()
 
         assertNotNull(koin.get<AppCoordinator>())
-        assertNotNull(koin.get<TtsEngine>())
+        assertTrue(koin.get<TtsEngine>() is VoicePolicyTtsEngine)
         assertNotNull(koin.get<SensorDataSource>())
         assertNotNull(koin.get<RuleEngine>())
         assertSame(koin.get<DiagnosticLogger>(), koin.get<DiagnosticLogger>())

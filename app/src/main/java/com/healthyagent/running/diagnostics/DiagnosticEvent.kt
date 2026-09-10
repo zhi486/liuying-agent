@@ -8,6 +8,7 @@ enum class SpeechOutcomeReason(val wireName: String) {
     SESSION_STATUS_SCHEDULED("session_status_scheduled"),
     PENDING_SESSION_STATUS_REPLACED("pending_session_status_replaced"),
     TTS_SUCCESS("tts_success"),
+    NOT_PLAYED("not_played"),
     TTS_FAILURE("tts_failure"),
     PLAYBACK_TIMEOUT("playback_timeout"),
     CANCELLED("cancelled"),

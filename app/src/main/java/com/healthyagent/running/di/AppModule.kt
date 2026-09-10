@@ -1,6 +1,7 @@
 package com.healthyagent.running.di
 
 import android.os.Build
+import com.healthyagent.running.ai.AnthropicCompanionTextSource
 import com.healthyagent.running.coordinator.PausedHeartRateMonitor
 import com.healthyagent.running.core.engine.RuleCatalog
 import com.healthyagent.running.core.engine.RuleEngine
@@ -14,6 +15,7 @@ import com.healthyagent.running.data.local.AppDatabase
 import com.healthyagent.running.data.local.RunSessionDao
 import com.healthyagent.running.data.local.SettingsDataStore
 import com.healthyagent.running.data.local.SettingsRepository
+import com.healthyagent.running.data.local.SettingsSnapshot
 import com.healthyagent.running.data.health.AndroidHealthConnectSync
 import com.healthyagent.running.data.health.HealthConnectSync
 import com.healthyagent.running.data.repository.RoomRunRepository
@@ -28,11 +30,10 @@ import com.healthyagent.running.diagnostics.DiagnosticLogger
 import com.healthyagent.running.diagnostics.FileDiagnosticLogger
 import com.healthyagent.running.speech.AndroidAudioFocusController
 import com.healthyagent.running.speech.AndroidAudioPlayerPort
-import com.healthyagent.running.speech.AndroidTextToSpeechPort
-import com.healthyagent.running.speech.AndroidTtsEngine
+import com.healthyagent.running.speech.AndroidBundledVoiceStore
 import com.healthyagent.running.speech.AudioFocusController
-import com.healthyagent.running.speech.CompositeTtsEngine
-import com.healthyagent.running.speech.FishAudioTtsEngine
+import com.healthyagent.running.speech.PreparedVoicePlayer
+import com.healthyagent.running.speech.VoicePolicyTtsEngine
 import com.healthyagent.running.speech.OkHttpFishSynthesisClient
 import com.healthyagent.running.speech.SpeechBus
 import com.healthyagent.running.speech.TtsEngine
@@ -40,6 +41,7 @@ import com.healthyagent.running.ui.history.HistoryViewModel
 import com.healthyagent.running.ui.running.RunningViewModel
 import com.healthyagent.running.ui.settings.SettingsViewModel
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -101,34 +103,34 @@ val appModule = module {
         )
     }
 
-    // ── Phase 2: TTS（双层：本地 Android TTS + Fish Audio 云端声音克隆）──
+    // 设置接纳时同步更新；在线工厂只读取快照，不阻塞或启动额外订阅。
+    single {
+        AtomicReference(runBlocking { get<SettingsRepository>().current() })
+    }
+
+    // 每次事件独立准备在线语音；本地只使用已经核验的固定音频。
     single<TtsEngine> {
         val logger = get<DiagnosticLogger>()
         val focus = get<AudioFocusController>()
-        val settings = runBlocking { get<SettingsRepository>().current() }
-        val local = AndroidTtsEngine(
-            port = AndroidTextToSpeechPort(androidContext()),
-            audioFocusController = focus,
+        val context = androidContext()
+        val settingsReference = get<AtomicReference<SettingsSnapshot>>()
+        VoicePolicyTtsEngine(
+            bundledStore = AndroidBundledVoiceStore(context),
+            onlineFactory = {
+                val settings = settingsReference.get()
+                if (settings.fishApiKey.isBlank() || settings.fishReferenceId.isBlank()) null else {
+                    OkHttpFishSynthesisClient(
+                        apiKey = settings.fishApiKey,
+                        referenceId = settings.fishReferenceId,
+                        cacheDirectory = File(context.cacheDir, "tts_cache"),
+                        readCache = false,
+                    )
+                }
+            },
+            companionTextSource = AnthropicCompanionTextSource(),
+            playerFactory = { PreparedVoicePlayer({ AndroidAudioPlayerPort() }, focus, logger) },
             diagnosticLogger = logger,
         )
-        val cloud = if (
-            settings.fishApiKey.isNotBlank() &&
-            settings.fishReferenceId.isNotBlank()
-        ) {
-            FishAudioTtsEngine(
-                synthesisClient = OkHttpFishSynthesisClient(
-                    apiKey = settings.fishApiKey,
-                    referenceId = settings.fishReferenceId,
-                    cacheDirectory = File(androidContext().cacheDir, "tts_cache"),
-                ),
-                audioPlayerFactory = { AndroidAudioPlayerPort() },
-                audioFocusController = focus,
-                diagnosticLogger = logger,
-            )
-        } else {
-            null
-        }
-        CompositeTtsEngine(local = local, cloud = cloud, diagnosticLogger = logger)
     }
 
     // ── Phase 2: SpeechBus ──
@@ -198,6 +200,7 @@ val appModule = module {
             analysisManager = get(),
             emergencyPhraseCache = get(),
             pausedHeartRateMonitor = get(),
+            onVoiceSettingsChanged = get<AtomicReference<SettingsSnapshot>>()::set,
         )
     }
     single<RunCommandDispatcher> {

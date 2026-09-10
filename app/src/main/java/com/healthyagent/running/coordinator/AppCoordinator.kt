@@ -13,7 +13,6 @@ import com.healthyagent.running.core.model.RuleContext
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.RoutePoint
 import com.healthyagent.running.core.model.RunState
-import com.healthyagent.running.core.model.SpeechPriority
 import com.healthyagent.running.core.pipeline.RunningDataPipeline
 import com.healthyagent.running.core.session.RunSessionManager
 import com.healthyagent.running.data.local.SettingsPatch
@@ -28,6 +27,7 @@ import com.healthyagent.running.data.sensor.RunLifecycleAwareSensor
 import com.healthyagent.running.data.sensor.SensorDataSource
 import com.healthyagent.running.speech.SpeechBus
 import com.healthyagent.running.speech.SpeechPolicy
+import com.healthyagent.running.speech.SpeechRequest
 import com.healthyagent.running.speech.SessionSpeechEvent
 import com.healthyagent.running.speech.SessionSpeechTriggerFactory
 import java.time.Instant
@@ -75,6 +75,7 @@ class AppCoordinator(
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val realtimeMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val pausedHeartRateMonitor: PausedHeartRateMonitor = PausedHeartRateMonitor(),
+    private val onVoiceSettingsChanged: (SettingsSnapshot) -> Unit = {},
 ) {
     private val _snapshot = MutableStateFlow(
         AppSnapshot.initial(runConfig, nowMillis()).copy(
@@ -124,6 +125,7 @@ class AppCoordinator(
     private var activeRunConfig = runConfig
     @Volatile
     private var pendingLlmApiKey = ""
+    private var voiceSettings: SettingsSnapshot? = null
 
     val isRestoring: Boolean get() = !restoreJob.isCompleted
 
@@ -330,8 +332,7 @@ class AppCoordinator(
         recentTriggerTexts.clear()
         analysisManager.cancel()
         speechBus.resetSession()
-        speechBus.enqueueSessionStatus(SessionSpeechTriggerFactory.create(SessionSpeechEvent.STARTED))
-        if (config.llmEnabled) emergencyPhraseCache.pregenerate(config)
+        enqueueSessionStatus(SessionSpeechEvent.STARTED)
         prepareFrameRebase(
             elapsedSeconds = session.totalDurationSec,
             distanceMeters = session.totalDistanceMeters,
@@ -377,7 +378,7 @@ class AppCoordinator(
         cancelPipeline()
         analysisManager.cancel()
         sessionManager.pause()
-        speechBus.enqueueSessionStatus(SessionSpeechTriggerFactory.create(SessionSpeechEvent.PAUSED))
+        enqueueSessionStatus(SessionSpeechEvent.PAUSED)
         (sensorDataSource as? RunLifecycleAwareSensor)?.onRunPaused(frozenElapsed)
         updateSnapshot { current ->
             current.copy(
@@ -436,7 +437,7 @@ class AppCoordinator(
         checkpointActiveSession()
         (sensorDataSource as? RunLifecycleAwareSensor)?.onRunResumed(segmentBaseElapsedSeconds)
         (sensorDataSource as? RunLifecycleAwareSensor)?.onRunMetricsUpdated(segmentBaseDistanceMeters, null)
-        speechBus.enqueueSessionStatus(SessionSpeechTriggerFactory.create(SessionSpeechEvent.RESUMED))
+        enqueueSessionStatus(SessionSpeechEvent.RESUMED)
         connectSensor()
         return CommandOutcome.Accepted
     }
@@ -458,7 +459,7 @@ class AppCoordinator(
         cancelPipeline()
         analysisManager.cancel()
         (sensorDataSource as? RunLifecycleAwareSensor)?.onRunStopped()
-        speechBus.enqueueSessionStatus(SessionSpeechTriggerFactory.create(SessionSpeechEvent.FINISHED))
+        enqueueSessionStatus(SessionSpeechEvent.FINISHED)
         val pendingDisconnect = scheduleDisconnect()
         val session = sessionManager.finishSession()
             ?: return CommandOutcome.Rejected(BridgeErrorCode.INTERNAL_ERROR, "会话数据不存在")
@@ -607,10 +608,24 @@ class AppCoordinator(
         }
     }
 
+    @Synchronized
     private fun acceptPersistedSettings(settings: SettingsSnapshot) {
         val nextRunConfig = settings.toRunConfig()
         pendingRunConfig = nextRunConfig
         pendingLlmApiKey = settings.llmApiKey
+        val previous = voiceSettings
+        voiceSettings = settings
+        onVoiceSettingsChanged(settings)
+        LlmConfig.apiKey = settings.llmApiKey
+        if (previous != null && (
+                previous.ttsEnabled != settings.ttsEnabled ||
+                previous.ttsMinIntervalSec != settings.ttsMinIntervalSec ||
+                previous.llmEnabled != settings.llmEnabled ||
+                previous.llmApiKey != settings.llmApiKey ||
+                previous.fishApiKey != settings.fishApiKey ||
+                previous.fishReferenceId != settings.fishReferenceId
+            )) speechBus.stop()
+        speechBus.configure(SpeechPolicy(settings.ttsEnabled, settings.ttsMinIntervalSec))
         updateSnapshot { current ->
             val session = if (sessionManager.currentState in CONFIG_FROZEN_RUN_STATES) {
                 current.session
@@ -635,11 +650,18 @@ class AppCoordinator(
         ruleEngine.updateConfig(config)
         speechBus.configure(
             SpeechPolicy(
-                enabled = config.ttsEnabled,
-                minIntervalSec = config.ttsMinIntervalSec,
+                enabled = voiceSettings?.ttsEnabled ?: config.ttsEnabled,
+                minIntervalSec = voiceSettings?.ttsMinIntervalSec ?: config.ttsMinIntervalSec,
             ),
         )
         LlmConfig.apiKey = pendingLlmApiKey
+    }
+
+    private fun enqueueSessionStatus(event: SessionSpeechEvent) {
+        speechBus.enqueueSessionStatus(SpeechRequest(
+            SessionSpeechTriggerFactory.create(event),
+            companionEnabled = voiceSettings?.llmEnabled ?: activeRunConfig.llmEnabled,
+        ))
     }
 
     private fun settingsResult(settings: SettingsSnapshot): JsonObject = buildJsonObject {
@@ -732,18 +754,6 @@ class AppCoordinator(
         }
         if (split != null) {
             ruleEngine.onSplit(split.index)
-            val session = sessionManager.currentSession
-            val config = activeRunConfig
-            if (session != null && config.llmEnabled) {
-                analysisManager.analyze(
-                    PromptBuilder.build(
-                        session = session,
-                        split = split,
-                        config = config,
-                        recentTriggers = recentTriggerTexts.toList(),
-                    ),
-                )
-            }
         }
 
         val triggers = ruleEngine.evaluate(
@@ -757,20 +767,23 @@ class AppCoordinator(
         )
 
         triggers.forEach { trigger ->
+            val request = SpeechRequest(
+                trigger = trigger,
+                companionEnabled = voiceSettings?.llmEnabled ?: activeRunConfig.llmEnabled,
+                analysis = if (trigger.ruleId == "km_split" && split != null) {
+                    sessionManager.currentSession?.let { session ->
+                        PromptBuilder.build(session, split, activeRunConfig, recentTriggerTexts.toList())
+                    }
+                } else null,
+            )
             recentTriggerTexts.add(trigger.speakText)
             if (recentTriggerTexts.size > 10) recentTriggerTexts.removeAt(0)
             val generation = runGeneration
             val speechSessionGeneration = speechBus.sessionGenerationToken()
             scope.launch {
                 if (!isCurrentRunGeneration(generation)) return@launch
-                val speakText = if (trigger.ttsPriority == SpeechPriority.URGENT) {
-                    emergencyPhraseCache.consume(trigger.ruleId) ?: trigger.speakText
-                } else {
-                    trigger.speakText
-                }
-                if (!isCurrentRunGeneration(generation)) return@launch
                 speechBus.enqueue(
-                    trigger.copy(speakText = speakText),
+                    request,
                     speechSessionGeneration,
                 )
             }

@@ -40,6 +40,19 @@ import com.healthyagent.running.diagnostics.DiagnosticEvent
 import com.healthyagent.running.diagnostics.DiagnosticLogger
 import com.healthyagent.running.diagnostics.SpeechOutcomeReason
 import com.healthyagent.running.speech.SpeechBus
+import com.healthyagent.running.speech.SpeechRequest
+import com.healthyagent.running.speech.SpeechDelivery
+import com.healthyagent.running.speech.VoicePolicyTtsEngine
+import com.healthyagent.running.speech.BundledVoiceStore
+import com.healthyagent.running.speech.CompanionTextSource
+import com.healthyagent.running.speech.FishSynthesisClient
+import com.healthyagent.running.speech.PreparedVoicePlayer
+import com.healthyagent.running.speech.AudioFocusController
+import com.healthyagent.running.speech.AudioFocusLease
+import com.healthyagent.running.speech.AudioPlayerPort
+import com.healthyagent.running.speech.SpeechAudioProfile
+import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import com.healthyagent.running.speech.TtsEngine
 import com.healthyagent.running.testing.FakeDiagnosticLogger
 import com.healthyagent.running.testing.FakeTtsEngine
@@ -63,6 +76,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -411,10 +425,17 @@ class AppCoordinatorTest {
     @Test
     fun `权威 Split 在长于规则窗口时仍只播报一次`() = runTest {
         val sensor = FakeSensorDataSource()
-        val config = RunConfig(llmEnabled = false, ttsMinIntervalSec = 0)
+        val config = RunConfig(llmEnabled = true, ttsMinIntervalSec = 0)
         val ttsEngine = FakeTtsEngine()
+        val requests = mutableListOf<SpeechRequest>()
+        var independentAnalysisCalls = 0
         val speechBus = SpeechBus(
-            ttsEngine = ttsEngine,
+            ttsEngine = object : TtsEngine by ttsEngine {
+                override suspend fun speak(request: SpeechRequest): Result<SpeechDelivery> {
+                    requests += request
+                    return ttsEngine.speak(request)
+                }
+            },
             dispatcher = StandardTestDispatcher(testScheduler),
         )
         val ruleEngine = RuleEngine(
@@ -428,6 +449,13 @@ class AppCoordinatorTest {
             config = config,
             speechBus = speechBus,
             ruleEngine = ruleEngine,
+            settingsRepository = FakeSettingsRepository(SettingsSnapshot(llmEnabled = true, ttsMinIntervalSec = 0)),
+            llmClient = object : LlmClient {
+                override suspend fun analyze(request: LlmAnalyzeRequest): Result<LlmAnalyzeResponse> {
+                    independentAnalysisCalls++
+                    return Result.success(LlmAnalyzeResponse("不应独立播出。"))
+                }
+            },
         )
         coordinator.startRun()
         runCurrent()
@@ -476,12 +504,20 @@ class AppCoordinatorTest {
 
         val expected = "第一公里，用时六分四十秒，配速每公里六分四十秒。"
         assertEquals(1, ttsEngine.requests.count { it.text == expected })
+        val kilometer = requests.single { it.trigger.ruleId == "km_split" }
+        assertTrue(kilometer.companionEnabled)
+        assertEquals(1, kilometer.analysis?.split_index)
+        assertEquals(400L, kilometer.analysis?.split_data?.duration_sec)
+        assertEquals(400.0, kilometer.analysis?.split_data?.avg_pace_sec_per_km)
+        assertEquals(0, independentAnalysisCalls)
 
         ttsEngine.completeNextSuccessfully()
         runCurrent()
         acceptFrame(401_000L, 1_001.0)
         runCurrent()
         assertEquals(1, ttsEngine.requests.count { it.text == expected })
+        assertEquals(0, independentAnalysisCalls)
+        assertTrue(requests.none { it.trigger.ruleId == "llm_coach" })
     }
 
     @Test
@@ -799,6 +835,174 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `运行中语音关闭立即取消旧请求并使后续状态静音`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = SpeechBus(tts, dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(repository = FakeRunRepository(), speechBus = bus)
+        coordinator.startRun()
+        runCurrent()
+        val before = tts.stopCalls
+        coordinator.updateSettings(SettingsPatch(ttsEnabled = false))
+        runCurrent()
+        assertTrue(tts.stopCalls > before)
+        tts.completeNextSuccessfully()
+        coordinator.pauseRun()
+        runCurrent()
+        assertEquals(1, tts.requests.size)
+        assertNull(coordinator.snapshot.value.latestCoachMessage)
+    }
+
+    @Test
+    fun `真实语音链路生命周期等实际完成才更新文字且等待网络不取焦点`() = runTest {
+        val voice = VoiceFixture()
+        val bus = SpeechBus(voice.engine, dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = bus,
+            onVoiceSettingsChanged = voice.settings::set)
+        val actions = listOf(coordinator::startRun, coordinator::pauseRun, coordinator::resumeRun, coordinator::stopRun)
+        val expected = listOf("流萤已开始记录，出发吧。", "跑步已暂停。", "跑步已恢复。", "跑步已结束。")
+        actions.forEachIndexed { index, action ->
+            action()
+            runCurrent()
+            assertEquals(index, voice.focusRequests)
+            voice.clients.last().gate.complete(voice.file)
+            runCurrent()
+            assertEquals(index + 1, voice.focusRequests)
+            voice.ports.last().listener.onCompletion()
+            runCurrent()
+            assertEquals(expected[index], coordinator.snapshot.value.latestCoachMessage?.text)
+            assertEquals(index + 1, voice.focusReleases)
+        }
+        assertEquals(4, voice.clients.size)
+        assertTrue(voice.clients.all { it.shutdownCalls == 1 })
+        assertTrue(voice.ports.all { it.releaseCalls == 1 })
+    }
+
+    @Test
+    fun `同步配置回调重载Fish且取消旧请求关闭语音后不补播`() = runTest {
+        val voice = VoiceFixture()
+        val bus = SpeechBus(voice.engine, dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = bus,
+            onVoiceSettingsChanged = voice.settings::set)
+        coordinator.startRun()
+        runCurrent()
+        val old = voice.clients.single()
+        val generation = bus.sessionGenerationToken()
+        coordinator.updateSettings(SettingsPatch(maxHeartRate = 170))
+        assertEquals(generation, bus.sessionGenerationToken())
+        coordinator.updateSettings(SettingsPatch(fishApiKey = "new-test-key", fishReferenceId = "new-test-voice"))
+        assertEquals("new-test-key", voice.settings.get().fishApiKey)
+        coordinator.pauseRun()
+        runCurrent()
+        assertTrue(old.cancelCalls > 0)
+        assertEquals("new-test-key", voice.configurations.last().fishApiKey)
+        assertEquals("new-test-voice", voice.configurations.last().fishReferenceId)
+        old.gate.complete(voice.file)
+        runCurrent()
+        assertEquals(0, voice.focusRequests)
+        coordinator.updateSettings(SettingsPatch(ttsEnabled = false))
+        coordinator.resumeRun()
+        runCurrent()
+        voice.clients.last().gate.complete(voice.file)
+        runCurrent()
+        assertEquals(0, voice.focusRequests)
+        assertNull(coordinator.snapshot.value.latestCoachMessage)
+        assertEquals(2, voice.clients.size)
+    }
+
+    @Test
+    fun `真实链路URGENT抢占网络并等待完成后提升结束状态且跨会话迟到结果失效`() = runTest {
+        val voice = VoiceFixture()
+        val logger = FakeDiagnosticLogger()
+        val bus = SpeechBus(voice.engine, diagnosticLogger = logger, dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = bus,
+            onVoiceSettingsChanged = voice.settings::set)
+        coordinator.startRun()
+        runCurrent()
+        val started = voice.clients.single()
+        bus.enqueue(RuleTrigger("hr_rapid_rise", com.healthyagent.running.core.model.Severity.NORMAL,
+            "不得采用的改写。", SpeechPriority.URGENT))
+        runCurrent()
+        assertTrue(started.cancelCalls > 0)
+        assertEquals(1, voice.clients.size)
+        assertEquals(1, voice.focusRequests)
+        coordinator.stopRun()
+        runCurrent()
+        assertEquals(1, voice.clients.size)
+        voice.ports.single().listener.onCompletion()
+        runCurrent()
+        assertEquals(2, voice.clients.size)
+        val finished = voice.clients.last()
+        coordinator.startRun()
+        runCurrent()
+        assertTrue(finished.cancelCalls > 0)
+        started.gate.complete(voice.file)
+        finished.gate.complete(voice.file)
+        runCurrent()
+        assertNull(coordinator.snapshot.value.latestCoachMessage)
+        assertEquals(1, voice.focusRequests)
+        voice.clients.last().gate.complete(voice.file)
+        runCurrent()
+        voice.ports.last().listener.onCompletion()
+        runCurrent()
+        assertEquals("流萤已开始记录，出发吧。", coordinator.snapshot.value.latestCoachMessage?.text)
+        assertEquals(1, logger.events.filterIsInstance<DiagnosticEvent.SpeechOutcome>().count {
+            it.ruleId == "session_finished" && it.reason == SpeechOutcomeReason.CANCELLED
+        })
+    }
+
+    private class VoiceFixture {
+        val file = File("测试语音.mp3")
+        val settings = AtomicReference(SettingsSnapshot())
+        val configurations = mutableListOf<SettingsSnapshot>()
+        val clients = mutableListOf<VoiceClient>()
+        val ports = mutableListOf<VoicePort>()
+        var focusRequests = 0
+        var focusReleases = 0
+        private val logger = FakeDiagnosticLogger()
+        private val focus = object : AudioFocusController {
+            override fun request(): AudioFocusLease {
+                focusRequests++
+                return object : AudioFocusLease {
+                    override val granted = true
+                    override fun release() { focusReleases++ }
+                }
+            }
+        }
+        val engine = VoicePolicyTtsEngine(
+            bundledStore = object : BundledVoiceStore { override suspend fun open(ruleId: String) = file },
+            onlineFactory = {
+                configurations += settings.get()
+                VoiceClient().also(clients::add)
+            },
+            companionTextSource = object : CompanionTextSource {
+                override suspend fun create(request: SpeechRequest) = "能和你在一起，我很开心。"
+            },
+            playerFactory = { PreparedVoicePlayer({ VoicePort().also(ports::add) }, focus, logger) },
+            diagnosticLogger = logger,
+        )
+    }
+
+    private class VoiceClient : FishSynthesisClient {
+        val gate = CompletableDeferred<File>()
+        var cancelCalls = 0
+        var shutdownCalls = 0
+        override suspend fun synthesize(text: String): File = withContext(NonCancellable) { gate.await() }
+        override fun cancel() { cancelCalls++ }
+        override fun shutdown() { shutdownCalls++ }
+    }
+
+    private class VoicePort : AudioPlayerPort {
+        lateinit var listener: AudioPlayerPort.Listener
+        var releaseCalls = 0
+        override fun start(file: File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener): Result<Unit> {
+            this.listener = listener
+            return Result.success(Unit)
+        }
+        override fun stop() = Unit
+        override fun release() { releaseCalls++ }
+    }
+
+    @Test
     fun `设置更新持久化且只影响下一次开跑配置`() = runTest {
         val settingsRepository = FakeSettingsRepository(
             SettingsSnapshot(
@@ -865,11 +1069,12 @@ class AppCoordinatorTest {
         ruleEngine: RuleEngine? = null,
         sessionManager: RunSessionManager = RunSessionManager(),
         pausedHeartRateMonitor: PausedHeartRateMonitor = PausedHeartRateMonitor(),
-    ): AppCoordinator {
-        val llmClient = object : LlmClient {
+        onVoiceSettingsChanged: (SettingsSnapshot) -> Unit = {},
+        llmClient: LlmClient = object : LlmClient {
             override suspend fun analyze(request: LlmAnalyzeRequest): Result<LlmAnalyzeResponse> =
                 Result.failure(IllegalStateException("测试中不调用网络"))
-        }
+        },
+    ): AppCoordinator {
         val effectiveSpeechBus = speechBus ?: SpeechBus(object : TtsEngine {
             override val isSpeaking: Boolean = false
             override suspend fun speak(text: String, priority: SpeechPriority) = Result.success(Unit)
@@ -897,6 +1102,7 @@ class AppCoordinatorTest {
             nowMillis = { 1_787_745_600_000L },
             realtimeMillis = { sensorDataSource.monotonicMillis },
             pausedHeartRateMonitor = pausedHeartRateMonitor,
+            onVoiceSettingsChanged = onVoiceSettingsChanged,
         )
         runCurrent()
         return coordinator

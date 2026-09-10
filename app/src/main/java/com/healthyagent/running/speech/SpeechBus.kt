@@ -43,10 +43,11 @@ class SpeechBus(
     private data class ScheduledSpeech(
         val operationId: Long,
         val sessionGeneration: Long,
-        val trigger: RuleTrigger,
+        val request: SpeechRequest,
         val acceptedAtMillis: Long,
         val sessionStatusRevision: Long? = null,
     ) {
+        val trigger: RuleTrigger get() = request.trigger
         val finishedKey: FinishedTerminalKey?
             get() = sessionStatusRevision
                 ?.takeIf { trigger.ruleId == SESSION_FINISHED_RULE_ID }
@@ -56,8 +57,10 @@ class SpeechBus(
     private data class PendingSessionStatus(
         val revision: Long,
         val sessionGeneration: Long,
-        val trigger: RuleTrigger,
-    )
+        val request: SpeechRequest,
+    ) {
+        val trigger: RuleTrigger get() = request.trigger
+    }
 
     private sealed interface Command {
         data class Start(val speech: ScheduledSpeech) : Command
@@ -69,6 +72,7 @@ class SpeechBus(
         data class Terminal(
             val speech: ScheduledSpeech,
             val reason: SpeechOutcomeReason,
+            val delivery: SpeechDelivery? = null,
         ) : Command
 
         data class HardStop(
@@ -116,7 +120,9 @@ class SpeechBus(
 
     fun configure(policy: SpeechPolicy) {
         require(policy.minIntervalSec >= 0)
+        val disabled = this.policy.enabled && !policy.enabled
         this.policy = policy
+        if (disabled) stop()
     }
 
     fun enqueue(trigger: RuleTrigger) {
@@ -124,6 +130,13 @@ class SpeechBus(
     }
 
     internal fun enqueue(trigger: RuleTrigger, expectedSessionGeneration: Long) {
+        enqueue(SpeechRequest(trigger), expectedSessionGeneration)
+    }
+
+    fun enqueue(request: SpeechRequest) = enqueue(request, sessionGenerationToken())
+
+    internal fun enqueue(request: SpeechRequest, expectedSessionGeneration: Long) {
+        val trigger = request.trigger
         val activePolicy = policy
         val now = nowMillis()
         synchronized(stateLock) {
@@ -143,7 +156,7 @@ class SpeechBus(
                     val speech = ScheduledSpeech(
                         operationId = ++activeOperationId,
                         sessionGeneration = sessionGeneration,
-                        trigger = trigger,
+                        request = request,
                         acceptedAtMillis = now,
                     )
                     activeSpeech = speech
@@ -155,6 +168,11 @@ class SpeechBus(
     }
 
     fun enqueueSessionStatus(trigger: RuleTrigger) {
+        enqueueSessionStatus(SpeechRequest(trigger))
+    }
+
+    fun enqueueSessionStatus(request: SpeechRequest) {
+        val trigger = request.trigger
         val activePolicy = policy
         val now = nowMillis()
         var disabledSpeech: ScheduledSpeech? = null
@@ -164,7 +182,7 @@ class SpeechBus(
                 disabledSpeech = ScheduledSpeech(
                     operationId = activeOperationId,
                     sessionGeneration = sessionGeneration,
-                    trigger = trigger,
+                    request = request,
                     acceptedAtMillis = now,
                     sessionStatusRevision = revision,
                 )
@@ -179,7 +197,7 @@ class SpeechBus(
                 pendingSessionStatus = PendingSessionStatus(
                     revision = revision,
                     sessionGeneration = sessionGeneration,
-                    trigger = trigger,
+                    request = request,
                 )
                 null
             } else {
@@ -187,7 +205,7 @@ class SpeechBus(
                 val speech = ScheduledSpeech(
                     operationId = ++activeOperationId,
                     sessionGeneration = sessionGeneration,
-                    trigger = trigger,
+                    request = request,
                     acceptedAtMillis = now,
                     sessionStatusRevision = revision,
                 )
@@ -266,14 +284,14 @@ class SpeechBus(
     private fun startPlayback(speech: ScheduledSpeech) {
         actorPlaybackOperationId = speech.operationId
         activePlaybackJob = actorScope.launch {
+            var delivery: SpeechDelivery? = null
             val reason = try {
-                val result = ttsEngine.speak(
-                    speech.trigger.speakText,
-                    speech.trigger.ttsPriority,
-                )
+                val result = ttsEngine.speak(speech.request)
+                delivery = result.getOrNull()
                 val error = result.exceptionOrNull()
                 when (error) {
-                    null -> SpeechOutcomeReason.TTS_SUCCESS
+                    null -> if (delivery?.played == true) SpeechOutcomeReason.TTS_SUCCESS
+                        else SpeechOutcomeReason.NOT_PLAYED
                     is PlaybackTimeoutException -> SpeechOutcomeReason.PLAYBACK_TIMEOUT
                     is CancellationException -> SpeechOutcomeReason.CANCELLED
                     else -> SpeechOutcomeReason.TTS_FAILURE
@@ -286,7 +304,7 @@ class SpeechBus(
             } catch (_: Throwable) {
                 SpeechOutcomeReason.TTS_FAILURE
             }
-            commandChannel.trySend(Command.Terminal(speech, reason))
+            commandChannel.trySend(Command.Terminal(speech, reason, delivery))
         }
     }
 
@@ -309,9 +327,13 @@ class SpeechBus(
             }
             if (command.reason == SpeechOutcomeReason.TTS_SUCCESS) {
                 speakHistory[command.speech.trigger.speakText] = command.speech.acceptedAtMillis
+            }
+            if (command.reason != SpeechOutcomeReason.CANCELLED) {
                 _latestMessage.value = CoachMessage(
                     id = newMessageId(),
-                    text = command.speech.trigger.speakText,
+                    text = command.delivery?.takeIf { it.played }?.text
+                        ?: BundledVoiceCatalog.find(command.speech.trigger.ruleId)?.text
+                        ?: command.speech.trigger.speakText,
                     priority = command.speech.trigger.ttsPriority,
                     timestampMillis = command.speech.acceptedAtMillis,
                 )
@@ -324,7 +346,7 @@ class SpeechBus(
                     ScheduledSpeech(
                         operationId = ++activeOperationId,
                         sessionGeneration = pending.sessionGeneration,
-                        trigger = pending.trigger,
+                        request = pending.request,
                         acceptedAtMillis = nowMillis(),
                         sessionStatusRevision = pending.revision,
                     ).also {
@@ -343,7 +365,7 @@ class SpeechBus(
             val speech = ScheduledSpeech(
                 operationId = -pending.revision,
                 sessionGeneration = pending.sessionGeneration,
-                trigger = pending.trigger,
+                request = pending.request,
                 acceptedAtMillis = nowMillis(),
                 sessionStatusRevision = pending.revision,
             )
