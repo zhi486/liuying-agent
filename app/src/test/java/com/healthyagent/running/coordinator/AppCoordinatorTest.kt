@@ -474,7 +474,7 @@ class AppCoordinatorTest {
         acceptFrame(400_000L, 1_000.0)
         runCurrent()
 
-        val expected = "第1公里，用时6分40秒，配速6分40秒"
+        val expected = "第一公里，用时六分四十秒，配速每公里六分四十秒。"
         assertEquals(1, ttsEngine.requests.count { it.text == expected })
 
         ttsEngine.completeNextSuccessfully()
