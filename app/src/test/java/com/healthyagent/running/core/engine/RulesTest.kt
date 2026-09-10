@@ -6,6 +6,7 @@ import com.healthyagent.running.core.model.MetricsFrame
 import com.healthyagent.running.core.model.RuleContext
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.Split
+import com.healthyagent.running.core.model.SpeechPriority
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -354,7 +355,10 @@ class RulesTest {
 
         assertNotNull(trigger)
         assertEquals("km_split", trigger!!.ruleId)
-        assertEquals("第3公里，用时6分47秒，配速6分35秒", trigger.speakText)
+        assertEquals("第三公里，用时六分四十七秒，配速每公里六分三十五秒。", trigger.speakText)
+        assertEquals(SpeechPriority.SPLIT, trigger.ttsPriority)
+        assertEquals(SpeechPriority.SPLIT, rule.defaultPriority)
+        assertEquals(0L, rule.cooldownMs)
     }
 
     @Test

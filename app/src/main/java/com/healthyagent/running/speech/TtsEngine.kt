@@ -22,6 +22,10 @@ interface TtsEngine {
      */
     suspend fun speak(text: String, priority: SpeechPriority): Result<Unit>
 
+    suspend fun speak(request: SpeechRequest): Result<SpeechDelivery> =
+        speak(request.trigger.speakText, request.trigger.ttsPriority)
+            .map { SpeechDelivery(request.trigger.speakText, played = true) }
+
     /** 停止当前播报 */
     fun stop()
 
