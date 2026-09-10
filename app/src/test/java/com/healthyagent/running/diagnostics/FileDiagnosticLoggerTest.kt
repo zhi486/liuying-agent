@@ -117,7 +117,7 @@ class FileDiagnosticLoggerTest {
         val logger = newLogger()
         val cases = buildList {
             SpeechOutcomeReason.entries.forEach { add(EnumCase(DiagnosticEvent.SpeechOutcome("rule", it), "reason", when (it) { SpeechOutcomeReason.POLICY_DISABLED -> "policy_disabled"; SpeechOutcomeReason.DUPLICATE_INTERVAL -> "duplicate_interval"; SpeechOutcomeReason.PRIORITY_BLOCKED -> "priority_blocked"; SpeechOutcomeReason.STALE_SESSION_GENERATION -> "stale_session_generation"; SpeechOutcomeReason.SESSION_STATUS_SCHEDULED -> "session_status_scheduled"; SpeechOutcomeReason.PENDING_SESSION_STATUS_REPLACED -> "pending_session_status_replaced"; SpeechOutcomeReason.TTS_SUCCESS -> "tts_success"; SpeechOutcomeReason.TTS_FAILURE -> "tts_failure"; SpeechOutcomeReason.PLAYBACK_TIMEOUT -> "playback_timeout"; SpeechOutcomeReason.CANCELLED -> "cancelled" })) }
-            TtsEventKind.entries.forEachIndexed { index, kind -> add(EnumCase(DiagnosticEvent.TtsProviderEvent(TtsProvider.entries[index % TtsProvider.entries.size], kind), "kind", when (kind) { TtsEventKind.ATTEMPTED -> "attempted"; TtsEventKind.SKIPPED_MISSING_CONFIG -> "skipped_missing_config"; TtsEventKind.INITIALIZATION_FAILED -> "initialization_failed"; TtsEventKind.COMPLETED -> "completed"; TtsEventKind.FAILED -> "failed"; TtsEventKind.LOCAL_FALLBACK -> "local_fallback"; TtsEventKind.PLAYBACK_TIMEOUT -> "playback_timeout"; TtsEventKind.CANCELLED -> "cancelled" })) }
+            TtsEventKind.entries.forEachIndexed { index, kind -> add(EnumCase(DiagnosticEvent.TtsProviderEvent(TtsProvider.entries[index % TtsProvider.entries.size], kind), "kind", when (kind) { TtsEventKind.ATTEMPTED -> "attempted"; TtsEventKind.SKIPPED_MISSING_CONFIG -> "skipped_missing_config"; TtsEventKind.INITIALIZATION_FAILED -> "initialization_failed"; TtsEventKind.COMPLETED -> "completed"; TtsEventKind.FAILED -> "failed"; TtsEventKind.LOCAL_FALLBACK -> "local_fallback"; TtsEventKind.PLAYBACK_TIMEOUT -> "playback_timeout"; TtsEventKind.CANCELLED -> "cancelled"; TtsEventKind.PREPARATION_TIMEOUT -> "preparation_timeout"; TtsEventKind.SKIPPED_OFFLINE -> "skipped_offline" })) }
             TtsProvider.entries.forEach { add(EnumCase(DiagnosticEvent.AudioFocusEvent(it, AudioFocusResult.GRANTED), "provider", when (it) { TtsProvider.ANDROID -> "android"; TtsProvider.FISH -> "fish"; TtsProvider.COMPOSITE -> "composite"; TtsProvider.BUNDLED -> "bundled" })) }
             AudioFocusResult.entries.forEach { add(EnumCase(DiagnosticEvent.AudioFocusEvent(TtsProvider.ANDROID, it), "result", when (it) { AudioFocusResult.GRANTED -> "granted"; AudioFocusResult.DENIED -> "denied"; AudioFocusResult.RELEASED -> "released" })) }
             DiagnosticBleLifecycle.entries.forEach { add(EnumCase(DiagnosticEvent.BleLifecycleChanged(it, it, 1, 1), "from", when (it) { DiagnosticBleLifecycle.STOPPED -> "stopped"; DiagnosticBleLifecycle.RUNNING -> "running"; DiagnosticBleLifecycle.PAUSED -> "paused" })) }
@@ -149,6 +149,16 @@ class FileDiagnosticLoggerTest {
         assertEquals(1, text.lineSequence().filter { it.isNotEmpty() }.count())
         val stored = decode(text).getValue("payload").jsonObject.getValue("ruleId").jsonPrimitive.content
         assertEquals("quote=\" slash=\\ newline=\n" + "😀".repeat(55), stored)
+    }
+
+    @Test
+    fun preparationTimeoutAndOfflineSkipHaveDistinctWireNames() = runTest {
+        val logger = newLogger()
+        listOf("PREPARATION_TIMEOUT", "SKIPPED_OFFLINE").forEach {
+            logger.record(DiagnosticEvent.TtsProviderEvent(TtsProvider.FISH, TtsEventKind.valueOf(it)))
+        }
+        logger.flush()
+        assertEquals(listOf("preparation_timeout", "skipped_offline"), currentLog().readLines().map { decode(it).payloadValue("kind") })
     }
 
     @Test

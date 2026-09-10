@@ -381,6 +381,20 @@ class OkHttpFishSynthesisClientTest {
         callFactory = factory,
     )
 
+    @Test
+    fun `禁读缓存时同文历史音频也必须重新请求且失败不返回旧缓存`() = runBlocking {
+        val factory = QueueCallFactory(
+            { request -> FakeCall(request) { response(request, 200, TrackingResponseBody("历史音频".encodeToByteArray())) } },
+            { request -> FakeCall(request) { response(request, 200, TrackingResponseBody("本次音频".encodeToByteArray())) } },
+            { request -> FakeCall(request) { throw IOException("本次网络失败") } },
+        )
+        client(factory).synthesize("同文")
+        val online = OkHttpFishSynthesisClient("api-secret", "reference-1", temporaryFolder.root, factory, readCache = false)
+        assertEquals("本次音频", online.synthesize("同文").readText())
+        assertTrue(captureThrowable { online.synthesize("同文") } is IOException)
+        assertEquals(3, factory.calls.size)
+    }
+
     private suspend fun captureThrowable(block: suspend () -> Any?): Throwable? = try {
         block()
         null

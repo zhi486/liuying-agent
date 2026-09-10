@@ -28,6 +28,7 @@ class OkHttpFishSynthesisClient(
     private val referenceId: String,
     private val cacheDirectory: File,
     private val callFactory: Call.Factory = defaultCallFactory(),
+    private val readCache: Boolean = true,
 ) : FishSynthesisClient {
     private val currentOperation = AtomicReference<SynthesisOperation?>(null)
 
@@ -37,7 +38,7 @@ class OkHttpFishSynthesisClient(
         currentOperation.set(operation)
         cacheDirectory.mkdirs()
         val cachedFile = File(cacheDirectory, "${cacheKey(text)}.mp3")
-        if (cachedFile.isFile && cachedFile.length() > 0L) {
+        if (readCache && cachedFile.isFile && cachedFile.length() > 0L) {
             currentOperation.compareAndSet(operation, null)
             return@withContext cachedFile
         }
