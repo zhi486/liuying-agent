@@ -1071,6 +1071,14 @@ class AppCoordinatorTest {
     private class VoicePort : AudioPlayerPort {
         lateinit var listener: AudioPlayerPort.Listener
         var releaseCalls = 0
+        override suspend fun prepare(file: File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener): Result<Unit> {
+            this.listener = listener
+            return Result.success(Unit)
+        }
+        override suspend fun startPrepared(startIfValid: (() -> Unit) -> Boolean): Result<Unit> {
+            startIfValid {}
+            return Result.success(Unit)
+        }
         override fun start(file: File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener): Result<Unit> {
             this.listener = listener
             return Result.success(Unit)

@@ -71,16 +71,15 @@ class VoicePolicyTtsEngine(
                         return@withContext Result.failure(IllegalStateException("固定语音资源不可用"))
                     }
                     if (!urgent) record(TtsEventKind.LOCAL_FALLBACK, provider = TtsProvider.BUNDLED)
-                    Prepared(file, core, VoiceAudioSource.BUNDLED)
+                    prepareAudio(operation, Prepared(file, core, VoiceAudioSource.BUNDLED))
                 }
-                val player = playerFactory()
-                synchronized(lock) { operation.player = player }
+                val player = checkNotNull(operation.player)
                 currentCoroutineContext().ensureActive()
                 synchronized(lock) {
                     if (active !== operation) throw CancellationException("语音操作已失效")
                     operation.playing = true
                 }
-                val result = player.play(prepared.file, prepared.source)
+                val result = player.play()
                 currentCoroutineContext().ensureActive()
                 result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
                 result.map { SpeechDelivery(prepared.text, played = true) }
@@ -125,19 +124,35 @@ class VoicePolicyTtsEngine(
                 val separator = if (suffix.isNotEmpty() && core.lastOrNull() !in setOf('。', '！', '？', '.', '!', '?')) "。" else ""
                 val text = core + separator + suffix
                 val file = awaitPreparation(onCancel = client::cancel) { client.synthesize(text) }
-                Prepared(file, text, VoiceAudioSource.ONLINE)
+                prepareAudio(operation, Prepared(file, text, VoiceAudioSource.ONLINE))
             }
             if (prepared == null) {
                 runCatching { client.cancel() }
+                discardPlayer(operation)
                 record(TtsEventKind.PREPARATION_TIMEOUT)
             }
             return prepared
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            discardPlayer(operation)
             record(TtsEventKind.FAILED, error)
             return null
         }
+    }
+
+    private suspend fun prepareAudio(operation: Operation, prepared: Prepared): Prepared {
+        val player = playerFactory()
+        synchronized(lock) { operation.player = player }
+        currentCoroutineContext().ensureActive()
+        player.prepare(prepared.file, prepared.source).getOrThrow()
+        currentCoroutineContext().ensureActive()
+        return prepared
+    }
+
+    private fun discardPlayer(operation: Operation) {
+        val player = synchronized(lock) { operation.player.also { operation.player = null } }
+        runCatching { player?.shutdown() }
     }
 
     // 阻塞或忽略取消的服务不能拖住调用方；迟到结果只能完成已经取消的等待。

@@ -30,6 +30,46 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpeechBusTest {
     @Test
+    fun `真实Policy到Player播放超时使provider和Bus使用相同超时诊断`() = runTest {
+        val logger = FakeDiagnosticLogger()
+        val engine = VoicePolicyTtsEngine(
+            object : BundledVoiceStore {
+                override suspend fun open(ruleId: String) = java.io.File("bundled.mp3")
+            },
+            { null },
+            object : CompanionTextSource {
+                override suspend fun create(request: SpeechRequest): String? = null
+            },
+            { PreparedVoicePlayer({ object : AudioPlayerPort {
+                override suspend fun prepare(file: java.io.File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener) = Result.success(Unit)
+                override suspend fun startPrepared(startIfValid: (() -> Unit) -> Boolean): Result<Unit> {
+                    startIfValid {}
+                    return Result.success(Unit)
+                }
+                override fun start(file: java.io.File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener) = Result.success(Unit)
+                override fun stop() = Unit
+                override fun release() = Unit
+            } }, object : AudioFocusController {
+                override fun request() = object : AudioFocusLease {
+                    override val granted = true
+                    override fun release() = Unit
+                }
+            }, logger) },
+            logger,
+        )
+        val bus = newBus(engine, logger)
+        bus.enqueue(trigger("session_paused", "跑步已暂停。"))
+        runCurrent()
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(SpeechOutcomeReason.PLAYBACK_TIMEOUT, outcomes(logger).single().reason)
+        assertTrue(logger.events.filterIsInstance<DiagnosticEvent.TtsProviderEvent>()
+            .any { it.kind == com.healthyagent.running.diagnostics.TtsEventKind.PLAYBACK_TIMEOUT })
+        bus.shutdown()
+        runCurrent()
+    }
+
+    @Test
     fun `typed引擎返回实际本地文本而非未播陪伴句`() = runTest {
         val tts = DeliveryTtsEngine(SpeechDelivery("固定核心。", true))
         val bus = newBus(tts)

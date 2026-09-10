@@ -1,5 +1,7 @@
 package com.healthyagent.running.speech
 
+import kotlinx.coroutines.test.runTest
+
 import android.media.AudioAttributes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -560,6 +562,33 @@ class AndroidAudioPlayerPortTest {
     val temporaryFolder = TemporaryFolder()
 
     @Test
+    fun `旧试听入口等待真实prepared且取消后忽略迟到回调`() {
+        val platform = FakeAudioPlayerPlatform(autoPrepared = false)
+        val port = AndroidAudioPlayerPort(platform)
+        assertTrue(port.start(temporaryFolder.newFile("legacy.mp3"),
+            SpeechAudioProfile.ASSISTANT_SPEECH, NoOpAudioPlayerListener).isSuccess)
+        assertEquals(listOf("prepare"), platform.calls)
+        port.stop()
+        port.release()
+        platform.capturedListener!!.onPrepared()
+        assertEquals(listOf("prepare"), platform.calls)
+    }
+
+    @Test
+    fun `分阶段准备完成不自动开播且启动门拒绝不会调用平台`() = runTest {
+        val platform = FakeAudioPlayerPlatform()
+        val port = AndroidAudioPlayerPort(platform)
+        assertTrue(port.prepare(temporaryFolder.newFile("gate.mp3"),
+            SpeechAudioProfile.ASSISTANT_SPEECH, NoOpAudioPlayerListener).isSuccess)
+        assertEquals(listOf("prepare"), platform.calls)
+        try {
+            port.startPrepared { false }
+            org.junit.Assert.fail("启动门拒绝必须传播取消")
+        } catch (_: kotlinx.coroutines.CancellationException) { }
+        assertEquals(listOf("prepare"), platform.calls)
+    }
+
+    @Test
     fun `助手语音使用 speech content type 和 assistant usage 并转发完成回调`() {
         val platform = FakeAudioPlayerPlatform()
         val port = AndroidAudioPlayerPort(platform)
@@ -591,21 +620,23 @@ class AndroidAudioPlayerPortTest {
     }
 
     @Test
-    fun `平台普通异常映射为 failure 而 Error 原样冒泡`() {
+    fun `平台普通异常映射为 failure 而 Error 原样冒泡`() = runTest {
         val ordinaryFailure = IOException("无法播放")
         val platform = FakeAudioPlayerPlatform(startFailure = ordinaryFailure)
         val port = AndroidAudioPlayerPort(platform)
         val audioFile = temporaryFolder.newFile("failure.mp3")
         val listener = NoOpAudioPlayerListener
 
-        val result = port.start(audioFile, SpeechAudioProfile.ASSISTANT_SPEECH, listener)
+        port.prepare(audioFile, SpeechAudioProfile.ASSISTANT_SPEECH, listener).getOrThrow()
+        val result = port.startPrepared()
 
         assertSame(ordinaryFailure, result.exceptionOrNull())
 
         val platformError = AssertionError("平台错误")
-        platform.startFailure = platformError
+        val errorPort = AndroidAudioPlayerPort(FakeAudioPlayerPlatform(startFailure = platformError))
+        errorPort.prepare(audioFile, SpeechAudioProfile.ASSISTANT_SPEECH, listener).getOrThrow()
         val thrown = try {
-            port.start(audioFile, SpeechAudioProfile.ASSISTANT_SPEECH, listener)
+            errorPort.startPrepared()
             null
         } catch (error: AssertionError) {
             error
@@ -620,6 +651,7 @@ class AndroidAudioPlayerPortTest {
 
     private class FakeAudioPlayerPlatform(
         var startFailure: Throwable? = null,
+        val autoPrepared: Boolean = true,
     ) : AndroidAudioPlayerPlatform {
         var contentType: Int? = null
         var usage: Int? = null
@@ -640,8 +672,9 @@ class AndroidAudioPlayerPortTest {
             capturedListener = listener
         }
 
-        override fun prepare() {
+        override fun prepareAsync() {
             calls += "prepare"
+            if (autoPrepared) capturedListener!!.onPrepared()
         }
 
         override fun start() {

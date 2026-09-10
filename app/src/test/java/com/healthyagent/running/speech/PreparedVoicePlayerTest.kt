@@ -52,7 +52,7 @@ class PreparedVoicePlayerTest {
         assertFalse(result.isCompleted)
         advanceTimeBy(1)
         runCurrent()
-        assertTrue(result.await().isFailure)
+        assertTrue(result.await().exceptionOrNull() is PlaybackTimeoutException)
         fixture.assertCleaned(stopCalls = 1)
         assertEquals(TtsEventKind.PLAYBACK_TIMEOUT, fixture.logger.events
             .filterIsInstance<DiagnosticEvent.TtsProviderEvent>().last().kind)
@@ -136,7 +136,7 @@ class PreparedVoicePlayerTest {
         assertFalse(fixture.ports.single().cleanedWhileStarting)
     }
 
-    @Test fun `另一个线程在start中停止无需等待端口返回`() = runTest {
+    @Test fun `实际start先取得启动门时取消等待其返回且随后清理一次`() = runTest {
         val fixture = Fixture()
         val entered = CountDownLatch(1)
         val proceed = CountDownLatch(1)
@@ -145,11 +145,14 @@ class PreparedVoicePlayerTest {
             check(proceed.await(5, TimeUnit.SECONDS))
         }
         val result = async(Dispatchers.Default) { fixture.play() }
+        var stopping: kotlinx.coroutines.Deferred<Unit>? = null
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS))
-            fixture.player.stop()
+            stopping = async(Dispatchers.Default) { fixture.player.stop() }
+            assertFalse(stopping.isCompleted)
             assertEquals(0, fixture.ports.single().releases)
         } finally { proceed.countDown() }
+        stopping?.await()
         try { result.await(); fail("应取消") } catch (_: CancellationException) { }
         fixture.assertCleaned(stopCalls = 1)
         assertFalse(fixture.ports.single().cleanedWhileStarting)
@@ -170,7 +173,39 @@ class PreparedVoicePlayerTest {
         } finally { proceed.countDown() }
         result.join()
         assertEquals(0, fixture.ports.single().starts)
+        assertEquals(1, fixture.ports.single().releases)
+        assertTrue(fixture.leases.isEmpty())
+    }
+
+    @Test fun `焦点请求迟到时取消先认领启动门不start且释放迟到lease`() = runTest {
+        val fixture = Fixture()
+        val entered = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        fixture.onRequest = {
+            entered.countDown()
+            check(proceed.await(5, TimeUnit.SECONDS))
+        }
+        val result = async(Dispatchers.Default) { fixture.play() }
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            fixture.player.stop()
+            assertEquals(0, fixture.ports.single().starts)
+            assertEquals(0, fixture.ports.single().releases)
+        } finally { proceed.countDown() }
+        result.join()
+        assertTrue(result.isCancelled)
+        assertEquals(0, fixture.ports.single().starts)
         fixture.assertCleaned()
+    }
+
+    @Test fun `prepared后取消先认领则后续play不申请焦点也不启动`() = runTest {
+        val fixture = Fixture()
+        assertTrue(fixture.player.prepare(File("test.mp3"), VoiceAudioSource.ONLINE).isSuccess)
+        fixture.player.stop()
+        assertTrue(fixture.player.play().isFailure)
+        assertEquals(0, fixture.ports.single().starts)
+        assertEquals(1, fixture.ports.single().releases)
+        assertTrue(fixture.leases.isEmpty())
     }
 
     @Test fun `旧回调不得释放新操作资源`() = runTest {
@@ -232,10 +267,11 @@ class PreparedVoicePlayerTest {
         val logger = FakeDiagnosticLogger()
         var onStart: (Port) -> Unit = {}
         var onCreate: () -> Unit = {}
+        var onRequest: () -> Unit = {}
         val player = PreparedVoicePlayer(
             audioPlayerFactory = { onCreate(); Port { onStart(it) }.also { ports += it } },
             audioFocusController = object : AudioFocusController {
-                override fun request() = Lease(granted).also { leases += it }
+                override fun request(): Lease { onRequest(); return Lease(granted).also { leases += it } }
             },
             diagnosticLogger = logger,
         )
@@ -263,6 +299,16 @@ class PreparedVoicePlayerTest {
         var throwOnRelease = false
         var onStop: () -> Unit = {}
         var startResult = Result.success(Unit)
+        override suspend fun prepare(file: File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener): Result<Unit> {
+            this.listener = listener
+            this.profile = profile
+            return Result.success(Unit)
+        }
+        override suspend fun startPrepared(startIfValid: (() -> Unit) -> Boolean): Result<Unit> {
+            var result = Result.success(Unit)
+            startIfValid { result = start(File("test.mp3"), checkNotNull(profile), listener) }
+            return result
+        }
         override fun start(file: File, profile: SpeechAudioProfile, listener: AudioPlayerPort.Listener): Result<Unit> {
             this.listener = listener
             this.profile = profile

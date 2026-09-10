@@ -1,9 +1,10 @@
 package com.healthyagent.running.core.model
 
 /**
- * 教练消息 — SpeechBus 实际播报内容的 UI 镜像
+ * 教练消息 — SpeechBus 发布的播报结果与核心文字
  *
- * 只有真正被 TTS 播报的消息才会产生（被去重/打断丢弃的不上屏，音画一致）。
+ * 实播时展示实际内容；离线公里跳过或播放失败时也可展示核心文字，不展示未播鼓励。
+ * 被去重、取消或打断丢弃的消息不上屏。
  * 放 core/model 保持 SpeechBus 纯 Kotlin 可单测。
  */
 data class CoachMessage(

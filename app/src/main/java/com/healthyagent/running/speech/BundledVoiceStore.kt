@@ -9,7 +9,12 @@ interface BundledVoiceStore {
 }
 
 interface VoiceFilePlayer {
-    suspend fun play(file: File, source: VoiceAudioSource): Result<Unit>
+    suspend fun prepare(file: File, source: VoiceAudioSource): Result<Unit>
+    suspend fun play(): Result<Unit>
+    suspend fun play(file: File, source: VoiceAudioSource): Result<Unit> {
+        val prepared = prepare(file, source)
+        return if (prepared.isSuccess) play() else prepared
+    }
     fun stop()
     fun shutdown()
 }

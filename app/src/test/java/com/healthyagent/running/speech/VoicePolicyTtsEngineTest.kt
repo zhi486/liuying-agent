@@ -441,7 +441,8 @@ class VoicePolicyTtsEngineTest {
         val sources = mutableListOf<VoiceAudioSource>()
         var stopCalls = 0
         var shutdownCalls = 0
-        override suspend fun play(file: File, source: VoiceAudioSource): Result<Unit> { sources += source; return playback() }
+        override suspend fun prepare(file: File, source: VoiceAudioSource): Result<Unit> { sources += source; return Result.success(Unit) }
+        override suspend fun play(): Result<Unit> = playback()
         override fun stop() { stopCalls++ }
         override fun shutdown() { shutdownCalls++ }
     }

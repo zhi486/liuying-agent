@@ -250,9 +250,15 @@ class VoicePolicyInstrumentedTest {
 
     private class RecordingPlayer : VoiceFilePlayer {
         val playbacks = mutableListOf<Playback>()
+        private lateinit var prepared: Playback
 
-        override suspend fun play(file: File, source: VoiceAudioSource): Result<Unit> {
-            playbacks += Playback(file, source)
+        override suspend fun prepare(file: File, source: VoiceAudioSource): Result<Unit> {
+            prepared = Playback(file, source)
+            return Result.success(Unit)
+        }
+
+        override suspend fun play(): Result<Unit> {
+            playbacks += prepared
             return Result.success(Unit)
         }
 

@@ -134,8 +134,8 @@ class SettingsDataStore(
         const val DEFAULT_MAX_HR = 180
         const val DEFAULT_TTS_INTERVAL = 4
 
-        /** LIUYING 声音克隆参考 ID。 */
-        const val DEFAULT_FISH_REFERENCE_ID = "79b9954c15f24deeab2319ec5f44f3b0"
+        /** 声线仅从用户显式保存的私有设置读取。 */
+        const val DEFAULT_FISH_REFERENCE_ID = ""
     }
 }
 
