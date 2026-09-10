@@ -34,6 +34,22 @@ class KilometerSpeechFormatterTest {
     }
 
     @Test
+    fun `百位后的十位补一`() {
+        assertEquals(
+            "第一百一十公里，用时一百一十分整，配速每公里一百一十分整。",
+            KilometerSpeechFormatter.format(110, 6_600, 6_600.0),
+        )
+    }
+
+    @Test
+    fun `千位后的十位补一`() {
+        assertEquals(
+            "第一千零一十公里，用时一千零一十分整，配速每公里一千零一十分整。",
+            KilometerSpeechFormatter.format(1_010, 60_600, 60_600.0),
+        )
+    }
+
+    @Test
     fun `不足一分钟时不播报零分`() {
         assertEquals(
             "第二公里，用时五十九秒，配速每公里五十九秒。",

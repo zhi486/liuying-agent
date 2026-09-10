@@ -34,7 +34,12 @@ object KilometerSpeechFormatter {
         val remainder = value % unitValue
         if (remainder == 0L) return "${formatNumber(value / unitValue)}$unit"
         val separator = if (remainder < unitValue / 10) "零" else ""
-        return "${formatNumber(value / unitValue)}$unit$separator${formatNumber(remainder)}"
+        val remainderText = if (remainder in 10..19) {
+            "一${formatNumber(remainder)}"
+        } else {
+            formatNumber(remainder)
+        }
+        return "${formatNumber(value / unitValue)}$unit$separator$remainderText"
     }
 
     private val DIGITS = listOf("零", "一", "二", "三", "四", "五", "六", "七", "八", "九")
