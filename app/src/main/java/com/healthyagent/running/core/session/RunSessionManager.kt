@@ -4,6 +4,7 @@ import com.healthyagent.running.core.model.MetricsFrame
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.RunSession
 import com.healthyagent.running.core.model.RunState
+import com.healthyagent.running.core.model.RoutePoint
 import com.healthyagent.running.core.model.Split
 import java.util.UUID
 
@@ -22,7 +23,9 @@ class RunSessionManager {
     private var lastSplitKm = 0
     private var totalHrSum = 0L
     private var totalCadenceSum = 0L
-    private var frameCount = 0
+    private var heartRateFrameCount = 0
+    private var cadenceFrameCount = 0
+    private var lastSplitElapsedSeconds = 0L
     private var _currentState = RunState.IDLE
 
     /** 当前会话状态 */
@@ -49,6 +52,27 @@ class RunSessionManager {
         return session
     }
 
+    /** 从本地检查点恢复未结束会话。 */
+    fun restoreSession(session: RunSession) {
+        require(session.runState == RunState.RUNNING || session.runState == RunState.PAUSED) {
+            "只能恢复进行中或已暂停的会话"
+        }
+
+        reset()
+        currentSession = session
+        _currentState = session.runState
+        lastSplitKm = session.splits.maxOfOrNull { it.index } ?: 0
+        lastSplitElapsedSeconds = session.splits.sumOf { it.durationSec }
+
+        // 管道每秒生成一帧。检查点只保存聚合值，恢复时以已用时近似帧数，
+        // 让结束后的全程均值不会只统计恢复后的部分。
+        val estimatedFrameCount = session.totalDurationSec.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        heartRateFrameCount = if (session.avgHeartRate == null) 0 else estimatedFrameCount
+        cadenceFrameCount = if (session.avgCadence == null) 0 else estimatedFrameCount
+        totalHrSum = (session.avgHeartRate?.toLong() ?: 0L) * heartRateFrameCount
+        totalCadenceSum = (session.avgCadence?.toLong() ?: 0L) * cadenceFrameCount
+    }
+
     /**
      * 处理一帧数据，返回新产生的 Split（跨公里时），否则返回 null
      */
@@ -56,15 +80,29 @@ class RunSessionManager {
         if (_currentState != RunState.RUNNING) return null
 
         val session = currentSession ?: return null
+        // 累积指标用于计算平均
+        frame.heartRateSmoothed?.let {
+            totalHrSum += it
+            heartRateFrameCount++
+        }
+        frame.cadence?.let {
+            totalCadenceSum += it
+            cadenceFrameCount++
+        }
         currentSession = session.copy(
             totalDistanceMeters = frame.distanceMeters,
-            totalDurationSec = frame.elapsedSeconds,
+            totalDurationSec = maxOf(session.totalDurationSec, frame.elapsedSeconds),
+            avgHeartRate = if (heartRateFrameCount > 0) {
+                (totalHrSum / heartRateFrameCount).toInt()
+            } else {
+                null
+            },
+            avgCadence = if (cadenceFrameCount > 0) {
+                (totalCadenceSum / cadenceFrameCount).toInt()
+            } else {
+                null
+            },
         )
-
-        // 累积指标用于计算平均
-        frame.heartRateSmoothed?.let { totalHrSum += it }
-        frame.cadence?.let { totalCadenceSum += it }
-        frameCount++
 
         // 追加到分段缓冲区
         splitBuffer.add(frame)
@@ -73,14 +111,35 @@ class RunSessionManager {
         val currentKm = (frame.distanceMeters / 1000.0).toInt()
         if (currentKm <= lastSplitKm) return null
 
-        val split = buildSplit(currentKm)
+        val split = buildSplit(currentKm, frame.elapsedSeconds)
         lastSplitKm = currentKm
+        lastSplitElapsedSeconds = maxOf(lastSplitElapsedSeconds, frame.elapsedSeconds)
         splitBuffer.clear()
 
         // 追加到会话的分段列表
         val updatedSplits = currentSession!!.splits + split
         currentSession = currentSession!!.copy(splits = updatedSplits)
         return split
+    }
+
+    fun onRoutePoint(point: RoutePoint) {
+        if (_currentState != RunState.RUNNING) return
+        currentSession = currentSession?.let { session ->
+            session.copy(routePoints = session.routePoints + point)
+        }
+    }
+
+    /**
+     * 在没有指标变化时，仅推进当前跑步的活动用时。
+     *
+     * 调用方应传入已经排除暂停区间的 elapsed；该方法不会让用时倒退，也不会在
+     * 暂停或结束状态下偷偷累计。
+     */
+    fun advanceElapsedTo(elapsedSeconds: Long) {
+        if (_currentState != RunState.RUNNING) return
+        currentSession = currentSession?.let { session ->
+            session.copy(totalDurationSec = maxOf(session.totalDurationSec, elapsedSeconds))
+        }
     }
 
     /** 暂停 */
@@ -108,8 +167,16 @@ class RunSessionManager {
 
         val finalized = session.copy(
             endTimeMillis = System.currentTimeMillis(),
-            avgHeartRate = if (frameCount > 0) (totalHrSum / frameCount).toInt() else null,
-            avgCadence = if (frameCount > 0) (totalCadenceSum / frameCount).toInt() else null,
+            avgHeartRate = if (heartRateFrameCount > 0) {
+                (totalHrSum / heartRateFrameCount).toInt()
+            } else {
+                null
+            },
+            avgCadence = if (cadenceFrameCount > 0) {
+                (totalCadenceSum / cadenceFrameCount).toInt()
+            } else {
+                null
+            },
             avgPaceSecPerKm = if (session.totalDistanceMeters > 0 && session.totalDurationSec > 0) {
                 session.totalDurationSec / (session.totalDistanceMeters / 1000.0)
             } else null,
@@ -126,18 +193,18 @@ class RunSessionManager {
         lastSplitKm = 0
         totalHrSum = 0
         totalCadenceSum = 0
-        frameCount = 0
+        heartRateFrameCount = 0
+        cadenceFrameCount = 0
+        lastSplitElapsedSeconds = 0L
         _currentState = RunState.IDLE
     }
 
     /**
      * 从分段缓冲区的帧中构建一个 Split
      */
-    private fun buildSplit(km: Int): Split {
+    private fun buildSplit(km: Int, boundaryElapsedSeconds: Long): Split {
         val frames = splitBuffer.toList()
-        val durationSec = if (frames.size >= 2) {
-            (frames.last().timestampMillis - frames.first().timestampMillis) / 1000
-        } else 0L
+        val durationSec = (boundaryElapsedSeconds - lastSplitElapsedSeconds).coerceAtLeast(0L)
 
         val hrValues = frames.mapNotNull { it.heartRateSmoothed }
         val cadenceValues = frames.mapNotNull { it.cadence }

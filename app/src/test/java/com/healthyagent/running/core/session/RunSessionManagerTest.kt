@@ -4,6 +4,8 @@ import com.healthyagent.running.core.model.HrZone
 import com.healthyagent.running.core.model.MetricsFrame
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.RunState
+import com.healthyagent.running.core.model.RunSession
+import com.healthyagent.running.core.model.RoutePoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -157,5 +159,108 @@ class RunSessionManagerTest {
         manager.startSession(config)
         val session = manager.finishSession()
         assertNotNull(session)
+    }
+
+    @Test
+    fun `restoreSession — 恢复会话身份和累计指标`() {
+        val manager = RunSessionManager()
+        val checkpoint = RunSession(
+            id = "active-run",
+            startTimeMillis = 1000L,
+            totalDistanceMeters = 1250.0,
+            totalDurationSec = 500,
+            avgHeartRate = 145,
+            avgCadence = 172,
+            runState = RunState.PAUSED,
+        )
+
+        manager.restoreSession(checkpoint)
+
+        assertEquals(RunState.PAUSED, manager.currentState)
+        assertEquals(checkpoint, manager.currentSession)
+    }
+
+    @Test
+    fun `路线点只在跑步中累计`() {
+        val manager = RunSessionManager()
+        val point = RoutePoint(31.0, 121.0, 1_000L, 5.0)
+        manager.startSession(config)
+
+        manager.onRoutePoint(point)
+        manager.pause()
+        manager.onRoutePoint(point.copy(timestampMillis = 2_000L))
+
+        assertEquals(listOf(point), manager.currentSession?.routePoints)
+    }
+
+    @Test
+    fun `手机单跑没有心率时平均心率保持为空`() {
+        val manager = RunSessionManager()
+        manager.startSession(config)
+        manager.onFrame(makeFrame(elapsedSec = 1, hr = null, cadence = null))
+
+        val session = manager.finishSession()
+
+        assertNull(session?.avgHeartRate)
+        assertNull(session?.avgCadence)
+    }
+
+    @Test
+    fun `分段时长使用活动 elapsed 而不是跨暂停的墙上时间`() {
+        val manager = RunSessionManager()
+        manager.startSession(config)
+        manager.onFrame(makeFrame(elapsedSec = 1, distance = 0.0, timestamp = 1_000L))
+        manager.onFrame(makeFrame(elapsedSec = 10, distance = 900.0, timestamp = 10_000L))
+
+        manager.pause()
+        manager.resume()
+        val split = manager.onFrame(
+            makeFrame(
+                elapsedSec = 11,
+                distance = 1_000.0,
+                timestamp = 3_611_000L,
+            ),
+        )
+
+        assertNotNull(split)
+        assertEquals(11L, split?.durationSec)
+    }
+
+    @Test
+    fun `后续分段只计算上一公里后的活动 elapsed 差值`() {
+        val manager = RunSessionManager()
+        manager.startSession(config)
+        val firstSplit = manager.onFrame(makeFrame(elapsedSec = 400, distance = 1_000.0))
+
+        manager.pause()
+        manager.resume()
+        val secondSplit = manager.onFrame(
+            makeFrame(
+                elapsedSec = 805,
+                distance = 2_000.0,
+                timestamp = 9_000_000L,
+            ),
+        )
+
+        assertEquals(400L, firstSplit?.durationSec)
+        assertEquals(405L, secondSplit?.durationSec)
+    }
+
+    @Test
+    fun `advanceElapsedTo 只在跑步中向前推进且不会倒退`() {
+        val manager = RunSessionManager()
+        manager.startSession(config)
+
+        manager.advanceElapsedTo(10L)
+        manager.advanceElapsedTo(7L)
+        assertEquals(10L, manager.currentSession?.totalDurationSec)
+
+        manager.pause()
+        manager.advanceElapsedTo(20L)
+        assertEquals(10L, manager.currentSession?.totalDurationSec)
+
+        manager.resume()
+        manager.advanceElapsedTo(12L)
+        assertEquals(12L, manager.currentSession?.totalDurationSec)
     }
 }

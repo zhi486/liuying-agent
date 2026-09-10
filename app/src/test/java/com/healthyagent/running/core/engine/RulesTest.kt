@@ -5,6 +5,7 @@ import com.healthyagent.running.core.model.HrZone
 import com.healthyagent.running.core.model.MetricsFrame
 import com.healthyagent.running.core.model.RuleContext
 import com.healthyagent.running.core.model.RunConfig
+import com.healthyagent.running.core.model.Split
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -327,25 +328,40 @@ class RulesTest {
     // ==================== 规则 10: KmSplitRule ====================
 
     @Test
-    fun `KmSplitRule — 跨过整公里触发`() {
+    fun `KmSplitRule — 使用 completedSplit 生成权威播报`() {
         val rule = KmSplitRule()
-        val frames = listOf(
-            makeFrame(1, distance = 900.0, timestamp = 0),
-            makeFrame(2, distance = 1050.0, timestamp = 300_000),
+        val split = Split(
+            index = 3,
+            distanceMeters = 3_000.0,
+            durationSec = 407L,
+            avgHeartRate = null,
+            avgCadence = null,
+            avgPaceSecPerKm = 395.0,
+            hrZoneDistribution = null,
         )
-        val ctx = RuleContext(recentFrames = frames)
+        val ctx = RuleContext(
+            recentFrames = listOf(
+                makeFrame(
+                    elapsedSec = 999,
+                    pace = 222.0,
+                    distance = 4_250.0,
+                ),
+            ),
+            completedSplit = split,
+        )
+
         val trigger = rule.evaluate(ctx, config)
+
         assertNotNull(trigger)
         assertEquals("km_split", trigger!!.ruleId)
-        trigger!!.speakText.contains("第1公里")
-        assertTrue(trigger.speakText.contains("第1公里"))
+        assertEquals("第3公里，用时6分47秒，配速6分35秒", trigger.speakText)
     }
 
     @Test
-    fun `KmSplitRule — 未跨过整公里不触发`() {
+    fun `KmSplitRule — 没有 completedSplit 不触发`() {
         val rule = KmSplitRule()
-        val frames = listOf(makeFrame(1, distance = 500.0))
-        val ctx = RuleContext(recentFrames = frames)
+        val ctx = RuleContext(recentFrames = listOf(makeFrame(1, distance = 3_000.0)))
+
         assertNull(rule.evaluate(ctx, config))
     }
 

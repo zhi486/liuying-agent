@@ -8,7 +8,13 @@
     "generatedAt": "2026-08-26T12:00:02Z",
     "connection": {
       "state": "connected",
-      "deviceName": "Mock-KeepB5",
+      "deviceName": "手机 GPS",
+      "batteryPercent": null
+    },
+    "wearable": {
+      "supported": true,
+      "state": "connected",
+      "deviceName": "Keep B5",
       "batteryPercent": 86
     },
     "session": {
@@ -27,6 +33,12 @@
       "elapsedSeconds": 366,
       "hrZone": "z3",
       "isDataFresh": true
+    },
+    "completedRun": null,
+    "persistenceState": "idle",
+    "healthSync": {
+      "state": "idle",
+      "routeWritten": null
     },
     "latestCoachMessage": {
       "id": "20000000-0000-4000-8000-000000000001",

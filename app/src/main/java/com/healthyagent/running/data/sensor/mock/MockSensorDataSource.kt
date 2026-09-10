@@ -25,14 +25,22 @@ class MockSensorDataSource(
     override val connectionState = _connectionState.asStateFlow()
 
     override val deviceInfo = DeviceInfo(
-        name = "Mock-KeepB5",
+        name = "模拟跑步数据",
         batteryPercent = 85,
         firmwareVersion = "1.0.0-mock"
     )
 
     private var running = false
+    private var elapsedSec = 0L
+    private var totalDistance = 0.0
+    private var totalSteps = 0L
 
     override suspend fun connect() {
+        if (_connectionState.value == ConnectionState.DISCONNECTED) {
+            elapsedSec = 0L
+            totalDistance = 0.0
+            totalSteps = 0L
+        }
         _connectionState.value = ConnectionState.CONNECTING
         delay(500) // 模拟连接延迟
         _connectionState.value = ConnectionState.CONNECTED
@@ -44,10 +52,6 @@ class MockSensorDataSource(
     }
 
     override val samples: Flow<SensorSample> = flow {
-        var elapsedSec = 0L
-        var totalDistance = 0.0
-        var totalSteps = 0L
-
         running = true
 
         while (running) {
@@ -81,25 +85,23 @@ class MockSensorDataSource(
                 )
             )
 
-            // 距离 + 步数样本（每 5s 发一次，模拟手环聚合行为）
-            if (elapsedSec % 5 == 0L) {
-                emit(
-                    SensorSample(
-                        type = SampleType.DISTANCE,
-                        value = totalDistance,
-                        timestampMillis = System.currentTimeMillis(),
-                        source = "mock"
-                    )
+            // 模拟器代表手机 GPS 主源，因此距离与步数也按 1Hz 更新。
+            emit(
+                SensorSample(
+                    type = SampleType.DISTANCE,
+                    value = totalDistance,
+                    timestampMillis = System.currentTimeMillis(),
+                    source = "mock_phone"
                 )
-                emit(
-                    SensorSample(
-                        type = SampleType.STEPS,
-                        value = totalSteps.toDouble(),
-                        timestampMillis = System.currentTimeMillis(),
-                        source = "mock"
-                    )
+            )
+            emit(
+                SensorSample(
+                    type = SampleType.STEPS,
+                    value = totalSteps.toDouble(),
+                    timestampMillis = System.currentTimeMillis(),
+                    source = "mock_phone"
                 )
-            }
+            )
 
             elapsedSec++
             delay(1000) // 1Hz

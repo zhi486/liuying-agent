@@ -7,6 +7,8 @@ import com.healthyagent.running.core.model.RuleTrigger
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.Severity
 import com.healthyagent.running.core.model.SpeechPriority
+import com.healthyagent.running.diagnostics.DiagnosticEvent
+import com.healthyagent.running.testing.FakeDiagnosticLogger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -176,5 +178,79 @@ class RuleEngineTest {
 
         assertEquals(1, engine.evaluate(makeFrame(1), context).size)
         assertEquals(0, engine.evaluate(makeFrame(2), context).size)
+    }
+
+    @Test
+    fun `reset — 清除冷却诊断窗口标记`() {
+        var now = 12_000L
+        val logger = FakeDiagnosticLogger()
+        val splitRule = object : Rule {
+            override val id = "km_split"
+            override val cooldownMs = 10_000L
+            override val defaultPriority = SpeechPriority.SPLIT
+            override fun evaluate(ctx: RuleContext, config: RunConfig) = RuleTrigger(
+                ruleId = id,
+                severity = Severity.INFO,
+                speakText = "分段播报",
+                ttsPriority = defaultPriority,
+            )
+        }
+        val engine = RuleEngine(listOf(splitRule), config, nowMillis = { now }, diagnosticLogger = logger)
+        val context = RuleContext()
+
+        engine.evaluate(makeFrame(), context)
+        now = 12_001L
+        engine.evaluate(makeFrame(), context)
+        val eventCountBefore = logger.events.size
+        engine.reset()
+
+        now = 12_000L
+        engine.evaluate(makeFrame(), context)
+        now = 12_001L
+        engine.evaluate(makeFrame(), context)
+        assertEquals(
+            listOf(
+                DiagnosticEvent.RuleTriggered("km_split"),
+                DiagnosticEvent.RuleCooldownSkipped("km_split", windowStartedAtMillis = 12_000L),
+            ),
+            logger.events.drop(eventCountBefore),
+        )
+    }
+
+    @Test
+    fun `onSplit — 清除 split 规则的冷却诊断窗口标记`() {
+        var now = 12_000L
+        val logger = FakeDiagnosticLogger()
+        val splitRule = object : Rule {
+            override val id = "km_split"
+            override val cooldownMs = 10_000L
+            override val defaultPriority = SpeechPriority.SPLIT
+            override fun evaluate(ctx: RuleContext, config: RunConfig) = RuleTrigger(
+                ruleId = id,
+                severity = Severity.INFO,
+                speakText = "分段播报",
+                ttsPriority = defaultPriority,
+            )
+        }
+        val engine = RuleEngine(listOf(splitRule), config, nowMillis = { now }, diagnosticLogger = logger)
+        val context = RuleContext()
+
+        engine.evaluate(makeFrame(), context)
+        now = 12_001L
+        engine.evaluate(makeFrame(), context)
+        val eventCountBefore = logger.events.size
+        engine.onSplit(1)
+
+        now = 12_000L
+        engine.evaluate(makeFrame(), context)
+        now = 12_001L
+        engine.evaluate(makeFrame(), context)
+        assertEquals(
+            listOf(
+                DiagnosticEvent.RuleTriggered("km_split"),
+                DiagnosticEvent.RuleCooldownSkipped("km_split", windowStartedAtMillis = 12_000L),
+            ),
+            logger.events.drop(eventCountBefore),
+        )
     }
 }

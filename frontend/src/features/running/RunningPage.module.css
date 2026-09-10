@@ -2,6 +2,17 @@
   padding: 3rem 1.5rem 0;
 }
 
+.previewBadge {
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
 .readinessHeader {
   display: flex;
   align-items: flex-start;
@@ -40,25 +51,70 @@
   box-shadow: 0 0 0.8rem var(--accent);
 }
 
+.devicePulseMuted span {
+  background: var(--text-faint);
+  box-shadow: none;
+}
+
 .goalPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
   margin: 2.4rem 0 1.5rem;
   padding: 1.3rem 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
-.goalPanel p,
-.goalPanel span {
-  margin: 0;
+.goalHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.goalHeading span {
   color: var(--text-muted);
   font-size: 0.72rem;
 }
 
-.goalPanel strong {
-  font-size: 1.22rem;
+.goalHeading a {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 720;
+  text-decoration: none;
+}
+
+.targetGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.8rem;
+  margin: 1rem 0 0;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.targetGrid div {
+  min-width: 0;
+}
+
+.targetGrid div + div {
+  padding-left: 0.8rem;
+  border-left: 1px solid var(--line);
+}
+
+.targetGrid dt {
+  color: var(--text-faint);
+  font-size: 0.6rem;
+}
+
+.targetGrid dd {
+  margin: 0.45rem 0 0;
+  font-family: var(--font-numeric);
+  font-size: 1.05rem;
+  font-weight: 680;
+}
+
+.goalEmpty {
+  margin: 0.9rem 0 0;
+  color: var(--text-faint);
+  font-size: 0.66rem;
 }
 
 .readinessList {
@@ -92,24 +148,92 @@
   text-align: center;
 }
 
-.activePage {
-  padding-top: 2.4rem;
+.wearableControls {
+  margin: -0.8rem 0 1.5rem;
 }
 
-.liveStatus {
+.wearableControls button {
+  width: 100%;
+  min-height: 44px;
+}
+
+.wearableControls p {
+  margin: 0.6rem 0 0;
+  color: var(--text-faint);
+  font-size: 0.68rem;
+  line-height: 1.6;
+}
+
+.activePage {
+  padding-top: 2.4rem;
+  padding-bottom: 8rem;
+}
+
+.liveHeadline {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 0.65rem;
 }
 
-.liveStatus strong {
+.liveHeadline strong {
   font-size: 0.85rem;
 }
 
-.liveStatus > span:last-child {
+.sourceStatusList {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.sourceStatusList > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sourceStatusList span {
   color: var(--text-faint);
+  font-size: 0.64rem;
+}
+
+.sourceStatusList strong {
   font-size: 0.7rem;
+  font-weight: 680;
+  text-align: right;
+}
+
+.activePlan {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.7rem;
+  margin-top: 1.1rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.activePlan span {
+  grid-row: 1 / 3;
+  align-self: center;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.65rem;
+  font-weight: 760;
+}
+
+.activePlan strong {
+  font-size: 0.78rem;
+}
+
+.activePlan small {
+  color: var(--text-faint);
+  font-size: 0.62rem;
 }
 
 .pauseIndicator {
@@ -129,7 +253,7 @@
 .paceHero > span,
 .paceHero small {
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   letter-spacing: 0.08em;
 }
 
@@ -172,7 +296,7 @@
   width: 100%;
   margin-bottom: 0.35rem;
   color: var(--text-faint);
-  font-size: 0.6rem;
+  font-size: 0.68rem;
 }
 
 .metricsGrid strong {
@@ -182,7 +306,7 @@
 
 .metricsGrid small {
   color: var(--text-faint);
-  font-size: 0.5rem;
+  font-size: 0.65rem;
 }
 
 .zoneStrip {
@@ -201,11 +325,16 @@
 
 .zoneStrip span {
   color: var(--text-faint);
-  font-size: 0.62rem;
+  font-size: 0.68rem;
 }
 
 .zoneStrip strong {
   font-size: 0.78rem;
+}
+
+.zoneStrip small {
+  color: var(--text-faint);
+  font-size: 0.64rem;
 }
 
 .zoneTrack {
@@ -219,9 +348,44 @@
 .zoneTrack span {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 62%;
   border-radius: inherit;
   background: var(--accent);
+}
+
+.safetyNotice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0.9rem;
+  margin: 0.8rem 0;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.safetyNotice span {
+  color: var(--text-faint);
+  font-size: 0.68rem;
+}
+
+.safetyNotice strong {
+  font-size: 0.74rem;
+  font-weight: 680;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.safety_warning,
+.safety_emergency {
+  color: var(--danger);
+}
+
+.commandError {
+  margin: 0.8rem 0 0;
+  color: var(--danger);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .liveCoach,
@@ -249,10 +413,21 @@
 }
 
 .runControls {
+  position: fixed;
+  z-index: 18;
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 0.7rem);
+  left: 50%;
   display: grid;
   grid-template-columns: 0.72fr 1.28fr;
   gap: 0.8rem;
-  margin-top: 1.35rem;
+  width: min(calc(100% - 3rem), 31rem);
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--canvas-raised) 92%, transparent);
+  box-shadow: 0 0.9rem 2.5rem var(--shadow);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px);
 }
 
 .dialogBackdrop {
@@ -345,13 +520,14 @@
 
 .summary dl {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem 0;
   margin: 0;
   padding-top: 1rem;
   border-top: 1px solid var(--line);
 }
 
-.summary dl > div + div {
+.summary dl > div:nth-child(even) {
   padding-left: 0.7rem;
   border-left: 1px solid var(--line);
 }
@@ -368,10 +544,42 @@
   font-weight: 720;
 }
 
+.syncStatus {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0 0 1rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.syncStatus > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.syncStatus span {
+  color: var(--text-faint);
+  font-size: 0.64rem;
+}
+
+.syncStatus strong {
+  font-size: 0.7rem;
+  text-align: right;
+}
+
 .finishedActions {
   display: grid;
   gap: 0.3rem;
   margin-top: 1.4rem;
+}
+
+.finishedActions :global(.primary-button:disabled),
+.page > :global(.primary-button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 @media (prefers-reduced-motion: no-preference) {

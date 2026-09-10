@@ -88,7 +88,7 @@ object BridgeCodec {
             value.capabilities == listOf(
                 "snapshot.v1",
                 "history.pagination",
-                "permission.request",
+                "settings.v1",
             ),
         )
         validateSnapshotValue(value.snapshot)
@@ -106,6 +106,10 @@ object BridgeCodec {
         require(value.connection.deviceName == null || value.connection.deviceName.isNotBlank())
         require(value.connection.batteryPercent == null || value.connection.batteryPercent in 0..100)
 
+        require(value.wearable.state in CONNECTION_STATES)
+        require(value.wearable.deviceName == null || value.wearable.deviceName.isNotBlank())
+        require(value.wearable.batteryPercent == null || value.wearable.batteryPercent in 0..100)
+
         value.session.id?.let(::requireCanonicalUuidV4)
         require(value.session.state in SESSION_STATES)
         value.session.startedAt?.let(Instant::parse)
@@ -119,6 +123,18 @@ object BridgeCodec {
         require(value.metrics.distanceMeters >= 0)
         require(value.metrics.elapsedSeconds >= 0)
         require(value.metrics.hrZone == null || value.metrics.hrZone in HR_ZONES)
+        require(value.metrics.heartRate != null || value.metrics.hrZone == null)
+
+        value.completedRun?.let { run ->
+            Instant.parse(run.endedAt)
+            require(run.distanceMeters >= 0)
+            require(run.durationSeconds >= 0)
+            requireNonNegative(run.averagePaceSecPerKm)
+            require(run.averageHeartRate == null || run.averageHeartRate >= 0)
+            require(run.averageCadence == null || run.averageCadence >= 0)
+        }
+        require(value.persistenceState in PERSISTENCE_STATES)
+        require(value.healthSync.state in HEALTH_SYNC_STATES)
 
         value.latestCoachMessage?.let { message ->
             requireCanonicalUuidV4(message.id)
@@ -158,6 +174,7 @@ object BridgeCodec {
             "run.pause",
             "run.resume",
             "run.stop",
+            "settings.query",
             -> require(body.isEmpty())
 
             "history.query" -> {
@@ -275,6 +292,16 @@ object BridgeCodec {
         nonNegativeIntOrNull()?.takeIf { it > 0 }
 
     private val CONNECTION_STATES = setOf("disconnected", "connecting", "connected", "error")
+    private val PERSISTENCE_STATES = setOf("idle", "saving", "saved", "failed")
+    private val HEALTH_SYNC_STATES = setOf(
+        "idle",
+        "syncing",
+        "synced",
+        "permissionRequired",
+        "providerUpdateRequired",
+        "unavailable",
+        "failed",
+    )
     private val SESSION_STATES = setOf("idle", "preparing", "running", "paused", "finished", "error")
     private val HR_ZONES = setOf("z1", "z2", "z3", "z4", "z5")
     private val MESSAGE_PRIORITIES = setOf("urgent", "split", "coach", "app")
@@ -328,8 +355,12 @@ private data class AppSnapshotWire(
     val revision: Int,
     val generatedAt: String,
     val connection: ConnectionWire,
+    val wearable: WearableWire,
     val session: SessionWire,
     val metrics: MetricsWire,
+    val completedRun: CompletedRunWire?,
+    val persistenceState: String,
+    val healthSync: HealthSyncWire,
     val latestCoachMessage: CoachMessageWire?,
     val settings: SettingsWire,
     val permissions: PermissionsWire,
@@ -340,6 +371,14 @@ private data class AppSnapshotWire(
 
 @Serializable
 private data class ConnectionWire(
+    val state: String,
+    val deviceName: String?,
+    val batteryPercent: Int?,
+)
+
+@Serializable
+private data class WearableWire(
+    val supported: Boolean,
     val state: String,
     val deviceName: String?,
     val batteryPercent: Int?,
@@ -364,6 +403,22 @@ private data class MetricsWire(
     val elapsedSeconds: Int,
     val hrZone: String?,
     val isDataFresh: Boolean?,
+)
+
+@Serializable
+private data class CompletedRunWire(
+    val endedAt: String,
+    val distanceMeters: Double,
+    val durationSeconds: Long,
+    val averagePaceSecPerKm: Double?,
+    val averageHeartRate: Int?,
+    val averageCadence: Int?,
+)
+
+@Serializable
+private data class HealthSyncWire(
+    val state: String,
+    val routeWritten: Boolean?,
 )
 
 @Serializable

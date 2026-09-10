@@ -1,5 +1,7 @@
 # === Android / Gradle ===
 .gradle/
+.gradle-local/
+.android-user/
 build/
 *.apk
 *.aab

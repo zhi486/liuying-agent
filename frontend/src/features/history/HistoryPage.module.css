@@ -1,0 +1,44 @@
+.statePanel {
+  display: grid;
+  min-height: 13rem;
+  place-content: center;
+  justify-items: start;
+}
+
+.statePanel h2 {
+  margin: 0.55rem 0 0;
+  font-size: 1.25rem;
+}
+
+.statePanel p:last-of-type {
+  max-width: 24rem;
+  margin: 0.75rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+
+.statePanel button {
+  margin-top: 1.1rem;
+}
+
+.recordCount {
+  margin: 2rem 0 0;
+}
+
+.loadMore {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.loadMore:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.loadMoreError {
+  margin: 0.75rem 0 0;
+  color: var(--danger);
+  font-size: 0.7rem;
+  text-align: center;
+}

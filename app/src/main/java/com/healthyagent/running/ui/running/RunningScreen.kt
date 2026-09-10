@@ -1,21 +1,23 @@
 package com.healthyagent.running.ui.running
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.healthyagent.running.core.math.MetricsCalculator
 import com.healthyagent.running.core.model.ConnectionState
 import com.healthyagent.running.core.model.HrZone
 import com.healthyagent.running.core.model.RunState
@@ -31,7 +33,19 @@ fun RunningScreen(
     onOpenSettings: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val runState by viewModel.runState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is RunningUiEvent.ShowError -> Toast.makeText(
+                    context,
+                    event.message,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -43,7 +57,6 @@ fun RunningScreen(
         StatusBar(
             sensorStatus = uiState.sensorStatus,
             deviceName = uiState.deviceName,
-            elapsedSeconds = uiState.elapsedSeconds,
             onOpenHistory = onOpenHistory,
             onOpenSettings = onOpenSettings,
         )
@@ -52,32 +65,32 @@ fun RunningScreen(
 
         // 核心指标区：心率（大字）+ 区间色
         HeartRateDisplay(
-            heartRate = uiState.currentFrame?.heartRateSmoothed
-                ?: uiState.currentFrame?.heartRate,
-            hrZone = uiState.currentFrame?.hrZone,
+            heartRateText = uiState.display.heartRateText,
+            zoneLabel = uiState.display.zoneLabel,
+            hrZone = uiState.display.hrZone,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // 辅助指标行：配速 | 步频 | 步幅
         MetricsRow(
-            paceSecPerKm = uiState.currentFrame?.currentPaceSecPerKm,
-            cadence = uiState.currentFrame?.cadence,
-            strideLengthCm = uiState.currentFrame?.strideLengthCm,
+            paceText = uiState.display.paceText,
+            cadenceText = uiState.display.cadenceText,
+            strideLengthText = uiState.display.strideLengthText,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // 距离 + 时间
         DistanceTimeRow(
-            distanceMeters = uiState.currentFrame?.distanceMeters ?: 0.0,
-            elapsedSeconds = uiState.elapsedSeconds,
+            distanceText = uiState.display.distanceText,
+            elapsedText = uiState.display.elapsedText,
         )
 
         Spacer(modifier = Modifier.weight(1f))
 
         // 数据新鲜度提示
-        if (uiState.currentFrame != null && !uiState.currentFrame!!.isDataFresh) {
+        if (uiState.display.isDataFresh == false) {
             Text(
                 text = "⚠ 数据中断，请检查手环",
                 color = HrZone5,
@@ -89,22 +102,9 @@ fun RunningScreen(
             )
         }
 
-        // 错误消息
-        uiState.errorMessage?.let { msg ->
-            Text(
-                text = msg,
-                color = HrZone5,
-                fontSize = 12.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                textAlign = TextAlign.Center,
-            )
-        }
-
         // 底部控制按钮
         ControlButtons(
-            runState = runState,
+            runState = uiState.runState,
             sensorStatus = uiState.sensorStatus,
             onConnect = { viewModel.connectSensor() },
             onStart = { viewModel.startRun() },
@@ -119,7 +119,6 @@ fun RunningScreen(
 private fun StatusBar(
     sensorStatus: ConnectionState,
     deviceName: String,
-    elapsedSeconds: Long,
     onOpenHistory: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
 ) {
@@ -182,16 +181,12 @@ private fun StatusBar(
 }
 
 @Composable
-private fun HeartRateDisplay(heartRate: Int?, hrZone: HrZone?) {
-    val zoneColor = when (hrZone) {
-        HrZone.Z1 -> HrZone1
-        HrZone.Z2 -> HrZone2
-        HrZone.Z3 -> HrZone3
-        HrZone.Z4 -> HrZone4
-        HrZone.Z5 -> HrZone5
-        null -> TextSecondary
-    }
-    val zoneLabel = hrZone?.label ?: "--"
+private fun HeartRateDisplay(
+    heartRateText: String,
+    zoneLabel: String,
+    hrZone: HrZone?,
+) {
+    val zoneColor = zoneColor(hrZone)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -199,7 +194,7 @@ private fun HeartRateDisplay(heartRate: Int?, hrZone: HrZone?) {
     ) {
         // 心率大数字
         Text(
-            text = heartRate?.toString() ?: "--",
+            text = heartRateText,
             fontSize = 96.sp,
             fontWeight = FontWeight.Bold,
             color = zoneColor,
@@ -230,9 +225,9 @@ private fun HeartRateDisplay(heartRate: Int?, hrZone: HrZone?) {
 
 @Composable
 private fun MetricsRow(
-    paceSecPerKm: Double?,
-    cadence: Int?,
-    strideLengthCm: Float?,
+    paceText: String,
+    cadenceText: String,
+    strideLengthText: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -240,17 +235,17 @@ private fun MetricsRow(
     ) {
         MetricItem(
             label = "配速",
-            value = paceSecPerKm?.let { MetricsCalculator.formatPace(it) } ?: "--",
+            value = paceText,
             unit = "/km",
         )
         MetricItem(
             label = "步频",
-            value = cadence?.toString() ?: "--",
+            value = cadenceText,
             unit = "spm",
         )
         MetricItem(
             label = "步幅",
-            value = strideLengthCm?.let { String.format("%.0f", it) } ?: "--",
+            value = strideLengthText,
             unit = "cm",
         )
     }
@@ -284,24 +279,19 @@ private fun MetricItem(label: String, value: String, unit: String) {
 }
 
 @Composable
-private fun DistanceTimeRow(distanceMeters: Double, elapsedSeconds: Long) {
-    val distanceKm = distanceMeters / 1000.0
-    val hours = elapsedSeconds / 3600
-    val minutes = (elapsedSeconds % 3600) / 60
-    val seconds = elapsedSeconds % 60
-
+private fun DistanceTimeRow(distanceText: String, elapsedText: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         MetricItem(
             label = "距离",
-            value = String.format("%.2f", distanceKm),
+            value = distanceText,
             unit = "km",
         )
         MetricItem(
             label = "时间",
-            value = "${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}",
+            value = elapsedText,
             unit = "",
         )
     }

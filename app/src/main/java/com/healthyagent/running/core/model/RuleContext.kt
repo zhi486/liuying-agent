@@ -10,6 +10,8 @@ data class RuleContext(
     val elapsedSeconds: Long = 0,
     /** 当前分段索引 */
     val currentSplitIndex: Int = 0,
+    /** 当前帧完成的公里分段；仅在该帧对应 split 事件时提供。 */
+    val completedSplit: Split? = null,
     /** 上一次触发时间记录（按 ruleId 记录时间戳） */
     val lastTriggerTimes: Map<String, Long> = emptyMap(),
 )

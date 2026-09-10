@@ -3,7 +3,10 @@ import { z } from 'zod';
 import type {
   AppSnapshot,
   BridgeEnvelopeV1,
+  HistoryQueryResult,
+  HistoryRunRecord,
   NativeToWebEnvelope,
+  SettingsQueryResult,
   WebToNativeEnvelope,
 } from './contract';
 
@@ -17,12 +20,44 @@ const timestampSchema = z.iso.datetime({ offset: true });
 const nullableNonNegativeNumber = z.number().nonnegative().nullable();
 const permissionStateSchema = z.enum(['granted', 'denied', 'notRequested']);
 
+const settingsSnapshotSchema = z
+  .object({
+    targetPaceSecPerKm: nullableNonNegativeNumber,
+    targetDistanceKm: nullableNonNegativeNumber,
+    maxHeartRate: z.number().int().positive(),
+    ttsEnabled: z.boolean(),
+    ttsMinIntervalSec: z.number().int().nonnegative(),
+    llmEnabled: z.boolean(),
+    mockScenario: z.enum([
+      'EASY_RUN',
+      'SPEED_TEST',
+      'PROGRESSIVE',
+      'HEART_RATE_SPIKE',
+      'CADENCE_DROP',
+    ]),
+    coachTone: z.enum(['gentle', 'balanced', 'direct']),
+    fishReferenceId: z.string(),
+    fishApiKeyConfigured: z.boolean(),
+    llmApiKeyConfigured: z.boolean(),
+    themePreference: z.enum(['system', 'morning', 'night']),
+    motionPreference: z.enum(['system', 'expressive', 'balanced', 'reduced', 'off']),
+  })
+  .strict();
+
 export const appSnapshotSchema: z.ZodType<AppSnapshot> = z
   .object({
     revision: z.number().int().nonnegative(),
     generatedAt: timestampSchema,
     connection: z
       .object({
+        state: z.enum(['disconnected', 'connecting', 'connected', 'error']),
+        deviceName: z.string().min(1).nullable(),
+        batteryPercent: z.number().int().min(0).max(100).nullable(),
+      })
+      .strict(),
+    wearable: z
+      .object({
+        supported: z.boolean(),
         state: z.enum(['disconnected', 'connecting', 'connected', 'error']),
         deviceName: z.string().min(1).nullable(),
         batteryPercent: z.number().int().min(0).max(100).nullable(),
@@ -58,29 +93,7 @@ export const appSnapshotSchema: z.ZodType<AppSnapshot> = z
       })
       .strict()
       .nullable(),
-    settings: z
-      .object({
-        targetPaceSecPerKm: nullableNonNegativeNumber,
-        targetDistanceKm: nullableNonNegativeNumber,
-        maxHeartRate: z.number().int().positive(),
-        ttsEnabled: z.boolean(),
-        ttsMinIntervalSec: z.number().int().nonnegative(),
-        llmEnabled: z.boolean(),
-        mockScenario: z.enum([
-          'EASY_RUN',
-          'SPEED_TEST',
-          'PROGRESSIVE',
-          'HEART_RATE_SPIKE',
-          'CADENCE_DROP',
-        ]),
-        coachTone: z.enum(['gentle', 'balanced', 'direct']),
-        fishReferenceId: z.string(),
-        fishApiKeyConfigured: z.boolean(),
-        llmApiKeyConfigured: z.boolean(),
-        themePreference: z.enum(['system', 'morning', 'night']),
-        motionPreference: z.enum(['system', 'expressive', 'balanced', 'reduced', 'off']),
-      })
-      .strict(),
+    settings: settingsSnapshotSchema,
     permissions: z
       .object({
         bluetooth: permissionStateSchema,
@@ -94,6 +107,32 @@ export const appSnapshotSchema: z.ZodType<AppSnapshot> = z
       .object({
         level: z.enum(['normal', 'warning', 'emergency']),
         message: z.string().min(1).nullable(),
+      })
+      .strict(),
+    completedRun: z
+      .object({
+        endedAt: timestampSchema,
+        distanceMeters: z.number().nonnegative(),
+        durationSeconds: z.number().int().nonnegative(),
+        averagePaceSecPerKm: nullableNonNegativeNumber,
+        averageHeartRate: nullableNonNegativeNumber,
+        averageCadence: nullableNonNegativeNumber,
+      })
+      .strict()
+      .nullable(),
+    persistenceState: z.enum(['idle', 'saving', 'saved', 'failed']),
+    healthSync: z
+      .object({
+        state: z.enum([
+          'idle',
+          'syncing',
+          'synced',
+          'permissionRequired',
+          'providerUpdateRequired',
+          'unavailable',
+          'failed',
+        ]),
+        routeWritten: z.boolean().nullable(),
       })
       .strict(),
   })
@@ -119,6 +158,37 @@ export const settingsUpdateBodySchema = z
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, 'settings.update 至少包含一个字段');
+
+export const historyRunRecordSchema: z.ZodType<HistoryRunRecord> = z
+  .object({
+    id: z.string().min(1),
+    startedAt: timestampSchema,
+    endedAt: timestampSchema.nullable(),
+    distanceMeters: z.number().nonnegative(),
+    durationSeconds: z.number().int().nonnegative(),
+    averagePaceSecPerKm: nullableNonNegativeNumber,
+    averageHeartRate: nullableNonNegativeNumber,
+    averageCadence: nullableNonNegativeNumber,
+  })
+  .strict();
+
+export const historyQueryResultSchema: z.ZodType<HistoryQueryResult> = z
+  .object({
+    commandId: canonicalUuidV4Schema,
+    page: z.number().int().positive(),
+    pageSize: z.number().int().min(1).max(100),
+    totalItems: z.number().int().nonnegative(),
+    hasNextPage: z.boolean(),
+    items: z.array(historyRunRecordSchema),
+  })
+  .strict();
+
+export const settingsQueryResultSchema: z.ZodType<SettingsQueryResult> = z
+  .object({
+    commandId: canonicalUuidV4Schema,
+    settings: settingsSnapshotSchema,
+  })
+  .strict();
 
 const emptyBodySchema = z.object({}).strict();
 const commandPayloadSchema = z.discriminatedUnion('name', [
@@ -159,6 +229,13 @@ const commandPayloadSchema = z.discriminatedUnion('name', [
       body: z
         .object({ page: z.number().int().positive(), pageSize: z.number().int().min(1).max(100) })
         .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      helloId: canonicalUuidV4Schema,
+      name: z.literal('settings.query'),
+      body: emptyBodySchema,
     })
     .strict(),
   z
@@ -207,7 +284,7 @@ const readyEnvelopeSchema = z
         capabilities: z.tuple([
           z.literal('snapshot.v1'),
           z.literal('history.pagination'),
-          z.literal('permission.request'),
+          z.literal('settings.v1'),
         ]),
         snapshot: appSnapshotSchema,
       })

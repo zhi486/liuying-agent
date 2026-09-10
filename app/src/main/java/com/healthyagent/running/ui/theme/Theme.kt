@@ -5,19 +5,26 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryAccent,
-    secondary = HrZone2,
-    tertiary = HrZone3,
-    background = PrimaryDark,
+    primary = VoltGreen,
+    onPrimary = InkBlack,
+    secondary = Gray500,
+    onSecondary = InkBlack,
+    background = InkBlack,
+    onBackground = PaperWhite,
     surface = SurfaceDark,
-    onBackground = OnSurfaceDark,
-    onSurface = OnSurfaceDark,
+    onSurface = PaperWhite,
+    surfaceVariant = SurfaceElevated,
+    onSurfaceVariant = Gray500,
+    error = SignalRed,
+    onError = PaperWhite,
+    outline = Gray700,
 )
 
 @Composable
 fun HealthyAgentTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColorScheme,
-        content = content
+        typography = HealthyAgentTypography,
+        content = content,
     )
 }

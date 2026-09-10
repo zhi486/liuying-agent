@@ -6,6 +6,7 @@ export type CommandName =
   | 'run.resume'
   | 'run.stop'
   | 'history.query'
+  | 'settings.query'
   | 'settings.update'
   | 'permission.request';
 
@@ -23,6 +24,12 @@ export interface AppSnapshot {
   revision: number;
   generatedAt: string;
   connection: {
+    state: 'disconnected' | 'connecting' | 'connected' | 'error';
+    deviceName: string | null;
+    batteryPercent: number | null;
+  };
+  wearable: {
+    supported: boolean;
     state: 'disconnected' | 'connecting' | 'connected' | 'error';
     deviceName: string | null;
     batteryPercent: number | null;
@@ -76,6 +83,26 @@ export interface AppSnapshot {
     level: 'normal' | 'warning' | 'emergency';
     message: string | null;
   };
+  completedRun: {
+    endedAt: string;
+    distanceMeters: number;
+    durationSeconds: number;
+    averagePaceSecPerKm: number | null;
+    averageHeartRate: number | null;
+    averageCadence: number | null;
+  } | null;
+  persistenceState: 'idle' | 'saving' | 'saved' | 'failed';
+  healthSync: {
+    state:
+      | 'idle'
+      | 'syncing'
+      | 'synced'
+      | 'permissionRequired'
+      | 'providerUpdateRequired'
+      | 'unavailable'
+      | 'failed';
+    routeWritten: boolean | null;
+  };
 }
 
 export interface SettingsUpdateBody {
@@ -94,6 +121,31 @@ export interface SettingsUpdateBody {
   motionPreference?: AppSnapshot['settings']['motionPreference'];
 }
 
+export interface SettingsQueryResult {
+  commandId: string;
+  settings: AppSnapshot['settings'];
+}
+
+export interface HistoryRunRecord {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  distanceMeters: number;
+  durationSeconds: number;
+  averagePaceSecPerKm: number | null;
+  averageHeartRate: number | null;
+  averageCadence: number | null;
+}
+
+export interface HistoryQueryResult {
+  commandId: string;
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  hasNextPage: boolean;
+  items: HistoryRunRecord[];
+}
+
 export interface HelloPayload {
   buildId: string;
   supportedContractVersions: [1];
@@ -102,7 +154,7 @@ export interface HelloPayload {
 export interface ReadyPayload {
   helloId: string;
   buildId: string;
-  capabilities: ['snapshot.v1', 'history.pagination', 'permission.request'];
+  capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1'];
   snapshot: AppSnapshot;
 }
 
@@ -114,6 +166,7 @@ export interface CommandBodyMap {
   'run.resume': Record<string, never>;
   'run.stop': Record<string, never>;
   'history.query': { page: number; pageSize: number };
+  'settings.query': Record<string, never>;
   'settings.update': SettingsUpdateBody;
   'permission.request': { kind: 'runningSensors' };
 }

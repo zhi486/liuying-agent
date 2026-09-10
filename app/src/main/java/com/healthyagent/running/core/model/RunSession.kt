@@ -26,5 +26,6 @@ data class RunSession(
     val avgCadence: Int? = null,
     val avgPaceSecPerKm: Double? = null,
     val splits: List<Split> = emptyList(),
+    val routePoints: List<RoutePoint> = emptyList(),
     val runState: RunState = RunState.IDLE,
 )

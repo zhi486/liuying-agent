@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  appSnapshotSchema,
   bridgeEnvelopeSchema,
+  historyQueryResultSchema,
   nativeToWebEnvelopeSchema,
   parseInboundEnvelope,
+  settingsQueryResultSchema,
   webToNativeEnvelopeSchema,
 } from './schemas';
 
@@ -70,5 +73,107 @@ describe('Bridge v1 schema', () => {
       ok: false,
       code: 'INVALID_MESSAGE',
     });
+  });
+
+  it('严格校验历史分页结果及可空均值', () => {
+    const result = historyQueryResultSchema.parse({
+      commandId: '06b8f5e1-6688-4494-abba-c50ba6baa0af',
+      page: 1,
+      pageSize: 10,
+      totalItems: 1,
+      hasNextPage: false,
+      items: [
+        {
+          id: 'run-1',
+          startedAt: '2026-09-01T11:00:00Z',
+          endedAt: null,
+          distanceMeters: 5020.5,
+          durationSeconds: 1818,
+          averagePaceSecPerKm: 362.15,
+          averageHeartRate: null,
+          averageCadence: null,
+        },
+      ],
+    });
+
+    expect(result.items[0]?.averageHeartRate).toBeNull();
+  });
+
+  it('拒绝字段缺失或负数的历史结果', () => {
+    expect(() =>
+      historyQueryResultSchema.parse({
+        commandId: '06b8f5e1-6688-4494-abba-c50ba6baa0af',
+        page: 1,
+        pageSize: 10,
+        totalItems: 1,
+        hasNextPage: false,
+        items: [
+          {
+            id: 'run-1',
+            startedAt: '2026-09-01T11:00:00Z',
+            endedAt: null,
+            distanceMeters: -1,
+            durationSeconds: 60,
+            averagePaceSecPerKm: null,
+            averageHeartRate: null,
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('严格校验设置查询结果', () => {
+    const result = settingsQueryResultSchema.parse({
+      commandId: '06b8f5e1-6688-4494-abba-c50ba6baa0af',
+      settings: {
+        targetPaceSecPerKm: null,
+        targetDistanceKm: 5,
+        maxHeartRate: 180,
+        ttsEnabled: true,
+        ttsMinIntervalSec: 30,
+        llmEnabled: false,
+        mockScenario: 'EASY_RUN',
+        coachTone: 'balanced',
+        fishReferenceId: 'default',
+        fishApiKeyConfigured: false,
+        llmApiKeyConfigured: false,
+        themePreference: 'night',
+        motionPreference: 'reduced',
+      },
+    });
+
+    expect(result.settings.motionPreference).toBe('reduced');
+  });
+
+  it('严格校验主源、手环、完成摘要与同步状态', () => {
+    const fixture = fixtureByType('snapshot');
+    if (typeof fixture !== 'object' || fixture === null || !('payload' in fixture)) {
+      throw new Error('snapshot 合同样本缺少 payload');
+    }
+
+    const parsed = appSnapshotSchema.parse(fixture.payload);
+
+    expect(parsed.connection.deviceName).toBe('手机 GPS');
+    expect(parsed.wearable.deviceName).toBe('Keep B5');
+    expect(parsed.completedRun).toBeNull();
+    expect(parsed.persistenceState).toBe('idle');
+    expect(parsed.healthSync).toEqual({ state: 'idle', routeWritten: null });
+  });
+
+  it('拒绝缺少真实状态字段或非法同步状态的快照', () => {
+    const fixture = fixtureByType('snapshot');
+    if (typeof fixture !== 'object' || fixture === null || !('payload' in fixture)) {
+      throw new Error('snapshot 合同样本缺少 payload');
+    }
+
+    const missingWearable = structuredClone(fixture.payload) as Record<string, unknown>;
+    delete missingWearable.wearable;
+    expect(() => appSnapshotSchema.parse(missingWearable)).toThrow();
+
+    const invalidHealthSync = {
+      ...(fixture.payload as Record<string, unknown>),
+      healthSync: { state: 'success', routeWritten: true },
+    };
+    expect(() => appSnapshotSchema.parse(invalidHealthSync)).toThrow();
   });
 });

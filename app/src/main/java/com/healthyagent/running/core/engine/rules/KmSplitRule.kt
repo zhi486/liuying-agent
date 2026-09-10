@@ -2,7 +2,6 @@ package com.healthyagent.running.core.engine.rules
 
 import com.healthyagent.running.core.engine.Rule
 import com.healthyagent.running.core.math.MetricsCalculator
-import com.healthyagent.running.core.model.MetricsFrame
 import com.healthyagent.running.core.model.RuleContext
 import com.healthyagent.running.core.model.RuleTrigger
 import com.healthyagent.running.core.model.RunConfig
@@ -12,49 +11,23 @@ import com.healthyagent.running.core.model.SpeechPriority
 /**
  * 规则 10：每公里播报
  *
- * 触发条件：split 事件（跨过整公里边界）
- * 冷却由 RuleEngine.onSplit() 控制
+ * 触发条件：RuleContext 提供已完成的 split 事件。
  */
 class KmSplitRule : Rule {
     override val id = "km_split"
-    override val cooldownMs = 0L // 由 onSplit 事件管理冷却
+    override val cooldownMs = 0L
     override val defaultPriority = SpeechPriority.SPLIT
 
-    /** 上一次检测到的公里数 */
-    private var lastKm = 0
-
-    override fun reset() {
-        lastKm = 0
-    }
-
     override fun evaluate(ctx: RuleContext, config: RunConfig): RuleTrigger? {
-        val frame = ctx.recentFrames.lastOrNull() ?: return null
-        val currentKm = (frame.distanceMeters / 1000.0).toInt()
-
-        if (currentKm <= lastKm) return null
-        lastKm = currentKm
-
-        // 计算该公里分段数据
-        val splitDuration = calculateSplitDuration(ctx.recentFrames, currentKm)
-        val splitPace = if (splitDuration > 0) splitDuration.toDouble() else null
-        val paceStr = splitPace?.let { MetricsCalculator.formatPace(it) } ?: "--"
+        val split = ctx.completedSplit ?: return null
 
         return RuleTrigger(
             ruleId = id,
             severity = Severity.INFO,
-            speakText = "第${currentKm}公里，用时${formatDuration(splitDuration)}，配速${paceStr}",
+            speakText = "第${split.index}公里，用时${formatDuration(split.durationSec)}，配速${MetricsCalculator.formatPace(split.avgPaceSecPerKm)}",
             ttsPriority = defaultPriority,
-            frame = frame,
+            frame = ctx.recentFrames.lastOrNull(),
         )
-    }
-
-    private fun calculateSplitDuration(frames: List<MetricsFrame>, km: Int): Long {
-        // 找到上一公里边界附近的帧
-        val startDistance = (km - 1) * 1000.0
-        val startFrame = frames.lastOrNull { it.distanceMeters <= startDistance + 50 }
-        val endFrame = frames.lastOrNull { it.distanceMeters >= km * 1000.0 - 50 }
-        if (startFrame == null || endFrame == null) return 0
-        return (endFrame.timestampMillis - startFrame.timestampMillis) / 1000
     }
 
     private fun formatDuration(seconds: Long): String {

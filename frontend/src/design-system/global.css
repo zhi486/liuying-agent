@@ -304,10 +304,11 @@ a:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1.5fr;
   align-items: end;
-  min-height: 6.75rem;
-  margin: 1rem 0 2.5rem;
-  padding: 1.15rem 1.25rem;
-  border-bottom: 1px solid var(--line);
+  gap: 1rem;
+  min-height: 5.6rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
 }
 
 .week-rhythm span {
@@ -344,6 +345,73 @@ a:focus-visible {
 
 .section-heading p {
   margin: 0.35rem 0 0;
+}
+
+.weekly-plan {
+  margin: 2.3rem 0;
+}
+
+.weekly-plan > .section-heading > strong {
+  color: var(--accent);
+  font-family: var(--font-numeric);
+  font-size: 0.78rem;
+}
+
+.weekly-plan-days {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weekly-plan-days li {
+  display: flex;
+  min-height: 4.2rem;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.weekly-plan-days li.completed {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  background: var(--accent-soft);
+}
+
+.weekly-plan-days span {
+  color: var(--text-faint);
+  font-size: 0.62rem;
+}
+
+.weekly-plan-days strong {
+  font-size: 0.72rem;
+}
+
+.trend-insight {
+  margin: 0 0 2.5rem;
+  padding: 1.15rem 1.2rem;
+  border-left: 2px solid var(--accent);
+  background: var(--canvas-raised);
+}
+
+.trend-insight .eyebrow {
+  margin-bottom: 0.45rem;
+}
+
+.trend-insight h3 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.trend-insight > div:first-child > p:last-child {
+  margin: 0.55rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
 }
 
 .past-runs ul {
@@ -398,6 +466,11 @@ a:focus-visible {
   margin-top: 2.3rem;
 }
 
+.setting-section > .section-heading > strong {
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+
 .theme-selector {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -441,6 +514,31 @@ a:focus-visible {
   height: 2.7rem;
   border: 1px solid rgba(128, 128, 128, 0.25);
   border-radius: 0.7rem;
+}
+
+.weekday-selector {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.35rem;
+  margin-top: 1rem;
+}
+
+.weekday-selector button {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-faint);
+  font-size: 0.6rem;
+  cursor: pointer;
+}
+
+.weekday-selector button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 760;
 }
 
 .morning-swatch {
@@ -519,6 +617,10 @@ a:focus-visible {
     animation: firefly-drift 7s var(--ease-out) infinite alternate;
   }
 
+  html[data-motion='expressive'] .ambient-light {
+    animation-duration: 5.5s;
+  }
+
   @keyframes firefly-drift {
     0% {
       transform: translate(-50%, 0);
@@ -533,4 +635,21 @@ a:focus-visible {
       opacity: 0.58;
     }
   }
+}
+
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 80ms !important;
+}
+
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
+  animation: none !important;
+  scroll-behavior: auto !important;
+  transition: none !important;
 }

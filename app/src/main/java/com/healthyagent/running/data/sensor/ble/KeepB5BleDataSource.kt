@@ -1,292 +1,329 @@
 package com.healthyagent.running.data.sensor.ble
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGatt
-import android.bluetooth.BluetoothManager
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import android.os.ParcelUuid
-import androidx.core.content.ContextCompat
+import android.os.SystemClock
 import com.healthyagent.running.core.model.ConnectionState
 import com.healthyagent.running.core.model.DeviceInfo
 import com.healthyagent.running.core.model.SensorSample
+import com.healthyagent.running.data.sensor.RunLifecycleAwareSensor
 import com.healthyagent.running.data.sensor.SensorDataSource
+import com.healthyagent.running.diagnostics.BleFailureReason
+import com.healthyagent.running.diagnostics.DiagnosticEvent
+import com.healthyagent.running.diagnostics.DiagnosticLogger
+import com.healthyagent.running.diagnostics.NoOpDiagnosticLogger
+import java.util.concurrent.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import timber.log.Timber
-import java.util.UUID
+import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Keep B5 手环 BLE 数据源
- *
- * 实现 SensorDataSource 接口，职责：
- * 1. 扫描附近的 Keep B5 设备（按名称前缀匹配）
- * 2. 通过 BluetoothGatt 连接并订阅数据通知
- * 3. 自动解析标准 BLE 心率/电池服务
- * 4. 支持断线自动重连（指数退避，最多 5 次）
- *
- * 架构：GATT 回调 ≠ suspend 操作，通过 SharedFlow 桥接，
- * callbackFlow 将 SharedFlow 事件转为 Flow<SensorSample> 供 Pipeline 消费。
- */
-@SuppressLint("MissingPermission") // 权限在 connect() 中运行时检查
-class KeepB5BleDataSource(
-    private val context: Context,
-) : SensorDataSource {
+/** Keep B5 BLE data source; all session transitions belong to [KeepB5SessionSupervisor]. */
+class KeepB5BleDataSource internal constructor(
+    private val transport: BleTransport,
+    scope: CoroutineScope,
+    private val monotonicMillis: () -> Long,
+    private val epochSeconds: () -> Long,
+    private val reconnectBackoff: ReconnectBackoffPolicy,
+    private val diagnosticLogger: DiagnosticLogger = NoOpDiagnosticLogger,
+) : SensorDataSource, RunLifecycleAwareSensor {
+    constructor(context: Context, diagnosticLogger: DiagnosticLogger = NoOpDiagnosticLogger) : this(
+        transport = AndroidKeepB5BleTransport(context, diagnosticLogger),
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        monotonicMillis = SystemClock::elapsedRealtime,
+        epochSeconds = { System.currentTimeMillis() / 1_000L },
+        reconnectBackoff = BleReconnectBackoff(1_000L, 30_000L),
+        diagnosticLogger = diagnosticLogger,
+    )
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    private val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
-    private val scanner = bluetoothAdapter.bluetoothLeScanner
-
+    private val reducerLock = Any()
+    private val supervisor = KeepB5SessionSupervisor()
+    private val sourceJob = SupervisorJob(scope.coroutineContext[Job])
+    private val sourceScope = CoroutineScope(scope.coroutineContext + sourceJob)
+    private val effects = Channel<EffectBatch>(Channel.UNLIMITED)
+    private val sampleQueue = Channel<SensorSample>(Channel.UNLIMITED)
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState = _connectionState.asStateFlow()
+    override val samples: Flow<SensorSample> = sampleQueue.receiveAsFlow()
 
-    private val gattCallback = KeepB5GattCallback()
+    @Volatile private var deviceInfoSnapshot = DeviceInfo(name = "Keep B5")
+    override val deviceInfo: DeviceInfo get() = deviceInfoSnapshot
+    internal val resourceSnapshot: KeepB5BleDataSourceResourceSnapshot
+        get() = KeepB5BleDataSourceResourceSnapshot(quiescedCallbackJobs = 0)
 
-    override val deviceInfo: DeviceInfo
-        get() = DeviceInfo(
-            name = connectedDevice?.name ?: "Keep B5",
-            batteryPercent = gattCallback.batteryPercent,
-            firmwareVersion = gattCallback.firmwareVersion,
-        )
+    private var activeScan: TimedAttempt? = null
+    private var reconnect: TimedAttempt? = null
+    private var readyTimeout: TimedGatt? = null
+    private var sync: ActiveSync? = null
 
-    private var bluetoothGatt: BluetoothGatt? = null
-    private var connectedDevice: BluetoothDevice? = null
-    private var reconnectCount = 0
-    private var isUserDisconnect = false
+    init {
+        sourceScope.launch { runEffects() }
+        sourceScope.launch { transport.controlEvents.collect { reducerDispatch(it.toSessionEvent()) } }
+        sourceScope.launch { transport.privateActivities.collect { reducerDispatch(KeepB5SessionEvent.PrivateActivity(it)) } }
+        sourceScope.launch { transport.samples.collect { reducerDispatch(KeepB5SessionEvent.SensorSampleReceived(it)) } }
+    }
 
-    // ── 连接 ──
+    override suspend fun connect() = reducerDispatch(KeepB5SessionEvent.ExplicitConnect)
+    override suspend fun prepareConnection() = reducerDispatch(KeepB5SessionEvent.PrepareConnection)
+    override suspend fun disconnect() = reducerDispatch(KeepB5SessionEvent.ExplicitDisconnect)
+    override fun onRunStarted(elapsedSeconds: Long) = reducerDispatch(KeepB5SessionEvent.RunStarted(elapsedSeconds))
+    override fun onRunPaused(elapsedSeconds: Long) = reducerDispatch(KeepB5SessionEvent.RunPaused(elapsedSeconds))
+    override fun onRunResumed(elapsedSeconds: Long) = reducerDispatch(KeepB5SessionEvent.RunResumed(elapsedSeconds))
+    override fun onRunStopped() = reducerDispatch(KeepB5SessionEvent.RunStopped)
+    override fun onRunMetricsUpdated(distanceMeters: Double, paceSecPerKm: Double?) = reducerDispatch(
+        KeepB5SessionEvent.MetricsUpdated(KeepB5DisplayMetrics.fromMeasurements(distanceMeters, paceSecPerKm)),
+    )
 
-    override suspend fun connect() {
-        // 检查权限
-        if (!hasBlePermissions()) {
-            _connectionState.value = ConnectionState.ERROR
-            Timber.e("BLE: 缺少蓝牙权限")
-            return
-        }
+    private fun reducerDispatch(event: KeepB5SessionEvent) {
+        synchronized(reducerLock) {
+            val actions = supervisor.handle(event, monotonicMillis())
+            if (event == KeepB5SessionEvent.PrepareConnection ||
+                event == KeepB5SessionEvent.ExplicitConnect || event == KeepB5SessionEvent.ExplicitDisconnect ||
+                event == KeepB5SessionEvent.RunStopped ||
+                actions.any { it == KeepB5SessionAction.PublishConnectionState(ConnectionState.CONNECTED) }
+            ) reconnectBackoff.reset()
 
-        // 检查蓝牙是否开启
-        if (!bluetoothAdapter.isEnabled) {
-            _connectionState.value = ConnectionState.ERROR
-            Timber.e("BLE: 蓝牙未开启")
-            return
-        }
-
-        _connectionState.value = ConnectionState.CONNECTING
-        isUserDisconnect = false
-        reconnectCount = 0
-
-        // 监听 GATT 连接事件
-        scope.launch {
-            gattCallback.connectionEvents.collect { event ->
-                when (event) {
-                    is ConnectionEvent.Connected -> {
-                        // 连接成功，等待服务发现
+            val reconnectDelays = mutableMapOf<KeepB5AttemptGuard, Long>()
+            actions.forEach { action ->
+                when (action) {
+                    is KeepB5SessionAction.RecordDiagnostic -> record(action.event)
+                    is KeepB5SessionAction.ActivateGattData -> safely { transport.activateGattData(action.guard) }
+                    is KeepB5SessionAction.ResetSyncUpdateAccounting ->
+                        sync?.takeIf { it.guard == action.guard }?.scheduler?.resetUpdateAccounting()
+                    is KeepB5SessionAction.CancelPendingConnect -> safely { transport.cancelPendingConnect(action.guard) }
+                    is KeepB5SessionAction.CloseGatt -> safelyJob {
+                        transport.quiesceGattCallbacks(action.guard)
                     }
-                    is ConnectionEvent.Ready -> {
-                        reconnectCount = 0
-                        _connectionState.value = ConnectionState.CONNECTED
-                        Timber.i("BLE: 数据通道就绪 ✓")
-                    }
-                    is ConnectionEvent.Disconnected -> {
-                        if (!isUserDisconnect) {
-                            _connectionState.value = ConnectionState.CONNECTING
-                            attemptReconnect()
+                    is KeepB5SessionAction.ScheduleReconnect ->
+                        reconnectDelays[action.guard] = reconnectBackoff.nextDelayMillis()
+                    else -> Unit
+                }
+            }
+            effects.trySend(EffectBatch(actions, reconnectDelays, event == KeepB5SessionEvent.RunStopped))
+        }
+    }
+
+    private suspend fun runEffects() {
+        for (batch in effects) {
+            var skipHeartbeat = false
+            batch.actions.forEach { action ->
+                try {
+                    when (action) {
+                        is KeepB5SessionAction.RecordDiagnostic,
+                        is KeepB5SessionAction.ActivateGattData,
+                        is KeepB5SessionAction.ResetSyncUpdateAccounting,
+                        is KeepB5SessionAction.CancelPendingConnect -> Unit
+                        is KeepB5SessionAction.BeginScan -> executeGuarded(action) {
+                            if (transport.startScan(action.guard)) armScanTimeout(action.guard)
+                        }
+                        is KeepB5SessionAction.StopScan -> stopScan(action)
+                        is KeepB5SessionAction.ConnectRemembered -> executeGuarded(action) {
+                            transport.connectRemembered(action.guard)
+                        }
+                        is KeepB5SessionAction.SendStart -> executeGuarded(action) {
+                            transport.sendStart(action.guard, epochSeconds())
+                        }
+                        is KeepB5SessionAction.StartSync -> executeGuarded(action) { startSync(action.guard) }
+                        is KeepB5SessionAction.StopSync -> stopSync(action.gattToken)
+                        is KeepB5SessionAction.SendWorkoutUpdate -> {
+                            try {
+                                val accepted = executeSyncWrite(action.guard, action.due) { allowed ->
+                                    transport.sendWorkoutUpdate(
+                                        allowed.submission,
+                                        requireNotNull(allowed.elapsedSeconds),
+                                        allowed.displayMetrics,
+                                    )
+                                }
+                                if (accepted == false) skipHeartbeat = true
+                            } catch (error: CancellationException) {
+                                skipHeartbeat = true
+                                throw error
+                            }
+                        }
+                        is KeepB5SessionAction.SendHeartbeat -> if (!skipHeartbeat) {
+                            executeSyncWrite(action.guard, KeepB5SyncDue(KeepB5SyncKind.HEART_BEAT)) { allowed ->
+                                transport.sendHeartbeat(allowed.submission)
+                            }
+                        }
+                        is KeepB5SessionAction.ArmReadyTimeout -> executeGuarded(action) {
+                            armReadyTimeout(action.guard, action.delayMillis)
+                        }
+                        is KeepB5SessionAction.CancelReadyTimeout -> cancelReadyTimeout(action.guard)
+                        is KeepB5SessionAction.ScheduleReconnect -> executeGuarded(action) {
+                            scheduleReconnect(action.guard, requireNotNull(batch.reconnectDelays[action.guard]))
+                        }
+                        is KeepB5SessionAction.CancelReconnect -> cancelReconnect(action)
+                        is KeepB5SessionAction.CloseGatt ->
+                            transport.closeGatt(action.guard, action.disconnectFirst).join()
+                        is KeepB5SessionAction.PublishConnectionState -> _connectionState.value = action.state
+                        is KeepB5SessionAction.PublishSample -> executeGuarded(action) {
+                            sampleQueue.trySend(action.sample.sample)
+                        }
+                        is KeepB5SessionAction.PublishDeviceInfo -> executeGuarded(action) {
+                            deviceInfoSnapshot = action.deviceInfo
                         }
                     }
-                    is ConnectionEvent.Error -> {
-                        Timber.w("BLE: 错误 — ${event.message}")
-                        if (_connectionState.value != ConnectionState.CONNECTED) {
-                            _connectionState.value = ConnectionState.ERROR
-                        }
-                    }
+                } catch (error: CancellationException) {
+                    if (!currentCoroutineContext().isActive) throw error
+                } catch (error: Error) {
+                    effects.close(error)
+                    sourceJob.cancel(
+                        CancellationException("BLE effect actor terminated").apply { initCause(error) },
+                    )
+                    throw error
+                } catch (_: Exception) {
+                    // Transport owns typed operation diagnostics; cleanup failures must not kill FIFO effects.
+                }
+            }
+            if (batch.terminalFlush) sourceScope.launch { withTimeoutOrNull(2_000L) { diagnosticLogger.flush() } }
+        }
+    }
+
+    private fun executeGuarded(action: KeepB5SessionAction, effect: () -> Unit) {
+        synchronized(reducerLock) {
+            when (val resolution = supervisor.resolveGuardedAction(action)) {
+                KeepB5ActionResolution.Allowed -> effect()
+                is KeepB5ActionResolution.Rejected -> record(resolution.diagnostic)
+            }
+        }
+    }
+
+    private fun executeSyncWrite(
+        guard: KeepB5WriteGuard,
+        due: KeepB5SyncDue,
+        write: (KeepB5WriteResolution.Allowed) -> Boolean,
+    ): Boolean? = synchronized(reducerLock) {
+        when (val resolution = supervisor.resolveSyncWrite(guard, due)) {
+            is KeepB5WriteResolution.Allowed -> write(resolution)
+            is KeepB5WriteResolution.Rejected -> null.also { record(resolution.diagnostic) }
+        }
+    }
+
+    private fun armScanTimeout(guard: KeepB5AttemptGuard) {
+        activeScan?.job?.cancel()
+        activeScan = TimedAttempt(guard, sourceScope.launch {
+            delay(15_000L)
+            reducerDispatch(KeepB5SessionEvent.ScanFailed(guard, BleFailureReason.SCAN_TIMEOUT))
+        })
+    }
+
+    private fun stopScan(action: KeepB5SessionAction.StopScan) = synchronized(reducerLock) {
+        activeScan?.takeIf { it.guard == action.guard }?.let {
+            it.job.cancel()
+            activeScan = null
+        }
+        // Transport owns the same exact-guard identity and safely ignores an old generation.
+        safely { transport.stopScan(action.guard, action.preserveMatchedTarget) }
+    }
+
+    private fun scheduleReconnect(guard: KeepB5AttemptGuard, delayMillis: Long) {
+        reconnect?.job?.cancel()
+        reconnect = TimedAttempt(guard, sourceScope.launch {
+            delay(delayMillis)
+            reducerDispatch(KeepB5SessionEvent.ReconnectDue(guard))
+        })
+    }
+
+    private fun cancelReconnect(action: KeepB5SessionAction.CancelReconnect) = synchronized(reducerLock) {
+        reconnect?.takeIf {
+            it.guard.epoch == action.epoch &&
+                (action.connectionAttemptToken == null || it.guard.connectionAttemptToken == action.connectionAttemptToken)
+        }?.let { it.job.cancel(); reconnect = null }
+    }
+
+    private fun armReadyTimeout(guard: KeepB5GattGuard, delayMillis: Long) {
+        readyTimeout?.job?.cancel()
+        readyTimeout = TimedGatt(guard, sourceScope.launch {
+            delay(delayMillis)
+            reducerDispatch(KeepB5SessionEvent.ReadyTimeout(guard))
+        })
+    }
+
+    private fun cancelReadyTimeout(guard: KeepB5GattGuard) = synchronized(reducerLock) {
+        readyTimeout?.takeIf { it.guard == guard }?.let { it.job.cancel(); readyTimeout = null }
+    }
+
+    private fun startSync(guard: KeepB5GattGuard) {
+        stopSync(null)
+        val scheduler = KeepB5SyncScheduler(monotonicMillis).also { it.start() }
+        lateinit var active: ActiveSync
+        val job = sourceScope.launch {
+            while (true) {
+                delay(scheduler.nextDelayMillis() ?: return@launch)
+                synchronized(reducerLock) {
+                    if (sync !== active) return@synchronized
+                    val pollGuard = supervisor.captureSyncPollGuard(guard) ?: return@synchronized
+                    val actions = supervisor.handle(
+                        KeepB5SessionEvent.SyncDue(pollGuard, scheduler.pollDue()),
+                        monotonicMillis(),
+                    )
+                    actions.filterIsInstance<KeepB5SessionAction.RecordDiagnostic>().forEach { record(it.event) }
+                    effects.trySend(EffectBatch(actions))
                 }
             }
         }
-
-        // 开始扫描
-        scanAndConnect()
+        active = ActiveSync(guard, scheduler, job)
+        sync = active
     }
 
-    override suspend fun disconnect() {
-        isUserDisconnect = true
-        _connectionState.value = ConnectionState.DISCONNECTED
-        try {
-            bluetoothGatt?.disconnect()
-            bluetoothGatt?.close()
-        } catch (e: Exception) {
-            Timber.w(e, "BLE: 断开连接异常")
-        }
-        bluetoothGatt = null
-        connectedDevice = null
-    }
-
-    // ── 数据流 ──
-
-    override val samples: Flow<SensorSample> = callbackFlow {
-        val job = scope.launch {
-            gattCallback.samples.collect { sample ->
-                trySend(sample)
-            }
-        }
-        awaitClose {
-            job.cancel()
+    private fun stopSync(gattToken: Long?) = synchronized(reducerLock) {
+        sync?.takeIf { gattToken == null || it.guard.gattToken == gattToken }?.let {
+            it.scheduler.stop(); it.job.cancel(); sync = null
         }
     }
 
-    // ── BLE 扫描 ──
+    private fun record(event: DiagnosticEvent) {
+        try { diagnosticLogger.record(event) } catch (_: Exception) { Unit }
+    }
 
-    private fun scanAndConnect() {
-        if (scanner == null) {
-            _connectionState.value = ConnectionState.ERROR
-            Timber.e("BLE: 扫描器不可用（蓝牙关闭？）")
-            return
-        }
+    private fun safely(block: () -> Unit) {
+        try { block() } catch (error: CancellationException) { throw error } catch (_: Exception) { Unit }
+    }
 
-        Timber.i("BLE: 开始扫描 Keep B5 设备...")
+    private fun safelyJob(block: () -> Job): Job = try {
+        block()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        Job().apply { complete() }
+    }
 
-        // 扫描过滤：心率服务 + 已知设备名前缀
-        val filters = listOf(
-            ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(KeepB5GattCallback.HR_SERVICE))
-                .build()
+    private fun BleTransportEvent.toSessionEvent(): KeepB5SessionEvent = when (this) {
+        is BleTransportEvent.ScanMatched -> KeepB5SessionEvent.ScanMatched(guard)
+        is BleTransportEvent.ScanFailed -> KeepB5SessionEvent.ScanFailed(guard, reason)
+        is BleTransportEvent.ConnectFailed -> KeepB5SessionEvent.ConnectFailed(guard, reason)
+        is BleTransportEvent.GattCreated -> KeepB5SessionEvent.GattCreated(guard)
+        is BleTransportEvent.GattConnected -> KeepB5SessionEvent.GattConnected(guard)
+        is BleTransportEvent.ServicesDiscovered -> KeepB5SessionEvent.ServicesDiscovered(guard, channel)
+        is BleTransportEvent.NotificationsEnabled -> KeepB5SessionEvent.NotificationsEnabled(guard, channel)
+        is BleTransportEvent.StartWriteCompleted -> KeepB5SessionEvent.StartWriteCompleted(guard, accepted)
+        is BleTransportEvent.SyncWriteCompleted -> KeepB5SessionEvent.SyncWriteCompleted(submission, accepted)
+        is BleTransportEvent.GattDisconnected -> KeepB5SessionEvent.LinkFailed(
+            guard, reason ?: BleFailureReason.REMOTE_DISCONNECTED,
         )
-
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
-
-        val scanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
-                val device = result.device
-                val name = device.name ?: return
-
-                if (matchesKeepB5(name)) {
-                    Timber.i("BLE: 发现 Keep B5 设备: $name (${device.address})")
-                    scanner.stopScan(this)
-                    connectToDevice(device)
-                }
-            }
-
-            override fun onScanFailed(errorCode: Int) {
-                Timber.e("BLE: 扫描失败 errorCode=$errorCode")
-                _connectionState.value = ConnectionState.ERROR
-            }
-        }
-
-        try {
-            scanner.startScan(filters, settings, scanCallback)
-        } catch (e: SecurityException) {
-            _connectionState.value = ConnectionState.ERROR
-            Timber.e(e, "BLE: 扫描权限不足")
-        }
-
-        // 扫描超时
-        scope.launch {
-            delay(SCAN_TIMEOUT_MS)
-            try { scanner.stopScan(scanCallback) } catch (_: Exception) {}
-            if (_connectionState.value == ConnectionState.CONNECTING) {
-                Timber.w("BLE: 扫描超时 — 未发现 Keep B5")
-                _connectionState.value = ConnectionState.ERROR
-            }
-        }
+        is BleTransportEvent.GattError -> KeepB5SessionEvent.LinkFailed(guard, reason)
+        is BleTransportEvent.DeviceInfoUpdated -> KeepB5SessionEvent.DeviceInfoReceived(guard, deviceInfo)
     }
 
-    // ── GATT 连接 ──
-
-    private fun connectToDevice(device: BluetoothDevice) {
-        Timber.i("BLE: 正在连接 ${device.name} (${device.address})...")
-        connectedDevice = device
-
-        try {
-            bluetoothGatt?.close()
-            bluetoothGatt = device.connectGatt(context, false, gattCallback)
-        } catch (e: SecurityException) {
-            _connectionState.value = ConnectionState.ERROR
-            Timber.e(e, "BLE: 连接权限不足")
-        }
-    }
-
-    // ── 重连 ──
-
-    private fun attemptReconnect() {
-        if (reconnectCount >= MAX_RECONNECT_ATTEMPTS) {
-            Timber.w("BLE: 重连已达上限 ($MAX_RECONNECT_ATTEMPTS 次)")
-            _connectionState.value = ConnectionState.ERROR
-            return
-        }
-
-        reconnectCount++
-        val delayMs = INITIAL_RECONNECT_DELAY_MS * (1L shl (reconnectCount - 1))
-            .coerceAtMost(MAX_RECONNECT_DELAY_MS)
-
-        Timber.i("BLE: 第 $reconnectCount 次重连，${delayMs}ms 后重试...")
-
-        scope.launch {
-            delay(delayMs)
-            if (_connectionState.value != ConnectionState.CONNECTED && !isUserDisconnect) {
-                connectedDevice?.let { connectToDevice(it) }
-                    ?: scanAndConnect() // 如果设备引用丢失，重新扫描
-            }
-        }
-    }
-
-    // ── 工具 ──
-
-    /** 检查设备名是否匹配已知 Keep B5 前缀 */
-    private fun matchesKeepB5(name: String): Boolean {
-        return KeepB5GattCallback.KNOWN_DEVICE_PREFIXES.any { prefix ->
-            name.startsWith(prefix, ignoreCase = true)
-        }
-    }
-
-    /** 检查运行时 BLE 权限 */
-    private fun hasBlePermissions(): Boolean {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            arrayOf(
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN,
-                Manifest.permission.ACCESS_FINE_LOCATION,
-            )
-        }
-        return permissions.all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    /** 资源清理 */
-    fun close() {
-        scope.cancel()
-        try {
-            bluetoothGatt?.disconnect()
-            bluetoothGatt?.close()
-        } catch (_: Exception) {}
-        bluetoothGatt = null
-    }
-
-    companion object {
-        private const val SCAN_TIMEOUT_MS = 15_000L
-        private const val MAX_RECONNECT_ATTEMPTS = 5
-        private const val INITIAL_RECONNECT_DELAY_MS = 1_000L
-        private const val MAX_RECONNECT_DELAY_MS = 30_000L
-    }
+    private data class EffectBatch(
+        val actions: List<KeepB5SessionAction>,
+        val reconnectDelays: Map<KeepB5AttemptGuard, Long> = emptyMap(),
+        val terminalFlush: Boolean = false,
+    )
+    private data class TimedAttempt(val guard: KeepB5AttemptGuard, val job: Job)
+    private data class TimedGatt(val guard: KeepB5GattGuard, val job: Job)
+    private data class ActiveSync(val guard: KeepB5GattGuard, val scheduler: KeepB5SyncScheduler, val job: Job)
 }
+
+internal data class KeepB5BleDataSourceResourceSnapshot(
+    val quiescedCallbackJobs: Int,
+)

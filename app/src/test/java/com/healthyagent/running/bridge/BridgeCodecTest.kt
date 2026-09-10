@@ -25,6 +25,7 @@ class BridgeCodecValidFixtureTest(private val resource: String) {
             "/v1/fixtures/valid/snapshot.json",
             "/v1/fixtures/valid/command.run-start.json",
             "/v1/fixtures/valid/command.history-query.json",
+            "/v1/fixtures/valid/command.settings-query.json",
             "/v1/fixtures/valid/command.settings-update.json",
             "/v1/fixtures/valid/result.accepted.json",
             "/v1/fixtures/valid/result.error.json",
@@ -81,5 +82,30 @@ class BridgeCodecTest {
         val roundTrip = BridgeCodec.decode(BridgeCodec.encode(accepted.envelope))
 
         assertTrue(roundTrip is BridgeDecodeResult.Accepted)
+    }
+
+    @Test
+    fun `未知持久化与健康同步状态会被拒绝`() {
+        val raw = checkNotNull(javaClass.getResource("/v1/fixtures/valid/snapshot.json")).readText()
+
+        val invalidPersistence = raw.replace(
+            "\"persistenceState\": \"idle\"",
+            "\"persistenceState\": \"unknown\"",
+        )
+        val invalidHealth = raw.replace(
+            "\"state\": \"idle\",\n      \"routeWritten\"",
+            "\"state\": \"unknown\",\n      \"routeWritten\"",
+        )
+
+        assertTrue(BridgeCodec.decode(invalidPersistence) is BridgeDecodeResult.Rejected)
+        assertTrue(BridgeCodec.decode(invalidHealth) is BridgeDecodeResult.Rejected)
+    }
+
+    @Test
+    fun `没有心率时不能携带心率区间`() {
+        val raw = checkNotNull(javaClass.getResource("/v1/fixtures/valid/snapshot.json")).readText()
+        val invalid = raw.replace("\"heartRate\": 142", "\"heartRate\": null")
+
+        assertTrue(BridgeCodec.decode(invalid) is BridgeDecodeResult.Rejected)
     }
 }

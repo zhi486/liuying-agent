@@ -1,102 +1,337 @@
 package com.healthyagent.running.speech
 
 import android.content.Context
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import com.healthyagent.running.core.model.SpeechPriority
-import kotlinx.coroutines.suspendCancellableCoroutine
-import timber.log.Timber
-import java.util.Locale
-import kotlin.coroutines.resume
+import com.healthyagent.running.diagnostics.AudioFocusResult
+import com.healthyagent.running.diagnostics.DiagnosticEvent
+import com.healthyagent.running.diagnostics.DiagnosticFailure
+import com.healthyagent.running.diagnostics.DiagnosticLogger
+import com.healthyagent.running.diagnostics.NoOpDiagnosticLogger
+import com.healthyagent.running.diagnostics.SafeDiagnosticSummary
+import com.healthyagent.running.diagnostics.TtsEventKind
+import com.healthyagent.running.diagnostics.TtsProvider
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Android TTS 引擎 — 包装 android.speech.tts.TextToSpeech
- *
- * 使用 QUEUE_FLUSH 模式（SpeechBus 是唯一的排队者），
- * speak() 以 suspend 方式等待播放完成。
- */
-class AndroidTtsEngine(context: Context) : TtsEngine {
+class AndroidTtsEngine(
+    private val port: TextToSpeechPort,
+    private val audioFocusController: AudioFocusController,
+    private val diagnosticLogger: DiagnosticLogger = NoOpDiagnosticLogger,
+    private val initializationTimeoutMillis: Long = 3_000L,
+    private val playbackTimeoutMillis: Long = 60_000L,
+    private val newUtteranceId: () -> String = { UUID.randomUUID().toString() },
+) : TtsEngine {
+    private sealed interface Terminal {
+        data object Completed : Terminal
+        data class Failed(val error: Throwable) : Terminal
+        data class TimedOut(val error: PlaybackTimeoutException) : Terminal
+        data class Cancelled(val error: CancellationException) : Terminal
+    }
 
-    private var tts: TextToSpeech? = null
-    private var ready = false
+    private data class Lease(
+        val value: AudioFocusLease,
+        val recordsRelease: Boolean,
+    )
+
+    private class Playback(
+        val utteranceId: String,
+        val lease: Lease,
+    ) {
+        val claimedTerminal = AtomicReference<Terminal?>(null)
+        val terminal = CompletableDeferred<Terminal>()
+    }
+
+    private val stateLock = Any()
+    private var activePlayback: Playback? = null
 
     @Volatile
     override var isSpeaking: Boolean = false
         private set
 
     init {
-        tts = TextToSpeech(context) { status ->
-            ready = status == TextToSpeech.SUCCESS
-            if (ready) {
-                tts?.language = Locale.SIMPLIFIED_CHINESE
-                tts?.setSpeechRate(1.0f)
-                val langResult = tts?.let {
-                    if (it.isLanguageAvailable(Locale.SIMPLIFIED_CHINESE) >= TextToSpeech.LANG_AVAILABLE) {
-                        it.setLanguage(Locale.SIMPLIFIED_CHINESE)
-                    } else {
-                        TextToSpeech.LANG_MISSING_DATA
-                    }
-                }
-                if (langResult == TextToSpeech.LANG_MISSING_DATA) {
-                    Timber.w("中文 TTS 语言数据不可用")
-                }
-                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {
+        port.setListener(object : TextToSpeechPort.Listener {
+            override fun onStart(utteranceId: String) {
+                synchronized(stateLock) {
+                    if (activePlayback?.utteranceId == utteranceId) {
                         isSpeaking = true
                     }
-
-                    override fun onDone(utteranceId: String?) {
-                        isSpeaking = false
-                    }
-
-                    @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) {
-                        isSpeaking = false
-                        Timber.w("TTS 播放错误: utteranceId=$utteranceId")
-                    }
-
-                    override fun onError(utteranceId: String?, errorCode: Int) {
-                        isSpeaking = false
-                        Timber.w("TTS 播放错误: utteranceId=$utteranceId, errorCode=$errorCode")
-                    }
-                })
-            } else {
-                Timber.e("TextToSpeech 初始化失败: status=$status")
+                }
             }
-        }
+
+            override fun onDone(utteranceId: String) {
+                playbackFor(utteranceId)?.let { finish(it, Terminal.Completed) }
+            }
+
+            override fun onError(utteranceId: String, errorCode: Int?) {
+                playbackFor(utteranceId)?.let {
+                    finish(it, Terminal.Failed(IllegalStateException("TTS 播放失败，错误码：$errorCode")))
+                }
+            }
+
+            override fun onStop(utteranceId: String) {
+                playbackFor(utteranceId)?.let {
+                    finish(it, Terminal.Cancelled(CancellationException("TTS 播放已停止")))
+                }
+            }
+        })
     }
 
-    override suspend fun speak(text: String, priority: SpeechPriority): Result<Unit> {
-        val engine = tts ?: return Result.failure(IllegalStateException("TTS 未初始化"))
-        if (!ready) return Result.failure(IllegalStateException("TTS 引擎未就绪"))
+    constructor(context: Context) : this(
+        port = AndroidTextToSpeechPort(context),
+        audioFocusController = AndroidAudioFocusController(context),
+    )
 
-        return suspendCancellableCoroutine { continuation ->
-            try {
-                val utteranceId = "tts_${System.currentTimeMillis()}"
-                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
-                if (result == TextToSpeech.SUCCESS) {
-                    isSpeaking = true
-                    continuation.resume(Result.success(Unit))
-                } else {
-                    isSpeaking = false
-                    continuation.resume(Result.failure(RuntimeException("TTS speak() 返回失败: $result")))
-                }
-            } catch (e: Exception) {
-                isSpeaking = false
-                continuation.resume(Result.failure(e))
+    override suspend fun speak(text: String, priority: SpeechPriority): Result<Unit> {
+        val initialization = try {
+            withTimeoutOrNull(initializationTimeoutMillis) {
+                port.awaitInitialization()
             }
+        } catch (cancelled: CancellationException) {
+            recordCancellation()
+            throw cancelled
+        } catch (error: Exception) {
+            return initializationFailure(error)
+        }
+
+        if (initialization == null) {
+            return initializationFailure(TtsInitializationTimeoutException())
+        }
+        initialization.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) {
+                recordCancellation()
+                throw error
+            }
+            if (error !is Exception) throw error
+            return initializationFailure(error)
+        }
+
+        val profile = try {
+            port.setAudioProfile(SpeechAudioProfile.ASSISTANT_SPEECH)
+        } catch (cancelled: CancellationException) {
+            recordCancellation()
+            throw cancelled
+        } catch (error: Exception) {
+            return playbackFailure(error)
+        }
+        profile.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) {
+                recordCancellation()
+                throw error
+            }
+            if (error !is Exception) throw error
+            return playbackFailure(error)
+        }
+
+        val lease = try {
+            val acquired = audioFocusController.request()
+            recordFocus(if (acquired.granted) AudioFocusResult.GRANTED else AudioFocusResult.DENIED)
+            Lease(acquired, recordsRelease = true)
+        } catch (cancelled: CancellationException) {
+            recordCancellation()
+            throw cancelled
+        } catch (_: Exception) {
+            recordFocus(AudioFocusResult.DENIED)
+            Lease(NoOpAudioFocusLease, recordsRelease = false)
+        }
+
+        val playback = Playback(newUtteranceId(), lease)
+        val installed = synchronized(stateLock) {
+            if (activePlayback == null) {
+                activePlayback = playback
+                isSpeaking = true
+                true
+            } else {
+                false
+            }
+        }
+        if (!installed) {
+            val error = IllegalStateException("TTS 正在播放")
+            finish(playback, Terminal.Failed(error))
+            return Result.failure(error)
+        }
+
+        val accepted = try {
+            port.speak(text, playback.utteranceId)
+        } catch (cancelled: CancellationException) {
+            finish(playback, Terminal.Cancelled(cancelled))
+            throw cancelled
+        } catch (error: Exception) {
+            finish(playback, Terminal.Failed(error))
+            return Result.failure(error)
+        } catch (error: Error) {
+            finish(playback, Terminal.Failed(error))
+            throw error
+        }
+        if (!accepted) {
+            val error = IllegalStateException("TTS 拒绝播放请求")
+            finish(playback, Terminal.Failed(error))
+            return Result.failure(error)
+        }
+
+        return try {
+            val terminal = withTimeoutOrNull(playbackTimeoutMillis) {
+                playback.terminal.await()
+            }
+            if (terminal == null) {
+                val timeout = PlaybackTimeoutException()
+                if (finish(playback, Terminal.TimedOut(timeout), stopPort = true)) {
+                    Result.failure(timeout)
+                } else {
+                    checkNotNull(playback.claimedTerminal.get()).toResult()
+                }
+            } else {
+                terminal.toResult()
+            }
+        } catch (cancelled: CancellationException) {
+            finish(playback, Terminal.Cancelled(cancelled), stopPort = true)
+            throw cancelled
         }
     }
 
     override fun stop() {
-        tts?.stop()
-        isSpeaking = false
+        val playback = synchronized(stateLock) { activePlayback }
+        if (playback == null || !finish(
+                playback,
+                Terminal.Cancelled(CancellationException("TTS 引擎已停止")),
+                stopPort = true,
+            )
+        ) {
+            safeStop()
+        }
     }
 
     override fun shutdown() {
-        tts?.stop()
-        tts?.shutdown()
-        isSpeaking = false
-        ready = false
+        val playback = synchronized(stateLock) { activePlayback }
+        if (playback == null || !finish(
+                playback,
+                Terminal.Cancelled(CancellationException("TTS 引擎已关闭")),
+                stopPort = true,
+            )
+        ) {
+            safeStop()
+        }
+        try {
+            port.shutdown()
+        } catch (_: Exception) {
+            // shutdown is best-effort; an active request has already reached its terminal state.
+        }
+    }
+
+    private fun playbackFor(utteranceId: String): Playback? = synchronized(stateLock) {
+        activePlayback?.takeIf { it.utteranceId == utteranceId }
+    }
+
+    private fun finish(
+        playback: Playback,
+        terminal: Terminal,
+        stopPort: Boolean = false,
+    ): Boolean {
+        if (!playback.claimedTerminal.compareAndSet(null, terminal)) return false
+        if (stopPort) safeStop()
+        synchronized(stateLock) {
+            if (activePlayback === playback) {
+                activePlayback = null
+                isSpeaking = false
+            }
+        }
+        try {
+            playback.lease.value.release()
+        } catch (_: Exception) {
+            // The terminal result must not be stranded by platform focus cleanup.
+        }
+        if (playback.lease.recordsRelease) {
+            recordFocus(AudioFocusResult.RELEASED)
+        }
+        recordTerminal(terminal)
+        playback.terminal.complete(terminal)
+        return true
+    }
+
+    private fun Terminal.toResult(): Result<Unit> = when (this) {
+        Terminal.Completed -> Result.success(Unit)
+        is Terminal.Failed -> Result.failure(error)
+        is Terminal.TimedOut -> Result.failure(error)
+        is Terminal.Cancelled -> throw error
+    }
+
+    private fun initializationFailure(error: Throwable): Result<Unit> {
+        diagnosticLogger.record(
+            DiagnosticEvent.TtsProviderEvent(
+                provider = TtsProvider.ANDROID,
+                kind = TtsEventKind.INITIALIZATION_FAILED,
+                failure = DiagnosticFailure.from(error, SafeDiagnosticSummary.TTS_INITIALIZATION_FAILED),
+            ),
+        )
+        return Result.failure(error)
+    }
+
+    private fun playbackFailure(error: Throwable): Result<Unit> {
+        diagnosticLogger.record(
+            DiagnosticEvent.TtsProviderEvent(
+                provider = TtsProvider.ANDROID,
+                kind = TtsEventKind.FAILED,
+                failure = DiagnosticFailure.from(error, SafeDiagnosticSummary.TTS_PLAYBACK_FAILED),
+            ),
+        )
+        return Result.failure(error)
+    }
+
+    private fun recordTerminal(terminal: Terminal) {
+        val event = when (terminal) {
+            Terminal.Completed -> DiagnosticEvent.TtsProviderEvent(
+                provider = TtsProvider.ANDROID,
+                kind = TtsEventKind.COMPLETED,
+            )
+            is Terminal.Failed -> DiagnosticEvent.TtsProviderEvent(
+                provider = TtsProvider.ANDROID,
+                kind = TtsEventKind.FAILED,
+                failure = DiagnosticFailure.from(
+                    terminal.error,
+                    SafeDiagnosticSummary.TTS_PLAYBACK_FAILED,
+                ),
+            )
+            is Terminal.TimedOut -> DiagnosticEvent.TtsProviderEvent(
+                provider = TtsProvider.ANDROID,
+                kind = TtsEventKind.PLAYBACK_TIMEOUT,
+                failure = DiagnosticFailure.from(
+                    terminal.error,
+                    SafeDiagnosticSummary.TTS_PLAYBACK_TIMEOUT,
+                ),
+            )
+            is Terminal.Cancelled -> DiagnosticEvent.TtsProviderEvent(
+                provider = TtsProvider.ANDROID,
+                kind = TtsEventKind.CANCELLED,
+            )
+        }
+        diagnosticLogger.record(event)
+    }
+
+    private fun recordCancellation() {
+        diagnosticLogger.record(
+            DiagnosticEvent.TtsProviderEvent(
+                provider = TtsProvider.ANDROID,
+                kind = TtsEventKind.CANCELLED,
+            ),
+        )
+    }
+
+    private fun recordFocus(result: AudioFocusResult) {
+        diagnosticLogger.record(DiagnosticEvent.AudioFocusEvent(TtsProvider.ANDROID, result))
+    }
+
+    private fun safeStop() {
+        try {
+            port.stop()
+        } catch (_: Exception) {
+            // stop is best-effort; the completion latch owns the observable terminal state.
+        }
+    }
+
+    private object NoOpAudioFocusLease : AudioFocusLease {
+        override val granted: Boolean = false
+        override fun release() = Unit
     }
 }

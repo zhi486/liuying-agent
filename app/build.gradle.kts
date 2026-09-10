@@ -20,7 +20,8 @@ val corepackExecutable = if (System.getProperty("os.name").startsWith("Windows")
 
 android {
     namespace = "com.healthyagent.running"
-    compileSdk = 34
+    // Health Connect 1.1.0 的 AAR 元数据要求 compileSdk 36；targetSdk 仍独立维持 34。
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.healthyagent.running"
@@ -85,6 +86,10 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.webkit:webkit:1.12.1")
+
+    // Health Connect：跑后写入跑步、距离与可选路线。
+    implementation("androidx.health.connect:connect-client:1.1.0")
 
     // Kotlin 协程
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
@@ -95,7 +100,7 @@ dependencies {
     implementation("io.insert-koin:koin-android:$koinVersion")
     implementation("io.insert-koin:koin-androidx-compose:$koinVersion")
 
-    // Room 持久化没反应
+    // Room 持久化
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")

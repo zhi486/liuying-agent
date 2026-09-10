@@ -7,204 +7,295 @@ import com.healthyagent.running.core.model.MetricsFrame
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.SampleType
 import com.healthyagent.running.core.model.SensorSample
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.runningFold
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
- * 实时跑步数据处理管道
+ * 实时跑步数据处理管道。
  *
- * 将传感器原始样本流（1Hz+）加工为每秒一帧的 MetricsFrame。
- * 内置心率 5s 滑动平均平滑、配速滚动 10s 计算、数据新鲜度检测。
+ * 样本只更新归约状态，单调时钟驱动的 1Hz tick 是唯一出帧来源。这样即使传感器
+ * 完全断流，UI、规则引擎和会话计时仍会按秒收到带有真实新鲜度的帧。
  */
-class RunningDataPipeline(private val config: RunConfig) {
+class RunningDataPipeline(
+    initialConfig: RunConfig,
+    private val tickSource: Flow<Long>? = null,
+    private val monotonicClockMillis: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val wallClockMillis: () -> Long = System::currentTimeMillis,
+) {
+
+    @Volatile
+    private var config = initialConfig
+
+    /** 仅应在新跑步开始前替换，保证本次管道使用同一组用户配置。 */
+    fun updateConfig(config: RunConfig) {
+        this.config = config
+    }
 
     companion object {
-        const val HR_SMOOTH_WINDOW = 5       // 心率平滑窗口（秒）
-        const val PACE_WINDOW_SEC = 10       // 配速计算窗口（秒）
-        const val DATA_FRESH_TIMEOUT = 5_000L // 超过 5s 无新数据视为数据中断
-        const val HISTORY_MAX = 60           // 最多保留 60 帧历史
+        const val HR_SMOOTH_WINDOW = 5
+        const val PACE_WINDOW_SEC = 10
+        const val DATA_FRESH_TIMEOUT = 5_000L
+        private const val TICK_INTERVAL_MILLIS = 1_000L
     }
 
-    private data class PipelineState(
-        val lastHeartRate: Int? = null,
-        val lastCadence: Int? = null,
-        val totalDistanceMeters: Double = 0.0,
-        val totalSteps: Long = 0,
-        val lastHrSampleTime: Long = 0,
-        val lastCadenceSampleTime: Long = 0,
-        val recentFrames: List<MetricsFrame> = emptyList(),
-        val elapsedSeconds: Long = 0,
+    private data class TimedHeartRate(
+        val receivedAtMillis: Long,
+        val value: Int,
     )
 
+    private data class DistancePoint(
+        val receivedAtMillis: Long,
+        val distanceMeters: Double,
+    )
+
+    private class PipelineState {
+        var lastHeartRate: Int? = null
+        var lastCadence: Int? = null
+        var totalDistanceMeters: Double = 0.0
+        var totalSteps: Long = 0
+        var lastHeartRateReceiptMillis: Long? = null
+        var lastCadenceReceiptMillis: Long? = null
+        var lastDistanceReceiptMillis: Long? = null
+        var firstTickMillis: Long? = null
+        var elapsedSeconds: Long = 0
+        val heartRates = ArrayDeque<TimedHeartRate>()
+        val distancePoints = ArrayDeque<DistancePoint>()
+        val lastSourceTimestampByType = mutableMapOf<SampleType, Long>()
+    }
+
+    private sealed interface PipelineEvent {
+        data class Sample(
+            val value: SensorSample,
+            val receivedAtMillis: Long,
+        ) : PipelineEvent
+
+        data class Tick(
+            val monotonicMillis: Long,
+            val wallClockMillis: Long,
+        ) : PipelineEvent
+    }
+
     /**
-     * 从传感器样本流生成指标帧流
+     * 从传感器样本流生成指标帧流。
      *
-     * 每秒产出一帧。心率做 5s 窗口滑动平均，配速基于过去 10s 的距离增量计算。
+     * [ticks] 传递单调时钟毫秒值。生产环境使用默认 1Hz 时钟，测试可传入
+     * `MutableSharedFlow<Long>` 精确控制每次出帧。
      */
-    fun process(samples: Flow<SensorSample>): Flow<MetricsFrame> {
-        val initialState = PipelineState()
+    fun process(
+        samples: Flow<SensorSample>,
+        ticks: Flow<Long> = tickSource ?: defaultTicks(),
+        onOrderedHeartRateReceived: (sample: SensorSample, receivedAtMillis: Long) -> Unit = { _, _ -> },
+    ): Flow<MetricsFrame> = flow {
+        // 状态位于冷流内部，每次 collect 都从全新窗口开始。
+        val state = PipelineState()
+        events(samples, ticks).collect { event ->
+            when (event) {
+                is PipelineEvent.Sample -> acceptSample(
+                    state = state,
+                    sample = event.value,
+                    receivedAtMillis = event.receivedAtMillis,
+                    onOrderedHeartRateReceived = onOrderedHeartRateReceived,
+                )
 
-        return samples
-            .buffer(64)
-            .groupBySecond()
-            .runningFold(initialState) { state, (timestamp, secondSamples) ->
-                val updated = updateState(state, secondSamples, timestamp)
-                // 每处理完一秒的样本就产出一帧
-                updated
-            }
-            .filter { it.recentFrames.isNotEmpty() }
-            .map { state -> buildFrame(state) }
-            .buffer(1)
-    }
-
-    /**
-     * 将样本按秒分组 → (秒级时间戳, 该秒内所有样本)
-     */
-    private fun Flow<SensorSample>.groupBySecond(): Flow<Pair<Long, List<SensorSample>>> = flow {
-        var currentSecond = -1L
-        var acc = mutableListOf<SensorSample>()
-
-        collect { sample ->
-            val sec = sample.timestampMillis / 1000
-            if (sec != currentSecond) {
-                if (acc.isNotEmpty()) {
-                    emit(currentSecond * 1000 to acc.toList())
-                }
-                currentSecond = sec
-                acc = mutableListOf(sample)
-            } else {
-                acc.add(sample)
+                is PipelineEvent.Tick -> emit(
+                    buildFrame(
+                        state = state,
+                        tickMillis = event.monotonicMillis,
+                        timestampMillis = event.wallClockMillis,
+                    ),
+                )
             }
         }
-        if (acc.isNotEmpty()) {
-            emit(currentSecond * 1000 to acc.toList())
+    }.buffer(1)
+
+    private fun events(
+        samples: Flow<SensorSample>,
+        ticks: Flow<Long>,
+    ): Flow<PipelineEvent> = channelFlow {
+        launch {
+            samples.collect { sample ->
+                send(
+                    PipelineEvent.Sample(
+                        value = sample,
+                        receivedAtMillis = monotonicClockMillis(),
+                    ),
+                )
+            }
+        }
+        launch {
+            ticks.collect { tickMillis ->
+                send(
+                    PipelineEvent.Tick(
+                        monotonicMillis = tickMillis,
+                        wallClockMillis = wallClockMillis(),
+                    ),
+                )
+            }
         }
     }
 
-    private fun updateState(
+    private fun defaultTicks(): Flow<Long> = flow {
+        while (currentCoroutineContext().isActive) {
+            delay(TICK_INTERVAL_MILLIS)
+            emit(monotonicClockMillis())
+        }
+    }
+
+    private fun acceptSample(
         state: PipelineState,
-        samples: List<SensorSample>,
-        timestamp: Long
-    ): PipelineState {
-        var hr = state.lastHeartRate
-        var cadence = state.lastCadence
-        var distance = state.totalDistanceMeters
-        var steps = state.totalSteps
-        var lastHrTime = state.lastHrSampleTime
-        var lastCadenceTime = state.lastCadenceSampleTime
+        sample: SensorSample,
+        receivedAtMillis: Long,
+        onOrderedHeartRateReceived: (sample: SensorSample, receivedAtMillis: Long) -> Unit,
+    ) {
+        val previousSourceTimestamp = state.lastSourceTimestampByType[sample.type]
+        if (previousSourceTimestamp != null && sample.timestampMillis < previousSourceTimestamp) return
+        state.lastSourceTimestampByType[sample.type] = sample.timestampMillis
 
-        for (s in samples) {
-            when (s.type) {
-                SampleType.HEART_RATE -> {
-                    hr = s.value.toInt()
-                    lastHrTime = timestamp
-                }
-                SampleType.CADENCE -> {
-                    cadence = s.value.toInt()
-                    lastCadenceTime = timestamp
-                }
-                SampleType.DISTANCE -> distance = s.value
-                SampleType.STEPS -> steps = s.value.toLong()
-                else -> { /* 忽略 */ }
+        when (sample.type) {
+            SampleType.HEART_RATE -> {
+                onOrderedHeartRateReceived(sample, receivedAtMillis)
+                val heartRate = sample.value.toInt()
+                state.lastHeartRate = heartRate
+                state.lastHeartRateReceiptMillis = receivedAtMillis
+                state.heartRates.addLast(TimedHeartRate(receivedAtMillis, heartRate))
+                trimHeartRates(state, receivedAtMillis)
             }
+
+            SampleType.CADENCE -> {
+                state.lastCadence = sample.value.toInt()
+                state.lastCadenceReceiptMillis = receivedAtMillis
+            }
+
+            SampleType.DISTANCE -> acceptDistance(state, sample.value, receivedAtMillis)
+            SampleType.STEPS -> state.totalSteps = sample.value.toLong()
+            else -> Unit
+        }
+    }
+
+    private fun acceptDistance(
+        state: PipelineState,
+        distanceMeters: Double,
+        receivedAtMillis: Long,
+    ) {
+        val previousReceipt = state.lastDistanceReceiptMillis
+        val resumedAfterGap = previousReceipt != null &&
+            receivedAtMillis - previousReceipt >= DATA_FRESH_TIMEOUT
+        val distanceRestarted = distanceMeters < state.totalDistanceMeters
+        if (resumedAfterGap || distanceRestarted) {
+            state.distancePoints.clear()
         }
 
-        // 构建当前帧并追加到历史
-        val newFrame = buildMetricsFrame(
-            hr = hr,
-            cadence = cadence,
-            distance = distance,
-            steps = steps,
-            lastHrTime = lastHrTime,
-            lastCadenceTime = lastCadenceTime,
-            history = state.recentFrames,
-            elapsedSeconds = state.elapsedSeconds + 1,
-        )
+        state.totalDistanceMeters = distanceMeters
+        state.lastDistanceReceiptMillis = receivedAtMillis
 
-        val updatedHistory = (state.recentFrames + newFrame).takeLast(HISTORY_MAX)
-
-        return state.copy(
-            lastHeartRate = hr,
-            lastCadence = cadence,
-            totalDistanceMeters = distance,
-            totalSteps = steps,
-            lastHrSampleTime = lastHrTime,
-            lastCadenceSampleTime = lastCadenceTime,
-            recentFrames = updatedHistory,
-            elapsedSeconds = state.elapsedSeconds + 1,
-        )
+        if (state.distancePoints.lastOrNull()?.receivedAtMillis == receivedAtMillis) {
+            state.distancePoints.removeLast()
+        }
+        state.distancePoints.addLast(DistancePoint(receivedAtMillis, distanceMeters))
+        trimDistancePoints(state, receivedAtMillis)
     }
 
-    private fun buildFrame(state: PipelineState): MetricsFrame {
-        return state.recentFrames.last()
-    }
-
-    /**
-     * 基于最新样本和历史窗口构建一帧 MetricsFrame
-     */
-    private fun buildMetricsFrame(
-        hr: Int?,
-        cadence: Int?,
-        distance: Double,
-        steps: Long,
-        lastHrTime: Long,
-        lastCadenceTime: Long,
-        history: List<MetricsFrame>,
-        elapsedSeconds: Long,
+    private fun buildFrame(
+        state: PipelineState,
+        tickMillis: Long,
+        timestampMillis: Long,
     ): MetricsFrame {
-        val now = System.currentTimeMillis()
-        val isFresh = (now - lastHrTime) < DATA_FRESH_TIMEOUT
+        val firstTick = state.firstTickMillis ?: tickMillis.also { state.firstTickMillis = it }
+        val elapsedFromClock = ((tickMillis - firstTick).coerceAtLeast(0L) / 1_000L) + 1L
+        state.elapsedSeconds = maxOf(state.elapsedSeconds, elapsedFromClock)
 
-        // 心率 5s 滑动平均
-        val smoothedHr = if (history.size >= 2 && hr != null) {
-            val recentHr = (history.takeLast(HR_SMOOTH_WINDOW).mapNotNull { it.heartRate } + hr)
-                .takeLast(HR_SMOOTH_WINDOW)
-            MetricsCalculator.movingAverage(recentHr)
-        } else hr
+        val isDataFresh = isFresh(state.lastDistanceReceiptMillis, tickMillis)
+        val isHeartRateFresh = isFresh(state.lastHeartRateReceiptMillis, tickMillis)
+        val isCadenceFresh = isFresh(state.lastCadenceReceiptMillis, tickMillis)
 
-        // 心率区间
-        val hrZone = if (smoothedHr != null) {
-            HrZoneCalculator.zone(smoothedHr, config.maxHeartRate)
-        } else HrZone.Z1
+        trimHeartRates(state, tickMillis)
+        val heartRate = state.lastHeartRate.takeIf { isHeartRateFresh }
+        val smoothedHeartRate = if (heartRate != null) {
+            MetricsCalculator.movingAverage(
+                state.heartRates.takeLast(HR_SMOOTH_WINDOW).map(TimedHeartRate::value),
+            )
+        } else {
+            null
+        }
+        val heartRateZone = smoothedHeartRate?.let { HrZoneCalculator.zone(it, config.maxHeartRate) }
+            ?: HrZone.Z1
+        val cadence = state.lastCadence.takeIf { isCadenceFresh }
+        val pace = calculatePace(state, tickMillis, isDataFresh)
 
-        // 配速：基于过去 PACE_WINDOW_SEC 的距离增量
-        val pace = if (history.size >= 2) {
-            val oldest = history.first()
-            val deltaDist = distance - oldest.distanceMeters
-            val deltaSec = (now - oldest.timestampMillis) / 1000.0
-            if (deltaDist > 0 && deltaSec > 0) {
-                MetricsCalculator.currentPace(deltaDist, deltaSec)
-            } else null
-        } else null
-
-        // 步幅
-        val strideLen = if (distance > 0 && steps > 0) {
-            MetricsCalculator.strideLength(distance, steps, 0)
-        } else null
-
-        // 心效比
-        val hrPaceRatio = if (smoothedHr != null && pace != null) {
-            MetricsCalculator.hrPaceRatio(smoothedHr, pace)
-        } else null
+        val strideLength = if (state.totalDistanceMeters > 0 && state.totalSteps > 0) {
+            MetricsCalculator.strideLength(state.totalDistanceMeters, state.totalSteps, 0)
+        } else {
+            null
+        }
+        val heartRatePaceRatio = if (smoothedHeartRate != null && pace != null) {
+            MetricsCalculator.hrPaceRatio(smoothedHeartRate, pace)
+        } else {
+            null
+        }
 
         return MetricsFrame(
-            timestampMillis = now,
-            elapsedSeconds = elapsedSeconds,
-            heartRate = hr,
-            heartRateSmoothed = smoothedHr,
-            hrZone = hrZone,
+            timestampMillis = timestampMillis,
+            elapsedSeconds = state.elapsedSeconds,
+            heartRate = heartRate,
+            heartRateSmoothed = smoothedHeartRate,
+            hrZone = heartRateZone,
             cadence = cadence,
-            strideLengthCm = strideLen,
+            strideLengthCm = strideLength,
             currentPaceSecPerKm = pace,
-            distanceMeters = distance,
-            splitDistanceMeters = distance, // 默认 = 总距离，RunSessionManager 会覆盖
-            totalSteps = steps,
-            isDataFresh = isFresh,
-            hrPaceRatio = hrPaceRatio,
+            distanceMeters = state.totalDistanceMeters,
+            splitDistanceMeters = state.totalDistanceMeters,
+            totalSteps = state.totalSteps,
+            isDataFresh = isDataFresh,
+            isHeartRateFresh = isHeartRateFresh,
+            hrPaceRatio = heartRatePaceRatio,
         )
+    }
+
+    private fun calculatePace(
+        state: PipelineState,
+        tickMillis: Long,
+        isDataFresh: Boolean,
+    ): Double? {
+        if (!isDataFresh) return null
+
+        val visiblePoints = state.distancePoints.filter { point ->
+            tickMillis - point.receivedAtMillis in 0..(PACE_WINDOW_SEC * 1_000L)
+        }
+        if (visiblePoints.size < 2) return null
+
+        val oldest = visiblePoints.first()
+        val newest = visiblePoints.last()
+        val deltaDistance = newest.distanceMeters - oldest.distanceMeters
+        val deltaSeconds = (newest.receivedAtMillis - oldest.receivedAtMillis) / 1_000.0
+        return MetricsCalculator.currentPace(deltaDistance, deltaSeconds)
+    }
+
+    private fun trimHeartRates(state: PipelineState, nowMillis: Long) {
+        while (state.heartRates.isNotEmpty() &&
+            nowMillis - state.heartRates.first().receivedAtMillis >= DATA_FRESH_TIMEOUT
+        ) {
+            state.heartRates.removeFirst()
+        }
+    }
+
+    private fun trimDistancePoints(state: PipelineState, nowMillis: Long) {
+        val windowMillis = PACE_WINDOW_SEC * 1_000L
+        while (state.distancePoints.isNotEmpty() &&
+            nowMillis - state.distancePoints.first().receivedAtMillis > windowMillis
+        ) {
+            state.distancePoints.removeFirst()
+        }
+    }
+
+    private fun isFresh(lastReceiptMillis: Long?, nowMillis: Long): Boolean {
+        if (lastReceiptMillis == null) return false
+        return nowMillis - lastReceiptMillis in 0 until DATA_FRESH_TIMEOUT
     }
 }

@@ -10,35 +10,42 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <!-- 蓝牙扫描需要位置权限（Android <12），maxSdkVersion=30 限制仅旧版本生效 -->
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
+    <!-- 手机 GPS 是距离、配速和路线的主数据源。 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- 声明 BLE 硬件特性 -->
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="false" />
 
-    <!-- 身体传感器（心率等，Android 14+ health 前台服务必需） -->
-    <uses-permission android:name="android.permission.BODY_SENSORS" />
-
     <!-- 前台服务（跑步保活） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- 通知权限（Android 13+） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Health Connect 仅写入本地完成的跑步、距离与可选路线。 -->
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE_ROUTE" />
+
     <!-- 精确闹钟（可选，用于间歇跑计时） -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- Android 13 及以下通过独立 Health Connect 应用提供能力。 -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <application
         android:name=".HealthyAgentApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="AI 跑步伴侣"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.HealthyAgent">
 
@@ -53,10 +60,32 @@
             </intent-filter>
         </activity>
 
+        <!-- Health Connect 权限页中的“隐私政策”入口。 -->
+        <activity
+            android:name=".data.health.HealthPermissionsRationaleActivity"
+            android:exported="true"
+            android:theme="@style/Theme.HealthyAgent">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Android 14+ 通过系统权限使用页打开同一说明。 -->
+        <activity-alias
+            android:name=".ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".data.health.HealthPermissionsRationaleActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- 跑步前台服务 -->
         <service
             android:name=".data.sensor.RunningService"
             android:exported="false"
-            android:foregroundServiceType="health" />
+            android:foregroundServiceType="location|connectedDevice" />
     </application>
 </manifest>

@@ -17,7 +17,8 @@ interface TtsEngine {
      *
      * @param text 要朗读的中文文本
      * @param priority 播报优先级（用于打断决策）
-     * @return 是否成功开始播放
+     * Result.success 只表示底层已回调真实播放完成；普通失败返回 Result.failure。
+     * 外部取消、stop 或 shutdown 必须让挂起调用抛出 CancellationException。
      */
     suspend fun speak(text: String, priority: SpeechPriority): Result<Unit>
 

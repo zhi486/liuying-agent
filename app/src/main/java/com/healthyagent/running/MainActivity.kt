@@ -2,144 +2,233 @@ package com.healthyagent.running
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import com.healthyagent.running.ai.AnalysisManager
-import com.healthyagent.running.ai.EmergencyPhraseCache
-import com.healthyagent.running.core.engine.RuleEngine
-import com.healthyagent.running.core.model.RunConfig
-import com.healthyagent.running.core.pipeline.RunningDataPipeline
-import com.healthyagent.running.core.session.RunSessionManager
-import com.healthyagent.running.data.local.SettingsDataStore
-import com.healthyagent.running.data.repository.RunRepository
-import com.healthyagent.running.data.sensor.SensorDataSource
-import com.healthyagent.running.speech.SpeechBus
-import com.healthyagent.running.ui.history.HistoryScreen
-import com.healthyagent.running.ui.history.HistoryViewModel
-import com.healthyagent.running.ui.running.RunningScreen
-import com.healthyagent.running.ui.running.RunningViewModel
-import com.healthyagent.running.ui.settings.SettingsScreen
-import com.healthyagent.running.ui.settings.SettingsViewModel
+import androidx.core.view.WindowCompat
+import androidx.health.connect.client.PermissionController
+import androidx.lifecycle.lifecycleScope
+import com.healthyagent.running.ui.navigation.AppNavHost
 import com.healthyagent.running.ui.theme.HealthyAgentTheme
+import com.healthyagent.running.ui.web.WebPreviewHost
+import com.healthyagent.running.coordinator.AppCoordinator
+import com.healthyagent.running.coordinator.CoordinatorEvent
+import com.healthyagent.running.coordinator.PermissionsSnapshot
+import com.healthyagent.running.coordinator.RunCommandDispatcher
+import com.healthyagent.running.data.health.HealthConnectAvailability
+import com.healthyagent.running.data.health.HealthConnectSync
+import com.healthyagent.running.data.sensor.RunningService
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
 
+    private val coordinator: AppCoordinator by inject()
+    private val commandDispatcher: RunCommandDispatcher by inject()
+    private val healthConnectSync: HealthConnectSync by inject()
+    private var healthPermissionRequestLaunched = false
+    private var runningPermissionRequestAttempted = false
+
     companion object {
-        /** 运行时权限列表（BLE + 身体传感器） */
-        val BLE_PERMISSIONS = buildList {
+        /** 首次启动一起申请手机 GPS、可选 BLE 与通知权限。 */
+        val RUNNING_PERMISSIONS = buildList {
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(Manifest.permission.BLUETOOTH_SCAN)
                 add(Manifest.permission.BLUETOOTH_CONNECT)
             } else {
                 add(Manifest.permission.BLUETOOTH)
                 add(Manifest.permission.BLUETOOTH_ADMIN)
-                add(Manifest.permission.ACCESS_FINE_LOCATION)
             }
-            // BODY_SENSORS 在 Android 13+ 是运行时权限，14+ health 前台服务必需
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                add(Manifest.permission.BODY_SENSORS)
+                add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }.toTypedArray()
     }
 
-    private val sensorDataSource: SensorDataSource by inject()
-    private val pipeline: RunningDataPipeline by inject()
-    private val runConfig: RunConfig by inject()
-    private val ruleEngine: RuleEngine by inject()
-    private val speechBus: SpeechBus by inject()
-    private val sessionManager: RunSessionManager by inject()
-    private val repository: RunRepository by inject()
-    private val analysisManager: AnalysisManager by inject()
-    private val emergencyPhraseCache: EmergencyPhraseCache by inject()
-    private val settingsDataStore: SettingsDataStore by inject()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        if (BuildConfig.WEB_UI_ENABLED) {
+            configurePreviewSystemBars()
+        } else {
+            enableEdgeToEdge()
+        }
 
         setContent {
             HealthyAgentTheme {
-                var showHistory by remember { mutableStateOf(false) }
-                var showSettings by remember { mutableStateOf(false) }
-
-                // ViewModel 在顶层创建，导航切换不销毁
-                val runningViewModel = remember {
-                    RunningViewModel(
-                        sensorDataSource = sensorDataSource,
-                        pipeline = pipeline,
-                        runConfig = runConfig,
-                        ruleEngine = ruleEngine,
-                        speechBus = speechBus,
-                        sessionManager = sessionManager,
-                        repository = repository,
-                        analysisManager = analysisManager,
-                        emergencyPhraseCache = emergencyPhraseCache,
-                    )
+                var runningPermissionFlowCompleted by remember {
+                    mutableStateOf(hasCoreRunningPermission())
                 }
-                val historyViewModel = remember { HistoryViewModel(repository) }
-                val settingsViewModel = remember { SettingsViewModel(settingsDataStore) }
 
                 // BLE 权限请求
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions()
                 ) { grants ->
+                    runningPermissionRequestAttempted = true
+                    publishPermissionSnapshot(requested = true)
+                    runningPermissionFlowCompleted = true
+                    recoverActiveSessionIfNeeded()
                     val allGranted = grants.values.all { it }
                     if (!allGranted) {
-                        android.widget.Toast.makeText(
+                        Toast.makeText(
                             this@MainActivity,
-                            "蓝牙权限被拒绝，无法连接手环",
-                            android.widget.Toast.LENGTH_SHORT
+                            "部分跑步权限未授权，GPS 或手环数据可能不可用",
+                            Toast.LENGTH_SHORT,
                         ).show()
                     }
                 }
 
-                // 检查并请求 BLE 权限
-                if (!hasBlePermissions()) {
-                    androidx.compose.runtime.LaunchedEffect(Unit) {
-                        permissionLauncher.launch(BLE_PERMISSIONS)
+                // Health Connect 使用官方 contract；结果只更新同步管理器，不阻止本地跑步。
+                val healthPermissionLauncher = rememberLauncherForActivityResult(
+                    PermissionController.createRequestPermissionResultContract(),
+                ) { grantedPermissions ->
+                    healthConnectSync.updateGrantedPermissions(grantedPermissions)
+                }
+
+                // Web UI 的权限请求和业务错误由当前 Activity 承接。
+                if (BuildConfig.WEB_UI_ENABLED) {
+                    LaunchedEffect(coordinator) {
+                        coordinator.events.collect { event ->
+                            when (event) {
+                                CoordinatorEvent.RequestRunningPermissions -> {
+                                    if (hasCoreRunningPermission()) {
+                                        publishPermissionSnapshot(requested = true)
+                                    } else {
+                                        runningPermissionRequestAttempted = true
+                                        permissionLauncher.launch(RUNNING_PERMISSIONS)
+                                    }
+                                }
+                                is CoordinatorEvent.ShowError -> Toast.makeText(
+                                    this@MainActivity,
+                                    event.message,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
                     }
                 }
 
-                when {
-                    showSettings -> {
-                        SettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { showSettings = false }
-                        )
+                // 首次进入时同步状态并请求跑步权限。
+                if (!hasCoreRunningPermission()) {
+                    LaunchedEffect(Unit) {
+                        publishPermissionSnapshot(requested = false)
+                        runningPermissionRequestAttempted = true
+                        permissionLauncher.launch(RUNNING_PERMISSIONS)
                     }
-                    showHistory -> {
-                        HistoryScreen(
-                            viewModel = historyViewModel,
-                            onBack = { showHistory = false }
-                        )
+                } else {
+                    LaunchedEffect(Unit) {
+                        publishPermissionSnapshot(requested = false)
+                        runningPermissionFlowCompleted = true
                     }
-                    else -> {
-                        RunningScreen(
-                            viewModel = runningViewModel,
-                            onOpenHistory = { showHistory = true },
-                            onOpenSettings = { showSettings = true },
-                        )
+                }
+
+                // 等系统跑步权限弹窗结束后再请求，避免两个 ActivityResult 流程相互覆盖。
+                LaunchedEffect(runningPermissionFlowCompleted, healthConnectSync) {
+                    if (!runningPermissionFlowCompleted || healthPermissionRequestLaunched) {
+                        return@LaunchedEffect
                     }
+                    val permissionState = healthConnectSync.refreshPermissions()
+                    if (permissionState.availability == HealthConnectAvailability.AVAILABLE &&
+                        permissionState.checked &&
+                        permissionState.errorMessage == null &&
+                        !permissionState.hasAllRequestedPermissions
+                    ) {
+                        healthPermissionRequestLaunched = true
+                        healthPermissionLauncher.launch(healthConnectSync.requestedPermissions)
+                    }
+                }
+
+                if (BuildConfig.WEB_UI_ENABLED) {
+                    WebPreviewHost(
+                        coordinator = coordinator,
+                        commandDispatcher = commandDispatcher,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    AppNavHost()
                 }
             }
         }
     }
 
-    /** 检查是否已授予 BLE 权限 */
-    private fun hasBlePermissions(): Boolean {
-        return BLE_PERMISSIONS.all {
+    override fun onResume() {
+        super.onResume()
+        publishPermissionSnapshot(requested = runningPermissionRequestAttempted)
+        recoverActiveSessionIfNeeded()
+    }
+
+    /** 只有精确定位仍获授权时，才恢复 Android 14 的 location 前台服务。 */
+    private fun recoverActiveSessionIfNeeded() {
+        if (!hasCoreRunningPermission()) return
+        lifecycleScope.launch {
+            if (coordinator.awaitRestoration() &&
+                coordinator.snapshot.value.session.state in setOf("running", "paused")
+            ) {
+                RunningService.recover(this@MainActivity)
+            }
+        }
+    }
+
+    /** 手机 GPS 是唯一会阻止开始跑步的核心权限；BLE 与通知可被单独拒绝。 */
+    private fun hasCoreRunningPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun publishPermissionSnapshot(requested: Boolean) {
+        val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            listOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN)
+        }
+        coordinator.updatePermissions(
+            PermissionsSnapshot(
+                bluetooth = permissionValue(bluetoothPermissions, requested),
+                bodySensors = "notRequested",
+                runningSensors = permissionValue(
+                    listOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                    requested,
+                ),
+            ),
+        )
+    }
+
+    private fun permissionValue(permissions: List<String>, requested: Boolean): String {
+        val granted = permissions.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+        return when {
+            granted -> "granted"
+            requested -> "denied"
+            else -> "notRequested"
+        }
+    }
+
+    /** 视觉评审宿主固定使用可读系统栏；正式主题联动由安全 WebView 宿主接管。 */
+    @Suppress("DEPRECATION")
+    private fun configurePreviewSystemBars() {
+        window.statusBarColor = Color.rgb(16, 19, 16)
+        window.navigationBarColor = Color.rgb(16, 19, 16)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
         }
     }
 }
