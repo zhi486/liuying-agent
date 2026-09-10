@@ -121,7 +121,9 @@ class VoicePolicyTtsEngine(
                         null
                     }
                 } else null
-                val text = core + companion?.trim().orEmpty()
+                val suffix = companion?.trim().orEmpty()
+                val separator = if (suffix.isNotEmpty() && core.lastOrNull() !in setOf('。', '！', '？', '.', '!', '?')) "。" else ""
+                val text = core + separator + suffix
                 val file = awaitPreparation(onCancel = client::cancel) { client.synthesize(text) }
                 Prepared(file, text, VoiceAudioSource.ONLINE)
             }

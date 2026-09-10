@@ -70,6 +70,38 @@ class VoicePolicyTtsEngineTest {
     }
 
     @Test
+    fun `无句末标点的固定核心与陪伴后句之间补句号`() = runTest {
+        val fixture = Fixture()
+        fixture.companion = { "  开拓者，我会陪着你。  " }
+        val result = fixture.engine.speak(request("hr_too_low", companion = true)).getOrThrow()
+        val expected = "心率偏低，可以适当加快。开拓者，我会陪着你。"
+        assertEquals(listOf(expected), fixture.client.texts)
+        assertEquals(SpeechDelivery(expected, true), result)
+    }
+
+    @Test
+    fun `空白陪伴后句不向固定核心增加句号`() = runTest {
+        val fixture = Fixture()
+        fixture.companion = { " \n\t " }
+        val result = fixture.engine.speak(request("hr_too_low", companion = true)).getOrThrow()
+        assertEquals(listOf("心率偏低，可以适当加快"), fixture.client.texts)
+        assertEquals(SpeechDelivery("心率偏低，可以适当加快", true), result)
+    }
+
+    @Test
+    fun `六种句末标点不重复添加且核心不trim`() = runTest {
+        for (ending in "。！？.!?") {
+            val fixture = Fixture()
+            fixture.companion = { "陪着你。" }
+            val original = request("km_split", companion = true)
+            val core = "  真实公里数据$ending"
+            val result = fixture.engine.speak(original.copy(trigger = original.trigger.copy(speakText = core))).getOrThrow()
+            assertEquals(listOf(core + "陪着你。"), fixture.client.texts)
+            assertEquals(SpeechDelivery(core + "陪着你。", true), result)
+        }
+    }
+
+    @Test
     fun `缺少在线配置固定事件回本地公里静默未知规则不猜本地`() = runTest {
         val fixture = Fixture()
         fixture.configured = false
