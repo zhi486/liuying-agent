@@ -56,3 +56,17 @@
 用户随后回复“接受”，已批准高优先级健康提醒立即本地、不等网络的例外。当前为brainstorming语音链路设计确认，尚未改生产代码、生成新公里小样或重新安装。已有KmSplitRule能提供整句文本，Fish客户端接受完整text；仍需验证数字读法与真实网络失败链路，不以第四段非数字小样推定公里听感已通过。
 
 完整设计稿：`docs/superpowers/specs/2026-09-10-online-whole-offline-core-voice-design.md`，待用户审阅。建议普通准备上限8秒、公里15秒，可选AI文字最多2秒并包含在总上限中；这些数值尚待确认，不是已实施配置。需14句固定音频，复用已认可的1句，拟新生成13句，另先做1条完整公里小样；制作批次尚未执行。实现须以限时获得当前事件在线音频判断成功，失败或超时按离线规则处理，迟到结果不得重复补播。现有URGENT原文会被EmergencyPhraseCache替换的路径需要停用；`goal_achieved`虽为SPLIT优先级仍应离线播固定提示，不能误按公里跳过。
+
+## 已批准执行与开工检查点（取代上方设计待审阅状态）
+
+用户已“批准执行”完整设计，并要求“先提交修改，再继续动工”。已在当前master保存本地检查点`261f422`（187文件），未推送，提交后工作区干净。提交前前端83/83、JVM524/524通过；JVM于15:38强制重跑、55套件、0失败/错误/跳过，测试包编译通过。工作区与暂存区文件扫描无疑似凭据命中；`.android-user/`和`.gradle-local/`加入忽略规则，签名、缓存、音频小样、抓包不在提交内。旧交接文档4处Markdown行尾双空格为换行，保留原文。
+
+实施计划已写至`docs/superpowers/plans/2026-09-10-online-whole-offline-core-voice.md`，Task 1进行中，生产Task 2—7未开始。公里小样文字为“第一公里，用时六分整，配速每公里六分整。开拓者，我们又一起完成了一公里，我会继续陪着你。”，44字符，只请求Fish一次，生成8.171667秒/131756字节/48kHz单声道MP3，SHA256 `8f6a2357576ee4c284e058c7befe559a01e62bb78d275ef3f9fe80c94dc4a40f`。文件 `build/device-tests/20260910/voice-audition/sample-km-whole.mp3`、独立`manifest-km-whole.json`；不要重新生成或重复收费。旧三段dry-run仍10片段/58字符，continuous仍1片段/42字符。
+
+临时试听工具仅新增`km-whole`白名单。前端83/83及测试包构建36秒通过；测试包SHA256 `18D0956EBD84073676733A907E802061C92CCFB051FB99ADC46B742C0A596E06`，原签名匹配。真机为device，正式主包仍`40AC56A698ACA0BE83CECD4DC4FE71974391A23417176DE797367F7FE4BF944F`，原记录1/未结束0/路线点2430。
+
+安装曾停在手机`com.android.packageinstaller/.PackageInterceptActivity`；随后同一次安装脚本（统一exec session 17569，现已退出0）返回Success，无需重装。已复制到`cache/voice_audition/sample-km-whole.mp3`并核对SHA256一致，传输文件`/data/local/tmp/liuying-audition-20260910-km-whole.mp3`仍保留。`default-guard-km-whole.txt`记录0.043秒、1项因未允许播放按预期跳过（status=-4），没有播放小样。主App已恢复前台；等用户明确戴好Beats、准备听后，另行播放km-whole一次并索取数字读法与衔接听感。未修改正式App、网络/音量设置或运动记录；其余13句固定音频未生成。
+
+16:03：用户回复“方便”后，km-whole只播放一次。播放前USB为device、活动跑步0、小样SHA256一致；实机用例9.097秒、1/1通过（status=0，非跳过），结果`km-whole-20260910-160338.txt`，结束后主App恢复前台。这次播放只用本地文件，未再请求Fish。
+
+最新人工验收：用户确认“可以可以，很满意，很自然”。完整公里数字读法与鼓励衔接通过，作为正式在线整句的自然度基准。无需重播或重新生成小样，允许进入已批准的生产Task 2—7与13句固定音频制作；此反馈不表示正式语音策略已安装。

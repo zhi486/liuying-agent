@@ -23,7 +23,7 @@ class LocalVoiceAuditionTest {
         val arguments = InstrumentationRegistry.getArguments()
         assumeTrue("需用户明确准备好才播放", arguments.getString("allowLocalVoiceAudition") == "true")
         val sample = arguments.getString("auditionSample")
-        require(sample in setOf("core", "stitched", "companion", "continuous")) { "未知试听小样" }
+        require(sample in setOf("core", "stitched", "companion", "continuous", "km-whole")) { "未知试听小样" }
         runBlocking {
             val koin = GlobalContext.get()
             val repository = koin.get<RunRepository>()
