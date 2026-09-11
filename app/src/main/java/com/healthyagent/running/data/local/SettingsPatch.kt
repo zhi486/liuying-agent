@@ -14,6 +14,8 @@ data class SettingsPatch(
     val targetPaceSecPerKm: NullableSettingUpdate<Double> = NullableSettingUpdate.Unchanged,
     val targetDistanceKm: NullableSettingUpdate<Double> = NullableSettingUpdate.Unchanged,
     val maxHeartRate: Int? = null,
+    val hrAlertThresholdBpm: NullableSettingUpdate<Int> = NullableSettingUpdate.Unchanged,
+    val hrAlertRepeatIntervalSec: Int? = null,
     val ttsEnabled: Boolean? = null,
     val ttsMinIntervalSec: Int? = null,
     val llmEnabled: Boolean? = null,
@@ -31,6 +33,8 @@ enum class SettingsPatchError {
     INVALID_TARGET_PACE,
     INVALID_TARGET_DISTANCE,
     INVALID_MAX_HEART_RATE,
+    INVALID_HR_ALERT_THRESHOLD,
+    INVALID_HR_ALERT_INTERVAL,
     INVALID_TTS_INTERVAL,
     INVALID_MOCK_SCENARIO,
     API_KEY_TOO_LONG,
@@ -55,6 +59,12 @@ fun SettingsPatch.validate(): List<SettingsPatchError> {
         if (maxHeartRate != null && maxHeartRate !in 80..240) {
             add(SettingsPatchError.INVALID_MAX_HEART_RATE)
         }
+        if (hrAlertThresholdBpm is NullableSettingUpdate.Set && hrAlertThresholdBpm.value !in 80..240) {
+            add(SettingsPatchError.INVALID_HR_ALERT_THRESHOLD)
+        }
+        if (hrAlertRepeatIntervalSec != null && hrAlertRepeatIntervalSec !in 30..300) {
+            add(SettingsPatchError.INVALID_HR_ALERT_INTERVAL)
+        }
         if (ttsMinIntervalSec != null && ttsMinIntervalSec !in 0..300) {
             add(SettingsPatchError.INVALID_TTS_INTERVAL)
         }
@@ -74,6 +84,8 @@ private fun SettingsPatch.hasNoChanges(): Boolean =
     targetPaceSecPerKm == NullableSettingUpdate.Unchanged &&
         targetDistanceKm == NullableSettingUpdate.Unchanged &&
         maxHeartRate == null &&
+        hrAlertThresholdBpm == NullableSettingUpdate.Unchanged &&
+        hrAlertRepeatIntervalSec == null &&
         ttsEnabled == null &&
         ttsMinIntervalSec == null &&
         llmEnabled == null &&

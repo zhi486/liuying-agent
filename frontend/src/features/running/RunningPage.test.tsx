@@ -44,6 +44,8 @@ const baseSnapshot: AppSnapshot = {
     targetPaceSecPerKm: 360,
     targetDistanceKm: 5,
     maxHeartRate: 190,
+    hrAlertThresholdBpm: null,
+    hrAlertRepeatIntervalSec: 120,
     ttsEnabled: true,
     ttsMinIntervalSec: 30,
     llmEnabled: false,

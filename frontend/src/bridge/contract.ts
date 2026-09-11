@@ -61,6 +61,8 @@ export interface AppSnapshot {
     targetPaceSecPerKm: number | null;
     targetDistanceKm: number | null;
     maxHeartRate: number;
+    hrAlertThresholdBpm: number | null;
+    hrAlertRepeatIntervalSec: number;
     ttsEnabled: boolean;
     ttsMinIntervalSec: number;
     llmEnabled: boolean;
@@ -109,6 +111,8 @@ export interface SettingsUpdateBody {
   targetPaceSecPerKm?: number | null;
   targetDistanceKm?: number | null;
   maxHeartRate?: number;
+  hrAlertThresholdBpm?: number | null;
+  hrAlertRepeatIntervalSec?: number;
   ttsEnabled?: boolean;
   ttsMinIntervalSec?: number;
   llmEnabled?: boolean;
@@ -154,7 +158,7 @@ export interface HelloPayload {
 export interface ReadyPayload {
   helloId: string;
   buildId: string;
-  capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1'];
+  capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1', 'heart-rate-alerts.v1'];
   snapshot: AppSnapshot;
 }
 

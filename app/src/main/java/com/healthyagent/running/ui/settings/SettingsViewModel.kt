@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 /** 迁移期 Compose 设置页的聚合状态适配器。 */
 class SettingsViewModel(
@@ -27,6 +28,85 @@ class SettingsViewModel(
 
     private val _maxHeartRate = MutableStateFlow("180")
     val maxHeartRate: StateFlow<String> = _maxHeartRate.asStateFlow()
+
+    private val _hrAlertThresholdBpm = MutableStateFlow("")
+    val hrAlertThresholdBpm: StateFlow<String> = _hrAlertThresholdBpm.asStateFlow()
+    private val _hrAlertRepeatIntervalSec = MutableStateFlow("120")
+    val hrAlertRepeatIntervalSec: StateFlow<String> = _hrAlertRepeatIntervalSec.asStateFlow()
+    private val _hrAlertError = MutableStateFlow<String?>(null)
+    val hrAlertError: StateFlow<String?> = _hrAlertError.asStateFlow()
+    private var hrThresholdRevision = 0L
+    private var hrIntervalRevision = 0L
+    private var hrThresholdDirty = false
+    private var hrIntervalDirty = false
+    private var hrThresholdError: String? = null
+    private var hrIntervalError: String? = null
+
+    fun setHrAlertThresholdBpm(value: String) {
+        val revision = ++hrThresholdRevision
+        hrThresholdDirty = true
+        _hrAlertThresholdBpm.value = value
+        val parsed = value.toIntOrNull()
+        val update = when {
+            value.isBlank() -> NullableSettingUpdate.Clear
+            parsed != null && parsed in 80..240 -> NullableSettingUpdate.Set(parsed)
+            else -> {
+                hrThresholdError = "警戒心率应为 80-240 的整数，或留空恢复自动"
+                publishHrAlertErrors()
+                return
+            }
+        }
+        persistHrAlertPatch(SettingsPatch(hrAlertThresholdBpm = update)) { error ->
+            if (revision == hrThresholdRevision) {
+                hrThresholdError = error
+                if (error == null) {
+                    hrThresholdDirty = false
+                    _hrAlertThresholdBpm.value = parsed?.toString() ?: ""
+                }
+                publishHrAlertErrors()
+            }
+        }
+    }
+
+    fun setHrAlertRepeatIntervalSec(value: String) {
+        val revision = ++hrIntervalRevision
+        hrIntervalDirty = true
+        _hrAlertRepeatIntervalSec.value = value
+        val parsed = value.toIntOrNull()
+        if (parsed == null || parsed !in 30..300) {
+            hrIntervalError = "高心率重复提醒间隔应为 30-300 的整数"
+            publishHrAlertErrors()
+            return
+        }
+        persistHrAlertPatch(SettingsPatch(hrAlertRepeatIntervalSec = parsed)) { error ->
+            if (revision == hrIntervalRevision) {
+                hrIntervalError = error
+                if (error == null) {
+                    hrIntervalDirty = false
+                    _hrAlertRepeatIntervalSec.value = parsed.toString()
+                }
+                publishHrAlertErrors()
+            }
+        }
+    }
+
+    private fun persistHrAlertPatch(patch: SettingsPatch, completed: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.update(patch)
+                completed(null)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                completed("心率警戒设置保存失败，请重试")
+            }
+        }
+    }
+
+    private fun publishHrAlertErrors() {
+        _hrAlertError.value = listOfNotNull(hrThresholdError, hrIntervalError)
+            .distinct().joinToString("\n").ifEmpty { null }
+    }
 
     private val _ttsEnabled = MutableStateFlow(true)
     val ttsEnabled: StateFlow<Boolean> = _ttsEnabled.asStateFlow()
@@ -55,6 +135,9 @@ class SettingsViewModel(
                 }
                 _targetDistance.value = snapshot.targetDistanceKm?.toString() ?: ""
                 _maxHeartRate.value = snapshot.maxHeartRate.toString()
+                // 未保存或保存中的新输入不被旧回显及另一字段的快照覆盖。
+                if (!hrThresholdDirty) _hrAlertThresholdBpm.value = snapshot.hrAlertThresholdBpm?.toString() ?: ""
+                if (!hrIntervalDirty) _hrAlertRepeatIntervalSec.value = snapshot.hrAlertRepeatIntervalSec.toString()
                 _ttsEnabled.value = snapshot.ttsEnabled
                 _ttsMinInterval.value = snapshot.ttsMinIntervalSec.toString()
                 _llmEnabled.value = snapshot.llmEnabled

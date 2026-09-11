@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.healthyagent.running.core.model.RunConfig
+import com.healthyagent.running.core.model.effectiveHrAlertThresholdBpm
 
 /**
  * 设置页 — 跑步目标 / 语音 / LLM / 数据源
@@ -112,6 +114,34 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            val configuredMaxHr = viewModel.maxHeartRate.collectAsState().value.toIntOrNull()
+            val automaticThreshold = configuredMaxHr?.takeIf { it in 80..240 }
+                ?.let { RunConfig(maxHeartRate = it).effectiveHrAlertThresholdBpm() }
+            OutlinedTextField(
+                value = viewModel.hrAlertThresholdBpm.collectAsState().value,
+                onValueChange = viewModel::setHrAlertThresholdBpm,
+                label = { Text("警戒心率（bpm）") },
+                placeholder = { Text(automaticThreshold?.let { "自动（当前 $it bpm）" } ?: "自动（请先填写有效最大心率）") },
+                supportingText = { Text("80-240；留空恢复自动，连续达到 10 秒后提醒。自动值并非个体医学评估。") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = viewModel.hrAlertRepeatIntervalSec.collectAsState().value,
+                onValueChange = viewModel::setHrAlertRepeatIntervalSec,
+                label = { Text("高心率重复提醒间隔（秒）") },
+                supportingText = { Text("30-300，默认 120；有效值自动保存，仅在下次跑步生效。") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            viewModel.hrAlertError.collectAsState().value?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error)
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
             HorizontalDivider()

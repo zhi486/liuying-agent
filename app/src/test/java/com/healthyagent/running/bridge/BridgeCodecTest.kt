@@ -5,6 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 @RunWith(Parameterized::class)
 class BridgeCodecValidFixtureTest(private val resource: String) {
@@ -61,6 +66,43 @@ class BridgeCodecInvalidFixtureTest(private val resource: String) {
 }
 
 class BridgeCodecTest {
+
+    @Test
+    fun `心率警戒更新接受空值和合法整数边界`() {
+        for (threshold in listOf(JsonNull, JsonPrimitive(80), JsonPrimitive(240))) {
+            for (interval in listOf(30, 300)) {
+                assertTrue(BridgeCodec.decode(hrSettingsCommand(JsonObject(mapOf(
+                    "hrAlertThresholdBpm" to threshold,
+                    "hrAlertRepeatIntervalSec" to JsonPrimitive(interval),
+                )))) is BridgeDecodeResult.Accepted)
+            }
+        }
+    }
+
+    @Test
+    fun `心率警戒更新拒绝越界字符串小数和多余字段`() {
+        val invalid = listOf(
+            "hrAlertThresholdBpm" to JsonPrimitive(79),
+            "hrAlertThresholdBpm" to JsonPrimitive(241),
+            "hrAlertThresholdBpm" to JsonPrimitive("170"),
+            "hrAlertThresholdBpm" to JsonPrimitive(170.5),
+            "hrAlertRepeatIntervalSec" to JsonPrimitive(29),
+            "hrAlertRepeatIntervalSec" to JsonPrimitive(301),
+            "hrAlertRepeatIntervalSec" to JsonPrimitive(120.5),
+            "hrAlertRepeatIntervalSec" to JsonNull,
+            "unknownAlertSetting" to JsonPrimitive(120),
+        )
+        invalid.forEach { (key, value) ->
+            assertTrue(BridgeCodec.decode(hrSettingsCommand(JsonObject(mapOf(key to value)))) is BridgeDecodeResult.Rejected)
+        }
+    }
+
+    private fun hrSettingsCommand(body: JsonObject): String {
+        val raw = checkNotNull(javaClass.getResource("/v1/fixtures/valid/command.settings-update.json")).readText()
+        val envelope = Json.parseToJsonElement(raw).jsonObject
+        val payload = JsonObject(envelope.getValue("payload").jsonObject + ("body" to body))
+        return JsonObject(envelope + ("payload" to payload)).toString()
+    }
 
     @Test
     fun `UTF-8 消息大小边界是 262144 字节`() {

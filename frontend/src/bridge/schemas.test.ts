@@ -7,6 +7,7 @@ import {
   nativeToWebEnvelopeSchema,
   parseInboundEnvelope,
   settingsQueryResultSchema,
+  settingsUpdateBodySchema,
   webToNativeEnvelopeSchema,
 } from './schemas';
 
@@ -34,6 +35,32 @@ function fixtureByType(type: string): unknown {
 }
 
 describe('Bridge v1 schema', () => {
+  it('接受心率警戒空值与整数边界', () => {
+    for (const threshold of [null, 80, 240]) {
+      for (const interval of [30, 300]) {
+        expect(
+          settingsUpdateBodySchema.safeParse({
+            hrAlertThresholdBpm: threshold,
+            hrAlertRepeatIntervalSec: interval,
+          }).success,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it.each([
+    { hrAlertThresholdBpm: 79 },
+    { hrAlertThresholdBpm: 241 },
+    { hrAlertThresholdBpm: '170' },
+    { hrAlertThresholdBpm: 170.5 },
+    { hrAlertRepeatIntervalSec: 29 },
+    { hrAlertRepeatIntervalSec: 301 },
+    { hrAlertRepeatIntervalSec: 120.5 },
+    { hrAlertRepeatIntervalSec: null },
+    { hrAlertThresholdBpm: null, unknownAlertSetting: 120 },
+  ])('拒绝非法心率警戒契约 %j', (body) => {
+    expect(settingsUpdateBodySchema.safeParse(body).success).toBe(false);
+  });
   it.each(Object.entries(validFixtures))('接受合法样本 %s', (_, fixture) => {
     expect(() => bridgeEnvelopeSchema.parse(fixture)).not.toThrow();
   });
@@ -129,6 +156,8 @@ describe('Bridge v1 schema', () => {
         targetPaceSecPerKm: null,
         targetDistanceKm: 5,
         maxHeartRate: 180,
+        hrAlertThresholdBpm: null,
+        hrAlertRepeatIntervalSec: 120,
         ttsEnabled: true,
         ttsMinIntervalSec: 30,
         llmEnabled: false,

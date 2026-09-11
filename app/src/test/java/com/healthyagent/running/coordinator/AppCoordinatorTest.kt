@@ -82,11 +82,82 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
+import com.healthyagent.running.data.local.SettingsDataStore
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TestTimeSource
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppCoordinatorTest {
+    @Test
+    fun `运行与暂停中保存警戒偏好不改变本跑而下一跑使用新阈值和间隔`() = runTest {
+        val clock = TestTimeSource()
+        val sensor = FakeSensorDataSource()
+        val logger = FakeDiagnosticLogger()
+        val settings = SettingsDataStore(object : DataStore<Preferences> {
+            override val data = MutableStateFlow(emptyPreferences())
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                transform(data.value).also { data.value = it }
+        })
+        settings.update(SettingsPatch(hrAlertThresholdBpm = NullableSettingUpdate.Set(160)))
+        val coordinator = createCoordinator(
+            FakeRunRepository(), sensor, settingsRepository = settings,
+            ruleEngine = RuleEngine(listOf(HrZone5Rule(clock)), RunConfig(), diagnosticLogger = logger),
+        )
+        var elapsedMillis = 0L
+        suspend fun sample(hr: Double = 165.0) {
+            clock += 1.seconds
+            elapsedMillis += 1000L
+            sensor.emitSample(SampleType.HEART_RATE, hr, elapsedMillis)
+            sensor.emitTick(elapsedMillis)
+            runCurrent()
+        }
+        fun alerts() = logger.events.filterIsInstance<DiagnosticEvent.RuleTriggered>().count { it.ruleId == "hr_z5_danger" }
+        coordinator.startRun()
+        runCurrent()
+        repeat(11) { sample() }
+        assertEquals(1, alerts())
+        assertTrue(coordinator.updateSettings(SettingsPatch(
+            hrAlertThresholdBpm = NullableSettingUpdate.Set(180), hrAlertRepeatIntervalSec = 30,
+        )) is CommandOutcome.AcceptedWithData)
+        assertEquals(180, coordinator.snapshot.value.settings.hrAlertThresholdBpm)
+        repeat(119) { sample() }
+        assertEquals(1, alerts())
+        sample()
+        assertEquals(2, alerts())
+        coordinator.pauseRun()
+        runCurrent()
+        coordinator.updateSettings(SettingsPatch(hrAlertThresholdBpm = NullableSettingUpdate.Set(190), hrAlertRepeatIntervalSec = 60))
+        coordinator.resumeRun()
+        runCurrent()
+        repeat(119) { sample() }
+        assertEquals(2, alerts())
+        sample()
+        assertEquals(3, alerts())
+        coordinator.stopRun()
+        runCurrent()
+        coordinator.startRun()
+        runCurrent()
+        repeat(20) { sample(185.0) }
+        assertEquals(3, alerts())
+        // 经真实平滑管线达到新阈值并连续十秒后，才有下一次事件。
+        var observedNewAlert = false
+        repeat(30) {
+            if (!observedNewAlert) {
+                sample(200.0)
+                observedNewAlert = alerts() == 4
+            }
+        }
+        assertTrue(observedNewAlert)
+        repeat(59) { sample(200.0) }
+        assertEquals(4, alerts())
+        sample(200.0)
+        assertEquals(5, alerts())
+        coordinator.close()
+    }
+
     @Test
     fun `短暂停后必须重新连续十秒才产生高心率事件`() = runTest {
         val clock = TestTimeSource()

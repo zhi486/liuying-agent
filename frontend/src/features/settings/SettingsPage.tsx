@@ -19,6 +19,8 @@ interface RunPreferencesDraft {
   targetPace: string;
   targetDistance: string;
   maxHeartRate: string;
+  hrAlertThresholdBpm: string;
+  hrAlertRepeatIntervalSec: string;
   ttsEnabled: boolean;
   ttsMinIntervalSec: string;
   coachTone: SettingsSnapshot['coachTone'];
@@ -151,7 +153,7 @@ export function SettingsPage() {
           <div className="section-heading">
             <div>
               <h2 id="running-title">跑步偏好</h2>
-              <p>目标留空即自由跑，心率上限用于途中安全提醒</p>
+              <p>目标留空即自由跑；最大心率用于训练分区，警戒心率单独设置</p>
             </div>
           </div>
           <div className={styles.fieldGrid}>
@@ -183,6 +185,27 @@ export function SettingsPage() {
                 onChange={(event) => patchDraft({ maxHeartRate: event.target.value })}
               />
               <small>80-240 bpm</small>
+            </label>
+            <label>
+              <span>警戒心率</span>
+              <input
+                inputMode="numeric"
+                placeholder={automaticThresholdLabel(draft.maxHeartRate)}
+                value={draft.hrAlertThresholdBpm}
+                onChange={(event) => patchDraft({ hrAlertThresholdBpm: event.target.value })}
+              />
+              <small>
+                80-240 bpm；留空沿用分区门槛，连续达到 10 秒后提醒。自动值并非个体医学评估。
+              </small>
+            </label>
+            <label>
+              <span>高心率重复提醒间隔</span>
+              <input
+                inputMode="numeric"
+                value={draft.hrAlertRepeatIntervalSec}
+                onChange={(event) => patchDraft({ hrAlertRepeatIntervalSec: event.target.value })}
+              />
+              <small>30-300 秒，默认 120 秒；仅影响高心率重复提醒，下次跑步生效。</small>
             </label>
           </div>
         </section>
@@ -321,6 +344,8 @@ function toDraft(settings: SettingsSnapshot): RunPreferencesDraft {
     targetPace: formatPace(settings.targetPaceSecPerKm),
     targetDistance: settings.targetDistanceKm?.toString() ?? '',
     maxHeartRate: settings.maxHeartRate.toString(),
+    hrAlertThresholdBpm: settings.hrAlertThresholdBpm?.toString() ?? '',
+    hrAlertRepeatIntervalSec: settings.hrAlertRepeatIntervalSec.toString(),
     ttsEnabled: settings.ttsEnabled,
     ttsMinIntervalSec: settings.ttsMinIntervalSec.toString(),
     coachTone: settings.coachTone,
@@ -343,6 +368,24 @@ function parseDraft(draft: RunPreferencesDraft): { patch: SettingsUpdateBody } |
   }
 
   const ttsMinIntervalSec = Number(draft.ttsMinIntervalSec);
+  const hrAlertThresholdBpm =
+    draft.hrAlertThresholdBpm.trim() === '' ? null : Number(draft.hrAlertThresholdBpm);
+  if (
+    hrAlertThresholdBpm !== null &&
+    (!Number.isInteger(hrAlertThresholdBpm) ||
+      hrAlertThresholdBpm < 80 ||
+      hrAlertThresholdBpm > 240)
+  ) {
+    return { error: '警戒心率应为 80-240 之间的整数，或留空使用自动门槛' };
+  }
+  const hrAlertRepeatIntervalSec = Number(draft.hrAlertRepeatIntervalSec);
+  if (
+    !Number.isInteger(hrAlertRepeatIntervalSec) ||
+    hrAlertRepeatIntervalSec < 30 ||
+    hrAlertRepeatIntervalSec > 300
+  ) {
+    return { error: '高心率重复提醒间隔应为 30-300 之间的整数' };
+  }
   if (!Number.isInteger(ttsMinIntervalSec) || ttsMinIntervalSec < 0 || ttsMinIntervalSec > 300) {
     return { error: '最短提醒间隔应为 0-300 之间的整数' };
   }
@@ -352,6 +395,8 @@ function parseDraft(draft: RunPreferencesDraft): { patch: SettingsUpdateBody } |
       targetPaceSecPerKm: pace,
       targetDistanceKm: distance,
       maxHeartRate,
+      hrAlertThresholdBpm,
+      hrAlertRepeatIntervalSec,
       ttsEnabled: draft.ttsEnabled,
       ttsMinIntervalSec,
       coachTone: draft.coachTone,
@@ -368,6 +413,13 @@ function parsePace(value: string): number | null | undefined {
   const seconds = Number(match[2]);
   const total = minutes * 60 + seconds;
   return seconds < 60 && total >= 120 && total <= 1200 ? total : undefined;
+}
+
+function automaticThresholdLabel(maxHeartRate: string): string {
+  const maximum = Number(maxHeartRate);
+  if (!Number.isInteger(maximum) || maximum < 80 || maximum > 240)
+    return '自动（请先填写有效最大心率）';
+  return `自动（当前 ${Math.floor((maximum * 9 + 9) / 10)} bpm）`;
 }
 
 function formatPace(value: number | null): string {

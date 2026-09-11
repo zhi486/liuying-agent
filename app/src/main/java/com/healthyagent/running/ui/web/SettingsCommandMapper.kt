@@ -17,6 +17,8 @@ internal fun JsonObject.toSettingsPatch(): SettingsPatch = SettingsPatch(
     targetPaceSecPerKm = nullableDoubleUpdate("targetPaceSecPerKm"),
     targetDistanceKm = nullableDoubleUpdate("targetDistanceKm"),
     maxHeartRate = optionalInt("maxHeartRate"),
+    hrAlertThresholdBpm = nullableIntUpdate("hrAlertThresholdBpm"),
+    hrAlertRepeatIntervalSec = optionalInt("hrAlertRepeatIntervalSec"),
     ttsEnabled = optionalBoolean("ttsEnabled"),
     ttsMinIntervalSec = optionalInt("ttsMinIntervalSec"),
     llmEnabled = optionalBoolean("llmEnabled"),
@@ -39,6 +41,12 @@ private fun JsonObject.nullableDoubleUpdate(key: String): NullableSettingUpdate<
 }
 
 private fun JsonObject.optionalInt(key: String): Int? = this[key]?.jsonPrimitive?.int
+
+private fun JsonObject.nullableIntUpdate(key: String): NullableSettingUpdate<Int> {
+    val value = this[key] ?: return NullableSettingUpdate.Unchanged
+    return if (value is JsonNull) NullableSettingUpdate.Clear
+    else NullableSettingUpdate.Set(value.jsonPrimitive.int)
+}
 
 private fun JsonObject.optionalBoolean(key: String): Boolean? = this[key]?.jsonPrimitive?.boolean
 

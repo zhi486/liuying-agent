@@ -32,7 +32,7 @@ describe('原生 Bridge 客户端', () => {
       payload: {
         helloId: hello.id,
         buildId: 'native-test',
-        capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1'],
+        capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1', 'heart-rate-alerts.v1'],
         snapshot,
       },
     });
@@ -169,7 +169,7 @@ function prepareReadyClient() {
     payload: {
       helloId: hello.id,
       buildId: 'native-test',
-      capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1'],
+      capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1', 'heart-rate-alerts.v1'],
       snapshot: createSnapshot(1),
     },
   });
@@ -223,6 +223,8 @@ function createSnapshot(revision: number): AppSnapshot {
       targetPaceSecPerKm: 360,
       targetDistanceKm: 5,
       maxHeartRate: 180,
+      hrAlertThresholdBpm: null,
+      hrAlertRepeatIntervalSec: 120,
       ttsEnabled: true,
       ttsMinIntervalSec: 4,
       llmEnabled: false,

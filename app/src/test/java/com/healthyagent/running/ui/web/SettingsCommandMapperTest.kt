@@ -12,6 +12,17 @@ import org.junit.Test
 class SettingsCommandMapperTest {
 
     @Test
+    fun `警戒阈值区分未修改清空和整数设置`() {
+        val unchanged = Json.parseToJsonElement("""{"ttsEnabled":false}""").jsonObject.toSettingsPatch()
+        assertEquals(NullableSettingUpdate.Unchanged, unchanged.hrAlertThresholdBpm)
+        val clear = Json.parseToJsonElement("""{"hrAlertThresholdBpm":null}""").jsonObject.toSettingsPatch()
+        assertEquals(NullableSettingUpdate.Clear, clear.hrAlertThresholdBpm)
+        val changed = Json.parseToJsonElement("""{"hrAlertThresholdBpm":170,"hrAlertRepeatIntervalSec":180}""").jsonObject.toSettingsPatch()
+        assertEquals(NullableSettingUpdate.Set(170), changed.hrAlertThresholdBpm)
+        assertEquals(180, changed.hrAlertRepeatIntervalSec)
+    }
+
+    @Test
     fun `完整设置命令映射为领域补丁`() {
         val body = Json.parseToJsonElement(
             """{

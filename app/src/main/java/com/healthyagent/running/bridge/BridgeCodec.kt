@@ -89,6 +89,7 @@ object BridgeCodec {
                 "snapshot.v1",
                 "history.pagination",
                 "settings.v1",
+                "heart-rate-alerts.v1",
             ),
         )
         validateSnapshotValue(value.snapshot)
@@ -146,6 +147,8 @@ object BridgeCodec {
         requireNonNegative(value.settings.targetPaceSecPerKm)
         requireNonNegative(value.settings.targetDistanceKm)
         require(value.settings.maxHeartRate > 0)
+        require(value.settings.hrAlertThresholdBpm == null || value.settings.hrAlertThresholdBpm in 80..240)
+        require(value.settings.hrAlertRepeatIntervalSec in 30..300)
         require(value.settings.ttsMinIntervalSec >= 0)
         require(value.settings.mockScenario in MOCK_SCENARIOS)
         require(value.settings.coachTone in COACH_TONES)
@@ -205,6 +208,8 @@ object BridgeCodec {
                     require(value is JsonNull || value.nonNegativeNumberOrNull() != null)
 
                 "maxHeartRate" -> require(value.positiveIntOrNull() != null)
+                "hrAlertThresholdBpm" -> require(value is JsonNull || value.positiveIntOrNull()?.let { it in 80..240 } == true)
+                "hrAlertRepeatIntervalSec" -> require(value.positiveIntOrNull()?.let { it in 30..300 } == true)
                 "ttsEnabled", "llmEnabled" -> require(value.booleanValueOrNull() != null)
                 "ttsMinIntervalSec" -> require(value.nonNegativeIntOrNull() != null)
                 "mockScenario" -> require(value.stringValueOrNull() in MOCK_SCENARIOS)
@@ -323,6 +328,8 @@ object BridgeCodec {
         "targetPaceSecPerKm",
         "targetDistanceKm",
         "maxHeartRate",
+        "hrAlertThresholdBpm",
+        "hrAlertRepeatIntervalSec",
         "ttsEnabled",
         "ttsMinIntervalSec",
         "llmEnabled",
@@ -434,6 +441,8 @@ private data class SettingsWire(
     val targetPaceSecPerKm: Double?,
     val targetDistanceKm: Double?,
     val maxHeartRate: Int,
+    val hrAlertThresholdBpm: Int?,
+    val hrAlertRepeatIntervalSec: Int,
     val ttsEnabled: Boolean,
     val ttsMinIntervalSec: Int,
     val llmEnabled: Boolean,

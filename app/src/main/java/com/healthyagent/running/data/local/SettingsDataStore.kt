@@ -54,6 +54,12 @@ class SettingsDataStore(
                 is NullableSettingUpdate.Set -> preferences[KEY_TARGET_DISTANCE] = value.value
             }
             patch.maxHeartRate?.let { preferences[KEY_MAX_HR] = it }
+            when (val value = patch.hrAlertThresholdBpm) {
+                NullableSettingUpdate.Unchanged -> Unit
+                NullableSettingUpdate.Clear -> preferences.remove(KEY_HR_ALERT_THRESHOLD)
+                is NullableSettingUpdate.Set -> preferences[KEY_HR_ALERT_THRESHOLD] = value.value
+            }
+            patch.hrAlertRepeatIntervalSec?.let { preferences[KEY_HR_ALERT_INTERVAL] = it }
             patch.ttsEnabled?.let { preferences[KEY_TTS_ENABLED] = it }
             patch.ttsMinIntervalSec?.let { preferences[KEY_TTS_INTERVAL] = it }
             patch.llmEnabled?.let { preferences[KEY_LLM_ENABLED] = it }
@@ -104,6 +110,8 @@ class SettingsDataStore(
         targetPaceSecPerKm = preferences[KEY_TARGET_PACE],
         targetDistanceKm = preferences[KEY_TARGET_DISTANCE],
         maxHeartRate = preferences[KEY_MAX_HR] ?: DEFAULT_MAX_HR,
+        hrAlertThresholdBpm = preferences[KEY_HR_ALERT_THRESHOLD],
+        hrAlertRepeatIntervalSec = preferences[KEY_HR_ALERT_INTERVAL] ?: 120,
         ttsEnabled = preferences[KEY_TTS_ENABLED] ?: true,
         ttsMinIntervalSec = preferences[KEY_TTS_INTERVAL] ?: DEFAULT_TTS_INTERVAL,
         llmEnabled = preferences[KEY_LLM_ENABLED] ?: false,
@@ -120,6 +128,8 @@ class SettingsDataStore(
         private val KEY_TARGET_PACE = doublePreferencesKey("target_pace")
         private val KEY_TARGET_DISTANCE = doublePreferencesKey("target_distance")
         private val KEY_MAX_HR = intPreferencesKey("max_hr")
+        private val KEY_HR_ALERT_THRESHOLD = intPreferencesKey("hr_alert_threshold_bpm")
+        private val KEY_HR_ALERT_INTERVAL = intPreferencesKey("hr_alert_repeat_interval_sec")
         private val KEY_TTS_ENABLED = booleanPreferencesKey("tts_enabled")
         private val KEY_TTS_INTERVAL = intPreferencesKey("tts_interval")
         private val KEY_LLM_ENABLED = booleanPreferencesKey("llm_enabled")

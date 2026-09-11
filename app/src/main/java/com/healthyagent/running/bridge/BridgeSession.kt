@@ -72,7 +72,7 @@ class BridgeSession(
                 "capabilities",
                 BridgeCodec.json.parseToJsonElement(
                     BridgeCodec.json.encodeToString(
-                        listOf("snapshot.v1", "history.pagination", "settings.v1"),
+                        listOf("snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1"),
                     ),
                 ),
             )

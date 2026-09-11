@@ -8,6 +8,8 @@
     "name": "settings.update",
     "body": {
       "themePreference": "night",
+      "hrAlertThresholdBpm": null,
+      "hrAlertRepeatIntervalSec": 120,
       "targetDistanceKm": null
     }
   }

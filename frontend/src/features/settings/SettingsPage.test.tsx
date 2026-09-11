@@ -23,6 +23,71 @@ describe('真实本地设置', () => {
     document.documentElement.dataset.theme = 'night';
   });
 
+  it('允许清空警戒心率恢复自动并保存独立间隔', async () => {
+    sendNativeCommandMock.mockResolvedValue(accepted(settings));
+    useBridgeStore.setState({ status: 'ready', snapshot });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    await screen.findByText('本机已同步');
+    fireEvent.change(screen.getByLabelText(/警戒心率/), { target: { value: '170' } });
+    fireEvent.change(screen.getByLabelText(/警戒心率/), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText(/高心率重复提醒间隔/), { target: { value: '180' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存跑步偏好' }));
+    await waitFor(() =>
+      expect(sendNativeCommandMock).toHaveBeenLastCalledWith(
+        'settings.update',
+        expect.objectContaining({ hrAlertThresholdBpm: null, hrAlertRepeatIntervalSec: 180 }),
+      ),
+    );
+  });
+
+  it('自动门槛跟随最大心率但手动值保持独立', async () => {
+    sendNativeCommandMock.mockResolvedValue(accepted(settings));
+    useBridgeStore.setState({ status: 'ready', snapshot });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    await screen.findByText('本机已同步');
+    expect(screen.getByPlaceholderText('自动（当前 162 bpm）')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText(/最大心率/), { target: { value: '200' } });
+    expect(screen.getByPlaceholderText('自动（当前 180 bpm）')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText(/警戒心率/), { target: { value: '170' } });
+    fireEvent.change(screen.getByLabelText(/最大心率/), { target: { value: '190' } });
+    expect(screen.getByLabelText(/警戒心率/)).toHaveValue('170');
+    fireEvent.click(screen.getByRole('button', { name: '保存跑步偏好' }));
+    await waitFor(() =>
+      expect(sendNativeCommandMock).toHaveBeenLastCalledWith(
+        'settings.update',
+        expect.objectContaining({
+          maxHeartRate: 190,
+          hrAlertThresholdBpm: 170,
+          hrAlertRepeatIntervalSec: 120,
+        }),
+      ),
+    );
+  });
+
+  it.each([
+    [/警戒心率/, '79', '警戒心率应为 80-240 之间的整数，或留空使用自动门槛'],
+    [/警戒心率/, '241', '警戒心率应为 80-240 之间的整数，或留空使用自动门槛'],
+    [/警戒心率/, '162.5', '警戒心率应为 80-240 之间的整数，或留空使用自动门槛'],
+    [/高心率重复提醒间隔/, '29', '高心率重复提醒间隔应为 30-300 之间的整数'],
+    [/高心率重复提醒间隔/, '301', '高心率重复提醒间隔应为 30-300 之间的整数'],
+    [/高心率重复提醒间隔/, '', '高心率重复提醒间隔应为 30-300 之间的整数'],
+  ])('拒绝非法心率偏好 %s %s', async (label, value, message) => {
+    sendNativeCommandMock.mockResolvedValue(accepted(settings));
+    useBridgeStore.setState({ status: 'ready', snapshot });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    await screen.findByText('本机已同步');
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    fireEvent.click(screen.getByRole('button', { name: '保存跑步偏好' }));
+    expect(screen.getByText(message)).toBeVisible();
+    expect(sendNativeCommandMock).toHaveBeenCalledTimes(1);
+  });
+
   it('浏览器预览不展示或保存虚构偏好', () => {
     render(<SettingsPage />);
 
@@ -30,6 +95,22 @@ describe('真实本地设置', () => {
     expect(screen.getByText(/不会展示或保存虚构偏好/)).toBeVisible();
     expect(screen.queryByLabelText(/目标配速/)).not.toBeInTheDocument();
     expect(sendNativeCommandMock).not.toHaveBeenCalled();
+  });
+
+  it('心率偏好保存失败时保留输入且不宣称已保存', async () => {
+    sendNativeCommandMock
+      .mockResolvedValueOnce(accepted(settings))
+      .mockRejectedValueOnce(new Error('保存本地设置失败'));
+    useBridgeStore.setState({ status: 'ready', snapshot });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    await screen.findByText('本机已同步');
+    fireEvent.change(screen.getByLabelText(/警戒心率/), { target: { value: '170' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存跑步偏好' }));
+    expect(await screen.findByText('保存本地设置失败')).toBeVisible();
+    expect(screen.getByLabelText(/警戒心率/)).toHaveValue('170');
+    expect(screen.queryByText('已保存，将在下一次跑步开始时生效')).not.toBeInTheDocument();
   });
 
   it('Bridge 就绪后查询并呈现持久化设置', async () => {
@@ -96,6 +177,8 @@ describe('真实本地设置', () => {
         targetPaceSecPerKm: 390,
         targetDistanceKm: 8,
         maxHeartRate: 170,
+        hrAlertThresholdBpm: null,
+        hrAlertRepeatIntervalSec: 120,
         ttsEnabled: false,
         ttsMinIntervalSec: 30,
         coachTone: 'gentle',
@@ -125,6 +208,8 @@ const settings: AppSnapshot['settings'] = {
   targetPaceSecPerKm: 375,
   targetDistanceKm: 5,
   maxHeartRate: 180,
+  hrAlertThresholdBpm: null,
+  hrAlertRepeatIntervalSec: 120,
   ttsEnabled: true,
   ttsMinIntervalSec: 30,
   llmEnabled: false,
