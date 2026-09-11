@@ -124,7 +124,7 @@ expect(screen.queryByDisplayValue('test-only-deepseek')).not.toBeInTheDocument()
 
 **Interfaces:** Coordinator 为每条可联网请求在enqueue前附 `deepseekCredentialsStore.capture(currentCoachTone)`；仅新AI开关有效时捕获，URGENT/BLE无配置。`SpeechRequest`带不可变已隐藏凭据配置，旧pending/排队copy保留身份与原preparationAcceptedAt。生产DI将CompanionTextSource切到DeepseekCompanionTextSource。
 
-- [ ] **Step 1：生产组合 RED。** 用真SpeechBus/VoicePolicy/DeepseekClient和假Call/假Fish验证：一条有效鼓励只合成一次 core+suffix；2秒超时实际cancel、Fish仅core；Fish失败普通local/km静默；排队吞掉准备时间，不另起8/15秒；开关关闭/密钥代次改变/停止/URGENT使旧call取消且晚响应不可播；关闭后再开不补播。计数验证旧LlmClient/analyze/预生成始终0。
+- [x] **Step 1：生产组合 RED。** 用真SpeechBus/VoicePolicy/DeepseekClient和假Call/假Fish验证：一条有效鼓励只合成一次 core+suffix；2秒超时实际cancel、Fish仅core；Fish失败普通local/km静默；排队吞掉准备时间，不另起8/15秒；开关关闭/密钥代次改变/停止/URGENT使旧call取消且晚响应不可播；关闭后再开不补播。计数验证旧LlmClient/analyze/预生成始终0。
 
 ```kotlin
 assertEquals(listOf("跑步已暂停。能陪着你，我很开心。"), fish.synthesizedTexts)
@@ -132,9 +132,9 @@ assertEquals(0, legacyLlm.calls)
 assertEquals(1, deepseekCalls.size)
 ```
 
-- [ ] **Step 2：接线并保持预算。** DI替换文字源，不改Fish目的地址／音频焦点／缓存策略。Coordinator按实际新开关与捕获配置构造请求；设置关闭时沿用现有停止旧准备的路径，密钥更换也取消旧配置请求；保留公里摘要构造，不调用旧AnalysisManager网络或EmergencyPhraseCache预生成。外层2秒／8/15秒预算继续从原接纳时刻扣除。
+- [x] **Step 2：接线并保持预算。** DI替换文字源，不改Fish目的地址／音频焦点／缓存策略。Coordinator按实际新开关与捕获配置构造请求；设置关闭时沿用现有停止旧准备的路径，密钥更换也取消旧配置请求；保留公里摘要构造，不调用旧AnalysisManager网络或EmergencyPhraseCache预生成。外层2秒／8/15秒预算继续从原接纳时刻扣除。
 
-- [ ] **Step 3：完整门禁、复审、提交与记忆。**
+- [x] **Step 3：完整门禁、复审、提交与记忆。**
 
 ```powershell
 $env:JAVA_HOME='C:/Users/fangr/.jdks/ms-17.0.20'
@@ -152,7 +152,7 @@ $env:Path='C:/Program Files/nodejs;' + $env:Path
 - [x] 官方文档2026-09-11复核：兼容基址仍为 https://api.deepseek.com/anthropic ，显式deepseek-flash，x-api-key/max_tokens/thinking均支持；网页工具404后通过只读公开HTTP读取，不调用真实API。
 - [x] Task 1 完成。
 - [x] Task 2 完成。
-- [ ] Task 3 完成。
+- [x] Task 3 完成。
 
 ### Task 1 验证记录（2026-09-11）
 
@@ -170,3 +170,14 @@ $env:Path='C:/Program Files/nodejs;' + $env:Path
 - 完整门禁：724 JVM、111 前端，lint／格式／类型／bundle、主和测试 APK 构建通过；3 项新 Android 窗口测试仅编译，未在真机执行。
 - 主 APK SHA-256：ECCF32EA3E5741FCBAB8EB3F11C5BE049012557FE00ECA97902CE8AF6C601773；测试 APK：378497E0CFB1C423EE5A039CAE25D0E1BDC12D76B47C3AFDBB663024A5EA7568。
 - 两包原签名不变，14 条音频哈希一致，主／测试包凭据扫描无发现。未安装、未联网生成、未试听。
+
+### Task 3 验证记录（2026-09-11）
+
+- 接线前 76 项定向中的 4 项按预期失败：普通生命周期没有真实文字请求、公里请求未附配置；接纳时捕获专属凭据与当时语气后全部通过。配置变更不回读到旧请求，关闭后再开不补播。
+- 新增真 SpeechBus／VoicePolicy／DeepseekClient／PreparedVoicePlayer 组合、假网络及媒体端口，覆盖单次整句 Fish、文字两秒超时与迟到响应关闭、Fish 失败普通本地／公里静默、无 Fish 不请求文字、紧急与 BLE 零联网、普通八秒／公里十五秒包含排队与文字时间、pending 预算。
+- 旧 analyze 用动态计数验证为零；预生成经生产调用链静态核查无触发（Coordinator 对 EmergencyPhraseCache 仅 clear）。由于旧预生成强转 AnthropicLlmClient，假 LlmClient 的 analyze 计数不作为预生成动态证明；不为此扩展旧客户端。
+- 独立审查发现 1 项 Important：停止仅排队 HardStop，在 actor 执行前旧媒体仍可启动。3 项 RED 复现 Call 尚未取消和旧 onlineFile 启动；最小修改 SpeechBus 为普通请求补撤销 token，停止／替换返回前在锁外同步取消，保留原 BLE token、pending 和 actor 清理。修复后 151 项定向通过，独立复核关闭，未发现遗留问题。
+- 最终完整门禁：737 JVM、111 前端，零失败；前端 lint／格式／类型／bundle、主与测试 APK 构建均成功。新增 Android 窗口测试仍只编译，未在真机执行。
+- 主 APK SHA-256：02206E233EE35CB026C8A4A3FE327EEEC012D0E5F21DC573B87A45497475B1B9；测试 APK：378497E0CFB1C423EE5A039CAE25D0E1BDC12D76B47C3AFDBB663024A5EA7568。
+- 双包签名 SHA-256 仍为 ebad2b92cff0324810062be3e8116645cfd352780ad79141be61be148774c603；主包 14 条音频哈希一致，主／测试包凭据扫描无发现。四份原 dirty 文档哈希均保持。
+- 本批只做本地实现、模拟验证和提交；没有安装、真实 DeepSeek／Fish 请求或试听。下一步按规格 8.2 先检查并备份真机，再覆盖安装；新密钥由用户在手机填，实际认证和一次试听需要当次确认。完整 API 状态面板仍后置重核。

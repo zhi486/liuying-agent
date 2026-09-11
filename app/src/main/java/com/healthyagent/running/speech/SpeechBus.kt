@@ -145,6 +145,7 @@ class SpeechBus(
         val trigger = request.trigger
         val activePolicy = policy
         val now = nowMillis()
+        var replacedToken: SpeechNoticeToken? = null
         synchronized(stateLock) {
             when {
                 request.noticeToken?.isValid == false -> record(trigger, SpeechOutcomeReason.CANCELLED)
@@ -163,15 +164,18 @@ class SpeechBus(
                     val speech = ScheduledSpeech(
                         operationId = ++activeOperationId,
                         sessionGeneration = sessionGeneration,
-                        request = request.copy(preparationAcceptedAt = timeSource.markNow()),
+                        request = request.copy(preparationAcceptedAt = timeSource.markNow(),
+                            noticeToken = request.noticeToken ?: SpeechNoticeToken()),
                         acceptedAtMillis = now,
                     )
                     activeSpeech = speech
                     currentPriority = trigger.ttsPriority
+                    replacedToken = replaced?.request?.noticeToken
                     publishAcceptance(Acceptance(speech, replaced))
                 }
             }
         }
+        replacedToken?.cancel()
     }
 
     fun enqueueSessionStatus(trigger: RuleTrigger) {
@@ -183,6 +187,7 @@ class SpeechBus(
         val activePolicy = policy
         val now = nowMillis()
         var disabledSpeech: ScheduledSpeech? = null
+        var replacedToken: SpeechNoticeToken? = null
         synchronized(stateLock) {
             val revision = ++sessionStatusRevision
             if (!activePolicy.enabled) {
@@ -196,10 +201,12 @@ class SpeechBus(
                 return@synchronized null
             }
 
-            val acceptedRequest = request.copy(preparationAcceptedAt = timeSource.markNow())
+            val acceptedRequest = request.copy(preparationAcceptedAt = timeSource.markNow(),
+                noticeToken = request.noticeToken ?: SpeechNoticeToken())
             record(trigger, SpeechOutcomeReason.SESSION_STATUS_SCHEDULED)
             if (currentPriority == SpeechPriority.URGENT) {
                 pendingSessionStatus?.let {
+                    replacedToken = it.request.noticeToken
                     record(it.trigger, SpeechOutcomeReason.PENDING_SESSION_STATUS_REPLACED)
                 }
                 pendingSessionStatus = PendingSessionStatus(
@@ -219,11 +226,13 @@ class SpeechBus(
                 )
                 activeSpeech = speech
                 currentPriority = trigger.ttsPriority
+                replacedToken = replaced?.request?.noticeToken
                 publishAcceptance(Acceptance(speech, replaced))
                 null
             }
         }
 
+        replacedToken?.cancel()
         disabledSpeech?.let {
             recordTerminal(it, SpeechOutcomeReason.POLICY_DISABLED)
         }
@@ -268,7 +277,7 @@ class SpeechBus(
     }
 
     private fun hardStop(clearHistory: Boolean, clearMessage: Boolean, shutdown: Boolean) {
-        synchronized(stateLock) {
+        val tokens = synchronized(stateLock) {
             val active = activeSpeech
             val pending = pendingSessionStatus
             sessionGeneration += 1
@@ -280,7 +289,10 @@ class SpeechBus(
             if (clearMessage) _latestMessage.value = null
             val command = Command.HardStop(active, pending, shutdown)
             check(commandChannel.trySend(command).isSuccess)
+            listOfNotNull(active?.request?.noticeToken, pending?.request?.noticeToken)
         }
+        // 停止返回前使网络与媒体启动门失效；外部取消回调不能在总线锁内执行。
+        tokens.forEach(SpeechNoticeToken::cancel)
     }
 
     private fun handleStart(speech: ScheduledSpeech) {

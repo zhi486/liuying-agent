@@ -4,12 +4,15 @@ import com.healthyagent.running.ai.AnalysisManager
 import com.healthyagent.running.ai.EmergencyPhraseCache
 import com.healthyagent.running.ai.LlmConfig
 import com.healthyagent.running.ai.PromptBuilder
+import com.healthyagent.running.ai.DeepseekRequestConfig
 import com.healthyagent.running.bridge.BridgeCodec
 import com.healthyagent.running.bridge.BridgeErrorCode
 import com.healthyagent.running.core.engine.RuleEngine
 import com.healthyagent.running.core.model.ConnectionState
 import com.healthyagent.running.core.model.MetricsFrame
 import com.healthyagent.running.core.model.RuleContext
+import com.healthyagent.running.core.model.RuleTrigger
+import com.healthyagent.running.core.model.SpeechPriority
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.RoutePoint
 import com.healthyagent.running.core.model.RunState
@@ -785,10 +788,20 @@ class AppCoordinator(
     }
 
     private fun enqueueSessionStatus(event: SessionSpeechEvent) {
+        val trigger = SessionSpeechTriggerFactory.create(event)
+        val config = captureCompanionConfig(trigger)
         speechBus.enqueueSessionStatus(SpeechRequest(
-            SessionSpeechTriggerFactory.create(event),
-            companionEnabled = voiceSettings?.llmEnabled ?: activeRunConfig.llmEnabled,
+            trigger,
+            companionEnabled = config != null,
+            deepseekConfig = config,
         ))
+    }
+
+    // 调用方持有协调器锁；在接纳前固定凭据与语气，排队不得回读新配置。
+    private fun captureCompanionConfig(trigger: RuleTrigger): DeepseekRequestConfig? {
+        val settings = voiceSettings ?: return null
+        if (!settings.llmEnabled || trigger.ttsPriority == SpeechPriority.URGENT || trigger.ruleId == "data_stale") return null
+        return deepseekCredentialsStore?.capture(settings.coachTone)
     }
 
     private fun settingsResult(settings: SettingsSnapshot): JsonObject = buildJsonObject {
@@ -927,14 +940,16 @@ class AppCoordinator(
         )
 
         triggers.forEach { trigger ->
+            val config = captureCompanionConfig(trigger)
             val request = SpeechRequest(
                 trigger = trigger,
-                companionEnabled = voiceSettings?.llmEnabled ?: activeRunConfig.llmEnabled,
+                companionEnabled = config != null,
                 analysis = if (trigger.ruleId == "km_split" && split != null) {
                     sessionManager.currentSession?.let { session ->
                         PromptBuilder.build(session, split, activeRunConfig, recentTriggerTexts.toList())
                     }
                 } else null,
+                deepseekConfig = config,
             )
             recentTriggerTexts.add(trigger.speakText)
             if (recentTriggerTexts.size > 10) recentTriggerTexts.removeAt(0)

@@ -21,7 +21,7 @@ data class SpeechRequest(
     val deepseekConfig: DeepseekRequestConfig? = null,
 )
 
-/** 单条通知的撤销凭证；随协程传至媒体启动门，不影响其他语音。 */
+/** 单条语音的撤销凭证；随协程传至媒体启动门，BLE 还可用原凭证定向撤销。 */
 class SpeechNoticeToken(
     private val stillRelevant: () -> Boolean = { true },
 ) : AbstractCoroutineContextElement(Key) {

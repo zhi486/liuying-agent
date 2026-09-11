@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicReference
 import com.healthyagent.running.speech.TtsEngine
 import com.healthyagent.running.testing.FakeDiagnosticLogger
 import com.healthyagent.running.testing.FakeTtsEngine
+import com.healthyagent.running.testing.DeepseekVoiceFixture
 import java.lang.reflect.Modifier
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -112,6 +113,142 @@ import kotlin.time.TestTimeSource
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppCoordinatorTest {
     @get:JunitRule val deepseekFolder = TemporaryFolder()
+
+    @Test fun `生产接纳捕获专属配置和语气且旧分析不调用`() = runTest {
+        val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+        val store = DeepseekCredentialsStore(File(deepseekFolder.root, "capture/key"))
+        assertTrue(store.save("test-only-deepseek"))
+        var legacyCalls = 0
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = voice.bus,
+            settingsRepository = FakeSettingsRepository(SettingsSnapshot(llmEnabled = true, coachTone = CoachTone.GENTLE)),
+            deepseekCredentialsStore = store,
+            llmClient = object : LlmClient {
+                override suspend fun analyze(request: LlmAnalyzeRequest): Result<LlmAnalyzeResponse> {
+                    legacyCalls++
+                    return Result.success(LlmAnalyzeResponse("不应调用。"))
+                }
+            })
+        try {
+            coordinator.startRun()
+            // 在 actor 取请求前改语气，已接纳的请求仍用原来的不可变配置。
+            coordinator.updateSettings(SettingsPatch(coachTone = CoachTone.DIRECT))
+            runCurrent()
+            assertEquals(1, voice.calls.size)
+            assertEquals("test-only-deepseek", voice.calls.single().request().header("x-api-key"))
+            assertEquals("GENTLE", voice.calls.single().prompt()["coachTone"]!!.jsonPrimitive.content)
+            voice.calls.single().respond()
+            runCurrent()
+            assertEquals(listOf("流萤已开始记录，出发吧。能陪着你，我很开心。"), voice.fishTexts)
+            voice.ports.single().listener.onCompletion()
+            runCurrent()
+            coordinator.pauseRun()
+            runCurrent()
+            assertEquals("DIRECT", voice.calls.last().prompt()["coachTone"]!!.jsonPrimitive.content)
+            assertEquals(0, legacyCalls)
+        } finally {
+            coordinator.close()
+            runCurrent()
+        }
+    }
+
+    @Test fun `关闭再开启陪伴取消旧Call且不补播直到新事件`() = runTest {
+        val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+        val store = DeepseekCredentialsStore(File(deepseekFolder.root, "toggle/key"))
+        assertTrue(store.save("test-only-deepseek"))
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = voice.bus,
+            settingsRepository = FakeSettingsRepository(SettingsSnapshot(llmEnabled = true)), deepseekCredentialsStore = store)
+        try {
+            coordinator.startRun()
+            runCurrent()
+            assertEquals(1, voice.calls.size)
+            val old = voice.calls.single()
+            coordinator.updateSettings(SettingsPatch(llmEnabled = false))
+            coordinator.updateSettings(SettingsPatch(llmEnabled = true))
+            runCurrent()
+            assertTrue(old.isCanceled())
+            assertTrue(old.respond().closed)
+            runCurrent()
+            assertEquals(1, voice.calls.size)
+            assertTrue(voice.fishTexts.isEmpty())
+            assertTrue(voice.startedFiles.isEmpty())
+            coordinator.pauseRun()
+            runCurrent()
+            assertEquals(2, voice.calls.size)
+            voice.calls.last().respond()
+            runCurrent()
+            assertEquals(listOf("跑步已暂停。能陪着你，我很开心。"), voice.fishTexts)
+        } finally {
+            coordinator.close()
+            runCurrent()
+        }
+    }
+
+    @Test fun `结束替换旧文字请求且换密钥取消结束播报并只用于新事件`() = runTest {
+        val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+        val store = DeepseekCredentialsStore(File(deepseekFolder.root, "replace/key"))
+        assertTrue(store.save("test-only-old"))
+        val coordinator = createCoordinator(FakeRunRepository(), speechBus = voice.bus,
+            settingsRepository = FakeSettingsRepository(SettingsSnapshot(llmEnabled = true)), deepseekCredentialsStore = store)
+        try {
+            coordinator.startRun()
+            runCurrent()
+            assertEquals(1, voice.calls.size)
+            val started = voice.calls.single()
+            coordinator.stopRun()
+            runCurrent()
+            assertTrue(started.isCanceled())
+            assertEquals(2, voice.calls.size)
+            val finished = voice.calls.last()
+            assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Accepted)
+            val token = coordinator.deepseekConfigurationRequest.value!!
+            assertTrue(coordinator.saveDeepseekKey(token, "test-only-new") is CommandOutcome.Accepted)
+            runCurrent()
+            assertTrue(finished.isCanceled())
+            assertTrue(started.respond().closed)
+            assertTrue(finished.respond().closed)
+            runCurrent()
+            assertTrue(voice.fishTexts.isEmpty())
+            assertTrue(voice.startedFiles.isEmpty())
+            coordinator.startRun()
+            runCurrent()
+            assertEquals(3, voice.calls.size)
+            assertEquals("test-only-new", voice.calls.last().request().header("x-api-key"))
+        } finally {
+            coordinator.close()
+            runCurrent()
+        }
+    }
+
+    @Test fun `关闭或换钥在媒体启动门前返回后旧声音不得启动`() = runTest {
+        for (replaceKey in listOf(false, true)) {
+            val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+            val store = DeepseekCredentialsStore(File(deepseekFolder.root, "media-$replaceKey/key"))
+            assertTrue(store.save("test-only-deepseek"))
+            val coordinator = createCoordinator(FakeRunRepository(), speechBus = voice.bus,
+                coordinatorScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)),
+                settingsRepository = FakeSettingsRepository(SettingsSnapshot(llmEnabled = true)), deepseekCredentialsStore = store)
+            try {
+                coordinator.startRun()
+                if (replaceKey) coordinator.stopRun()
+                runCurrent()
+                assertEquals(1, voice.calls.size)
+                voice.beforeMediaStart = {
+                    if (replaceKey) {
+                        assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Accepted)
+                        assertTrue(coordinator.saveDeepseekKey(coordinator.deepseekConfigurationRequest.value!!,
+                            "test-only-new") is CommandOutcome.Accepted)
+                    } else assertTrue(coordinator.updateSettings(SettingsPatch(llmEnabled = false)) is CommandOutcome.AcceptedWithData)
+                }
+                voice.calls.single().respond()
+                runCurrent()
+                assertTrue(voice.startedFiles.isEmpty())
+                assertNull(coordinator.snapshot.value.latestCoachMessage)
+            } finally {
+                coordinator.close()
+                runCurrent()
+            }
+        }
+    }
 
     @Test fun `恢复期间拒绝配置且恢复无活动记录后原生入口不会卡在禁用`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
@@ -1070,6 +1207,7 @@ class AppCoordinatorTest {
         assertEquals(1, ttsEngine.requests.count { it.text == expected })
         val kilometer = requests.single { it.trigger.ruleId == "km_split" }
         assertTrue(kilometer.companionEnabled)
+        assertEquals("test-only-deepseek", kilometer.deepseekConfig?.apiKey)
         assertEquals(1, kilometer.analysis?.split_index)
         assertEquals(400L, kilometer.analysis?.split_data?.duration_sec)
         assertEquals(400.0, kilometer.analysis?.split_data?.avg_pace_sec_per_km)
