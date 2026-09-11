@@ -102,6 +102,159 @@ import kotlin.time.TestTimeSource
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppCoordinatorTest {
+    @Test fun `暂停定位查询使用流水自己的时钟而非含深睡偏移的协调器时钟`() = runTest {
+        val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+        val coordinator = createCoordinator(FakeRunRepository(), sensor,
+            coordinatorRealtimeMillis = { sensor.monotonicMillis + 900_000 },
+        )
+        coordinator.startRun()
+        runCurrent()
+        sensor.emitSample(SampleType.DISTANCE, 0.0, 1_000)
+        runCurrent()
+        coordinator.pauseRun()
+        runCurrent()
+        assertEquals("fresh", coordinator.snapshot.value.dataQuality.gps)
+        coordinator.close()
+    }
+
+    @Test fun `恢复后尚无新帧就再次暂停不能永久保留新鲜心率`() = runTest {
+        val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+        val coordinator = createCoordinator(FakeRunRepository(), sensor, pausedHeartRateMonitor = PausedHeartRateMonitor(
+            tickSource = sensor.ticks, monotonicClockMillis = { sensor.monotonicMillis },
+        ))
+        coordinator.startRun()
+        runCurrent()
+        sensor.emitSample(SampleType.HEART_RATE, 145.0, 0)
+        sensor.emitTick(0)
+        runCurrent()
+        assertEquals("fresh", coordinator.snapshot.value.dataQuality.heartRate)
+        coordinator.pauseRun()
+        runCurrent()
+        coordinator.resumeRun()
+        runCurrent()
+        coordinator.pauseRun()
+        runCurrent()
+        sensor.emitTick(10_000)
+        runCurrent()
+        assertNull(coordinator.snapshot.value.metrics.heartRate)
+        assertEquals("stale", coordinator.snapshot.value.dataQuality.heartRate)
+        coordinator.close()
+    }
+
+    @Test fun `暂停后首次心率从等待转新鲜再过期而GPS保持等待`() = runTest {
+        val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+        val coordinator = createCoordinator(FakeRunRepository(), sensor, pausedHeartRateMonitor = PausedHeartRateMonitor(
+            tickSource = sensor.ticks, monotonicClockMillis = { sensor.monotonicMillis },
+        ))
+        coordinator.startRun()
+        runCurrent()
+        coordinator.pauseRun()
+        runCurrent()
+        assertEquals(DataQualitySnapshot("waiting", "waiting"), coordinator.snapshot.value.dataQuality)
+        sensor.emitSample(SampleType.HEART_RATE, 145.0, 1_000)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("waiting", "fresh"), coordinator.snapshot.value.dataQuality)
+        sensor.emitTick(6_000)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("waiting", "stale"), coordinator.snapshot.value.dataQuality)
+        assertNull(coordinator.snapshot.value.metrics.heartRate)
+        coordinator.close()
+    }
+
+    @Test fun `数据质量独立区分等待零米定位及单源过期且不改变蓝牙状态`() = runTest {
+        val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+        val coordinator = createCoordinator(FakeRunRepository(), sensor)
+        coordinator.startRun()
+        runCurrent()
+        sensor.emitTick(0)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("waiting", "waiting"), coordinator.snapshot.value.dataQuality)
+        sensor.emitSample(SampleType.DISTANCE, 0.0, 0)
+        sensor.emitSample(SampleType.HEART_RATE, 140.0, 0)
+        sensor.emitTick(0)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("fresh", "fresh"), coordinator.snapshot.value.dataQuality)
+        sensor.emitSample(SampleType.HEART_RATE, 142.0, 5_000)
+        sensor.emitTick(5_000)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("stale", "fresh"), coordinator.snapshot.value.dataQuality)
+        assertNull(coordinator.snapshot.value.metrics.paceSecPerKm)
+        assertEquals(0.0, coordinator.snapshot.value.metrics.distanceMeters, 0.0)
+        assertEquals("connected", coordinator.snapshot.value.wearable.state)
+        sensor.emitSample(SampleType.DISTANCE, 20.0, 10_000)
+        sensor.emitTick(10_000)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("fresh", "stale"), coordinator.snapshot.value.dataQuality)
+        assertNull(coordinator.snapshot.value.metrics.heartRate)
+        coordinator.close()
+    }
+
+    @Test fun `首帧前暂停保留已收到的零米和心率基线且暂停GPS不随时钟过期`() = runTest {
+        val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+        val coordinator = createCoordinator(FakeRunRepository(), sensor, pausedHeartRateMonitor = PausedHeartRateMonitor(
+            tickSource = sensor.ticks, monotonicClockMillis = { sensor.monotonicMillis },
+        ))
+        coordinator.startRun()
+        runCurrent()
+        sensor.emitSample(SampleType.DISTANCE, 0.0, 0)
+        sensor.emitSample(SampleType.HEART_RATE, 140.0, 0)
+        runCurrent()
+        coordinator.pauseRun()
+        runCurrent()
+        assertEquals(DataQualitySnapshot("fresh", "fresh"), coordinator.snapshot.value.dataQuality)
+        sensor.emitTick(5_000)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("fresh", "stale"), coordinator.snapshot.value.dataQuality)
+        coordinator.resumeRun()
+        runCurrent()
+        sensor.emitTick(6_000)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("stale", "stale"), coordinator.snapshot.value.dataQuality)
+        coordinator.stopRun()
+        runCurrent()
+        coordinator.startRun()
+        runCurrent()
+        sensor.emitTick(7_000)
+        runCurrent()
+        assertEquals(DataQualitySnapshot("waiting", "waiting"), coordinator.snapshot.value.dataQuality)
+        coordinator.close()
+    }
+
+    @Test fun `首次出帧已过期和首帧前心率过期后暂停仍是stale而非waiting`() = runTest {
+        val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+        val coordinator = createCoordinator(FakeRunRepository(), sensor, pausedHeartRateMonitor = PausedHeartRateMonitor(
+            tickSource = sensor.ticks, monotonicClockMillis = { sensor.monotonicMillis },
+        ))
+        coordinator.startRun()
+        runCurrent()
+        sensor.emitSample(SampleType.DISTANCE, 0.0, 0)
+        sensor.emitSample(SampleType.HEART_RATE, 140.0, 0)
+        runCurrent()
+        sensor.advanceClockTo(5_000)
+        coordinator.pauseRun()
+        runCurrent()
+        assertEquals(DataQualitySnapshot("stale", "stale"), coordinator.snapshot.value.dataQuality)
+        coordinator.close()
+    }
+
+    @Test fun `无手环能力不等待心率且进程恢复不推断旧数据新鲜`() = runTest {
+        val phone = createCoordinator(FakeRunRepository())
+        assertEquals("not_available", phone.snapshot.value.dataQuality.heartRate)
+        phone.startRun()
+        runCurrent()
+        phone.pauseRun()
+        runCurrent()
+        assertEquals(DataQualitySnapshot("waiting", "not_available"), phone.snapshot.value.dataQuality)
+        phone.close()
+        val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+        val restored = createCoordinator(FakeRunRepository(RunSession(
+            id = "quality-restored", startTimeMillis = 1, totalDistanceMeters = 1_000.0,
+            avgHeartRate = 145, runState = RunState.PAUSED,
+        )), sensor)
+        assertEquals(DataQualitySnapshot("waiting", "waiting"), restored.snapshot.value.dataQuality)
+        restored.close()
+    }
+
     @Test fun `关闭时已等待协调器锁的旧观察不能再写快照或提交故障`() = runTest {
         val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
         val source = MutableStateFlow(WearableLinkObservation())
@@ -1470,6 +1623,7 @@ class AppCoordinatorTest {
         sessionManager: RunSessionManager = RunSessionManager(),
         pausedHeartRateMonitor: PausedHeartRateMonitor = PausedHeartRateMonitor(),
         coordinatorScope: CoroutineScope = backgroundScope,
+        coordinatorRealtimeMillis: () -> Long = { sensorDataSource.monotonicMillis },
         onVoiceSettingsChanged: (SettingsSnapshot) -> Unit = {},
         llmClient: LlmClient = object : LlmClient {
             override suspend fun analyze(request: LlmAnalyzeRequest): Result<LlmAnalyzeResponse> =
@@ -1501,7 +1655,7 @@ class AppCoordinatorTest {
             emergencyPhraseCache = EmergencyPhraseCache(llmClient),
             scope = coordinatorScope,
             nowMillis = { 1_787_745_600_000L },
-            realtimeMillis = { sensorDataSource.monotonicMillis },
+            realtimeMillis = coordinatorRealtimeMillis,
             pausedHeartRateMonitor = pausedHeartRateMonitor,
             onVoiceSettingsChanged = onVoiceSettingsChanged,
         )

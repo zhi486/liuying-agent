@@ -31,6 +31,7 @@ data class AppSnapshot(
     val theme: String,
     val motionPolicy: String,
     val safetyState: SafetySnapshot,
+    val dataQuality: DataQualitySnapshot,
 ) {
     companion object {
         fun initial(config: RunConfig, nowMillis: Long): AppSnapshot = AppSnapshot(
@@ -52,9 +53,16 @@ data class AppSnapshot(
             theme = "night",
             motionPolicy = "balanced",
             safetyState = SafetySnapshot(),
+            dataQuality = DataQualitySnapshot(),
         )
     }
 }
+
+@Serializable
+data class DataQualitySnapshot(
+    val gps: String = "waiting",
+    val heartRate: String = "not_available",
+)
 
 @Serializable
 data class ConnectionSnapshot(

@@ -10,9 +10,19 @@
 
 ## 心率警戒偏好
 
-同包 Web／Native 保持版本 1，并在 ready 能力清单末尾声明 `heart-rate-alerts.v1`。
+同包 Web／Native 保持版本 1，并在 ready 能力清单中声明 `heart-rate-alerts.v1`。
 
 - 快照 `settings.hrAlertThresholdBpm` 为 null 或 80–240 的整数；null 表示沿用当前最大心率的 Z5 最低门槛，不代表个体医学评估。
 - `settings.hrAlertRepeatIntervalSec` 为 30–300 的整数，旧偏好缺省 120 秒，仅针对高心率重复提醒。
 - `settings.update` 可选择更新任一字段；阈值缺失表示不修改，显式 null 表示清空恢复自动。重复间隔不允许 null。非法输入拒绝，不截断。
 - 两项设置在新跑步开始时冻结；运行中或暂停时保存仅影响下一次跑步。语音总开关的即时行为不变。
+
+## 独立数据质量
+
+ready 能力清单按顺序为 `snapshot.v1`、`history.pagination`、`settings.v1`、`heart-rate-alerts.v1`、`data-quality.v1`；原生与同包 Web 同步更新。
+
+- 根 `dataQuality` 是必填严格对象：`gps` 为 `waiting | fresh | stale`；`heartRate` 为 `not_available | waiting | fresh | stale`。两端均拒绝缺失字段、未知枚举及额外字段。
+- `waiting` 表示当前会话尚未取得有效样本，有效的零米定位属于已取得样本。曾取得样本后，接收时间满 5 秒为 `stale`。无手环能力时心率为 `not_available`。
+- GPS 停更时不增加距离并清空当前配速，HR 停更时清空心率和区间。暂停时 GPS 保留暂停时的观察状态，HR 仍依据现有暂停心率来源更新。
+- 新跑和进程恢复重新建立观察基线；恢复的历史距离不能证明 GPS 当前新鲜。
+- 数据质量不改变 `wearable.state`，也不覆盖 `safetyState`。只有独立真实 BLE 故障观察才能提交手环中断语音。

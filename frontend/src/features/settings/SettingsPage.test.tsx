@@ -262,6 +262,7 @@ const snapshot: AppSnapshot = {
   theme: 'night',
   motionPolicy: 'balanced',
   safetyState: { level: 'normal', message: null },
+  dataQuality: { gps: 'waiting', heartRate: 'waiting' },
 };
 
 function accepted(value: AppSnapshot['settings']) {

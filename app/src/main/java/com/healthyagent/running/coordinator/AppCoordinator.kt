@@ -94,6 +94,7 @@ class AppCoordinator(
                 batteryPercent = sensorDataSource.primaryDeviceInfo.batteryPercent,
             ),
             wearable = wearableSnapshot(sensorDataSource.wearableConnectionState?.value),
+            dataQuality = initialDataQuality(),
         ),
     )
     val snapshot: StateFlow<AppSnapshot> = _snapshot.asStateFlow()
@@ -124,6 +125,9 @@ class AppCoordinator(
     private var lastCommittedDistanceMeters = 0.0
     private var sourceWasFresh = false
     private var lastCheckpointElapsed = -1L
+    private var hasSeenDistance = false
+    private var hasSeenHeartRate = false
+    private var lastDistanceReceiptMillis: Long? = null
     private val wearableAlertGate = WearableLinkAlertGate()
     private var wearableAlertsClosed = false
     @Volatile private var wearableAlertSession = 0L
@@ -337,6 +341,7 @@ class AppCoordinator(
 
         val config = pendingRunConfig
         resetWearableAlerts()
+        resetDataQuality()
         runGeneration++
         cancelPipeline()
         activeCompletionId = null
@@ -358,6 +363,7 @@ class AppCoordinator(
             it.copy(
                 session = session.toSnapshot(config),
                 metrics = MetricsSnapshot(),
+                dataQuality = initialDataQuality(),
                 completedRun = null,
                 persistenceState = "idle",
                 healthSync = HealthSyncSnapshot(),
@@ -399,6 +405,14 @@ class AppCoordinator(
         updateSnapshot { current ->
             current.copy(
                 session = current.session.copy(state = RunState.PAUSED.toContractValue()),
+                dataQuality = current.dataQuality.copy(
+                    gps = when {
+                        !hasSeenDistance -> "waiting"
+                        pipeline.isReceiptFresh(lastDistanceReceiptMillis) -> "fresh"
+                        else -> "stale"
+                    },
+                    heartRate = heartRateQuality(pausedSeed.heartRate != null && pipeline.isReceiptFresh(pausedSeed.receivedAtMillis)),
+                ),
                 metrics = current.metrics.copy(
                     elapsedSeconds = frozenElapsed.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
                 ),
@@ -436,6 +450,7 @@ class AppCoordinator(
         updateSnapshot { current ->
             current.copy(
                 session = current.session.copy(state = RunState.RUNNING.toContractValue()),
+                dataQuality = current.dataQuality.copy(heartRate = heartRateQuality(false)),
                 metrics = current.metrics.copy(
                     heartRate = null,
                     paceSecPerKm = null,
@@ -746,12 +761,25 @@ class AppCoordinator(
         pipelineJob = scope.launch {
             pipeline.process(
                 samples = sensorDataSource.samples,
+                onOrderedDistanceReceived = { receivedAtMillis ->
+                    synchronized(this@AppCoordinator) {
+                        if (isCurrentPipelineGeneration(generation) && sessionManager.currentState == RunState.RUNNING) {
+                            hasSeenDistance = true
+                            lastDistanceReceiptMillis = receivedAtMillis
+                        }
+                    }
+                },
                 onOrderedHeartRateReceived = { sample, receivedAtMillis ->
-                    pausedHeartRateMonitor.recordRunningSample(
-                        generation = generation,
-                        sample = sample,
-                        receivedAtMillis = receivedAtMillis,
-                    )
+                    synchronized(this@AppCoordinator) {
+                        if (isCurrentPipelineGeneration(generation) && sessionManager.currentState == RunState.RUNNING) {
+                            hasSeenHeartRate = true
+                            pausedHeartRateMonitor.recordRunningSample(
+                                generation = generation,
+                                sample = sample,
+                                receivedAtMillis = receivedAtMillis,
+                            )
+                        }
+                    }
                 },
             )
                 .catch { error ->
@@ -777,8 +805,10 @@ class AppCoordinator(
     @Synchronized
     internal fun processPausedHeartRate(state: PausedHeartRateState, generation: Long) {
         if (pipelineGeneration != generation || sessionManager.currentState != RunState.PAUSED) return
+        hasSeenHeartRate = hasSeenHeartRate || state.heartRate != null
         updateSnapshot { current ->
             current.copy(
+                dataQuality = current.dataQuality.copy(heartRate = heartRateQuality(state.heartRate != null)),
                 metrics = current.metrics.copy(
                     heartRate = state.heartRate,
                     hrZone = state.hrZone?.toContractValue(),
@@ -795,6 +825,8 @@ class AppCoordinator(
         if (!isCurrentPipelineGeneration(generation) || sessionManager.currentState != RunState.RUNNING) return
 
         val frame = rebaseFrame(sourceFrame)
+        hasSeenDistance = hasSeenDistance || sourceFrame.hasDistanceSample
+        hasSeenHeartRate = hasSeenHeartRate || sourceFrame.hasHeartRateSample
         (sensorDataSource as? RunLifecycleAwareSensor)?.onRunMetricsUpdated(
             frame.distanceMeters,
             frame.currentPaceSecPerKm.takeIf { frame.isDataFresh },
@@ -803,6 +835,14 @@ class AppCoordinator(
             val primaryInfo = sensorDataSource.primaryDeviceInfo
             it.copy(
                 metrics = frame.toSnapshot(),
+                dataQuality = DataQualitySnapshot(
+                    gps = when {
+                        !hasSeenDistance -> "waiting"
+                        frame.isDataFresh -> "fresh"
+                        else -> "stale"
+                    },
+                    heartRate = heartRateQuality(frame.isHeartRateFresh && frame.heartRateSmoothed != null),
+                ),
                 connection = it.connection.copy(
                     deviceName = primaryInfo.name.takeIf(String::isNotBlank),
                     batteryPercent = primaryInfo.batteryPercent,
@@ -1007,6 +1047,7 @@ class AppCoordinator(
                         synchronized(this) {
                             if (sessionManager.currentState == RunState.IDLE) {
                                 resetWearableAlerts()
+                                resetDataQuality()
                                 runGeneration++
                                 applyActiveRunConfig(restoredConfig)
                                 sessionManager.restoreSession(session)
@@ -1018,6 +1059,7 @@ class AppCoordinator(
                                 updateSnapshot {
                                     it.copy(
                                         session = session.toSnapshot(restoredConfig),
+                                        dataQuality = initialDataQuality(),
                                         metrics = MetricsSnapshot(
                                             distanceMeters = session.totalDistanceMeters,
                                             elapsedSeconds = session.totalDurationSec
@@ -1041,6 +1083,23 @@ class AppCoordinator(
                     false
                 },
             )
+    }
+
+    private fun initialDataQuality() = DataQualitySnapshot(
+        heartRate = if (sensorDataSource.wearableConnectionState != null) "waiting" else "not_available",
+    )
+
+    private fun resetDataQuality() {
+        hasSeenDistance = false
+        hasSeenHeartRate = false
+        lastDistanceReceiptMillis = null
+    }
+
+    private fun heartRateQuality(fresh: Boolean): String = when {
+        sensorDataSource.wearableConnectionState == null -> "not_available"
+        !hasSeenHeartRate -> "waiting"
+        fresh -> "fresh"
+        else -> "stale"
     }
 
     private fun updateSnapshot(transform: (AppSnapshot) -> AppSnapshot) {

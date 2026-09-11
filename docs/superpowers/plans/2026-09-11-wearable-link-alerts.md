@@ -81,7 +81,7 @@ class SpeechNoticeToken {
 
 **Interfaces:** 产出上述观察流和令牌接口；门控器消费 `WearableLinkObservation` 及显式单调毫秒。Coordinator 使用现有 `realtimeMillis`（Android 注入 elapsedRealtime），不新增墙上时钟计时。
 
-- [ ] **Step 1: 先写来源与门控失败测试。** 在 `KeepB5SessionSupervisorTest.kt` 中复用现有扫描／握手工具：初次失败和 Prepared→START_PENDING 无 fault；正常 Ready 后真实失败才有 fault；过期 GATT 回调不变；重试不重置起点；短暂 Ready 后 fault id 变而 episode 不变；稳定 Ready 满 10 秒后 episode 变；RunStopped 和新 RunStarted 清旧身份。增加 `WearableLinkAlertGateTest.kt`：
+- [x] **Step 1: 先写来源与门控失败测试。** 在 `KeepB5SessionSupervisorTest.kt` 中复用现有扫描／握手工具：初次失败和 Prepared→START_PENDING 无 fault；正常 Ready 后真实失败才有 fault；过期 GATT 回调不变；重试不重置起点；短暂 Ready 后 fault id 变而 episode 不变；稳定 Ready 满 10 秒后 episode 变；RunStopped 和新 RunStarted 清旧身份。增加 `WearableLinkAlertGateTest.kt`：
 
 ```kotlin
 @Test fun continuousFaultNeedsTenSeconds() {
@@ -100,7 +100,7 @@ class SpeechNoticeToken {
 
 门控器签名：`reset(baseline: WearableLinkObservation)` 建立新基线；`evaluate(observation: WearableLinkObservation, nowMillis: Long): WearableLinkFault?` 仅返回首次到期身份。新观察代次允许在来源已证明 Ready 时启用；进程恢复基线现有 fault 不补播，必须先出现更高 readyRevision。追加 9,999/10,000 边界、短暂／稳定恢复、静音不补发、跳过瞬时 Ready、代次换代的字面量期望。
 
-- [ ] **Step 2: 运行定向 RED。**
+- [x] **Step 2: 运行定向 RED。**
 
 ```powershell
 ./gradlew.bat --gradle-user-home .gradle-local :app:testDebugUnitTest --tests '*KeepB5SessionSupervisorTest' --tests '*WearableLinkAlertGateTest' -x :app:checkFrontend -x :app:verifyFrontendBundle --console=plain
@@ -108,7 +108,7 @@ class SpeechNoticeToken {
 
 预期新接口未实现或旧错误行为导致失败；确认不是测试拼写／依赖错误。
 
-- [ ] **Step 3: 最小来源与门控实现。** Supervisor 的 `handle` 可包裹原 reducer：只有被接受的 fail 分支增加内部失败标记，结束后生成观察，不用 diagnostic 字符串推断。不把新动作混入旧 transport actions。标准 HR 预连接即使内部 linkState 是 Ready，也须到运动生命周期才成为观察 READY。故障连续起点只在首次合法失败保存；原 Ready 的持续时间决定是否换 episode。
+- [x] **Step 3: 最小来源与门控实现。** Supervisor 的 `handle` 可包裹原 reducer：只有被接受的 fail 分支增加内部失败标记，结束后生成观察，不用 diagnostic 字符串推断。不把新动作混入旧 transport actions。标准 HR 预连接即使内部 linkState 是 Ready，也须到运动生命周期才成为观察 READY。故障连续起点只在首次合法失败保存；原 Ready 的持续时间决定是否换 episode。
 
 ```kotlin
 val fault = observation.fault ?: return null
@@ -121,7 +121,7 @@ return fault
 
 上段在观察代次／恢复基线资格校验之后运行；不能遗漏基线和曾 Ready 条件。BLE 源在 `synchronized(reducerLock)` 内赋 `_wearableLinkObservation.value = supervisor.linkObservation`，不增加第二个 sample collector。
 
-- [ ] **Step 4: 先写语音／Coordinator RED，再接通知。** `SpeechBusTest.kt` 使用真实总线与可阻塞 TtsEngine，分别断言：取消未运行 Start 后没有 speak；取消准备中／播放中的匹配 notice 只停该条；旧取消不影响随后 URGENT／普通提示；已取消令牌被晚到 enqueue 拒绝；不污染成功历史／字幕；保留 session-status 行为。`AppCoordinatorTest.kt` 使用显式 observation flow 与测试时钟，断言无 GPS 帧及 PAUSED 仍能按时发通知，恢复／停止／新跑／close 取消，初始故障基线不播。
+- [x] **Step 4: 先写语音／Coordinator RED，再接通知。** `SpeechBusTest.kt` 使用真实总线与可阻塞 TtsEngine，分别断言：取消未运行 Start 后没有 speak；取消准备中／播放中的匹配 notice 只停该条；旧取消不影响随后 URGENT／普通提示；已取消令牌被晚到 enqueue 拒绝；不污染成功历史／字幕；保留 session-status 行为。`AppCoordinatorTest.kt` 使用显式 observation flow 与测试时钟，断言无 GPS 帧及 PAUSED 仍能按时发通知，恢复／停止／新跑／close 取消，初始故障基线不播。
 
 ```kotlin
 val token = SpeechNoticeToken()
@@ -136,7 +136,7 @@ assertEquals(listOf(otherTrigger.speakText), engine.spoken)
 
 测试中沿用当前总线测试 fixture 的真实字段，不在生产类增加只供测试的接口。先运行 `--tests '*SpeechBusTest' --tests '*AppCoordinatorTest'` 并记录预期失败。
 
-- [ ] **Step 5: 实现集成。** 门控提交时先记录该 episode 已提交，再 enqueue；是否静音／拒绝不重试。Coordinator timer 定时前和回调中均读取观察 `.value`，同时验证独立会话代次，防 collector 延迟导致恢复后开播。READY、IDLE、不同 fault id／观察代次、停止、新跑和 close 立即 cancel timer/token；暂停不重置会话或门控。计时以 `fault.startedAtMillis + 10_000` 为边界，只安排尚未到期的资格计时，不轮询重播。恢复基线只屏幕展示，重新 Ready 后新故障才可播。
+- [x] **Step 5: 实现集成。** 门控提交时先记录该 episode 已提交，再 enqueue；是否静音／拒绝不重试。Coordinator timer 定时前和回调中均读取观察 `.value`，同时验证独立会话代次，防 collector 延迟导致恢复后开播。READY、IDLE、不同 fault id／观察代次、停止、新跑和 close 立即 cancel timer/token；暂停不重置会话或门控。计时以 `fault.startedAtMillis + 10_000` 为边界，只安排尚未到期的资格计时，不轮询重播。恢复基线只屏幕展示，重新 Ready 后新故障才可播。
 
 ```kotlin
 RuleTrigger(
@@ -150,7 +150,7 @@ RuleTrigger(
 
 上述代码由 `WearableLinkSpeech` 工厂唯一生成；沿用已有当前 frame／session speech 构造方式。`VoicePolicyTtsEngine` 为 `data_stale` 新增明确的本地优先分支（源码核对发现原来仅 URGENT 跳过联网）。删去 RuleCatalog 中 DataStaleRule，覆盖测试改为真实工厂，不能保留旧错误规则应付资产覆盖。新增安全诊断类型与格式化测试，原因 `ble_link_lost` 和代次数字，不存其他数据。
 
-- [ ] **Step 6: GREEN、回归、自审、独立复审及提交。** 定向覆盖 Supervisor、BleDataSource、CompositeSensorDataSource、Gate、SpeechBus、Coordinator、RuleCatalog、BundledVoiceCatalog、VoicePolicy、DiagnosticLogger。新增 GPS stale/HR fresh 和 HR stale/距离 fresh 的集成断言，均无 `data_stale` 请求。运行 JVM 全量（前端未改时可跳两项前端任务），逐文件 stage、`git diff --cached --check`、现有 `check-commit-files.mjs --staged`，提交“按真实手环故障防抖播报并支持定向取消”。
+- [x] **Step 6: GREEN、回归、自审、独立复审及提交。** 定向覆盖 Supervisor、BleDataSource、CompositeSensorDataSource、Gate、SpeechBus、Coordinator、RuleCatalog、BundledVoiceCatalog、VoicePolicy、DiagnosticLogger。新增 GPS stale/HR fresh 和 HR stale/距离 fresh 的集成断言，均无 `data_stale` 请求。运行 JVM 全量（前端未改时可跳两项前端任务），逐文件 stage、`git diff --cached --check`、现有 `check-commit-files.mjs --staged`，提交“按真实手环故障防抖播报并支持定向取消”。
 
 ## Task 2: 数据质量快照、严格契约与跑步页提示
 
@@ -158,7 +158,7 @@ RuleTrigger(
 
 **Interfaces:** 消费 Task 1 不变的源和独立故障通知。产出根 `DataQualitySnapshot(gps: String = "waiting", heartRate: String = "not_available")`；`MetricsFrame.hasDistanceSample`、`hasHeartRateSample` 为只读布尔；默认与既有有效帧兼容，真实流水依据已接受 receipt 是否存在赋值。桥接新增 `data-quality.v1` capability，保留现有四项能力。
 
-- [ ] **Step 1: 先写流水、Coordinator 和契约 RED。** 先无样本 tick 后应 waiting；取得零米有效距离后 fresh（不能把 0 当未定位）；一条有效样本首次 tick 已过期时也应 stale；新跑重置 waiting，暂停不拿冻结帧让 GPS 变 stale；暂停 HR 失效显示 stale，第一次尚无 HR 显示 waiting；不支持wearable显示 not_available。完整快照经 Kotlin encode→fixture→Zod decode 保留新字段，未知枚举／字段拒绝。
+- [x] **Step 1: 先写流水、Coordinator 和契约 RED。** 先无样本 tick 后应 waiting；取得零米有效距离后 fresh（不能把 0 当未定位）；一条有效样本首次 tick 已过期时也应 stale；新跑重置 waiting，暂停不拿冻结帧让 GPS 变 stale；暂停 HR 失效显示 stale，第一次尚无 HR 显示 waiting；不支持wearable显示 not_available。完整快照经 Kotlin encode→fixture→Zod decode 保留新字段，未知枚举／字段拒绝。
 
 ```kotlin
 assertEquals("waiting", coordinator.snapshot.value.dataQuality.gps)
@@ -173,7 +173,7 @@ assertNull(coordinator.snapshot.value.metrics.paceSecPerKm)
 
 上述断言分别放在真实 sample/tick 测试夹具内，保持现有距离与心率算法；非法样本不算已取得有效数据。定向运行 `--tests '*RunningDataPipelineTest' --tests '*AppCoordinatorTest' --tests '*BridgeCodecTest'`，记录预期失败。
 
-- [ ] **Step 2: 最小数据实现。** 无新增 samples 订阅。流水在输出 frame 时报告已取得有效样本；Coordinator 在当前会话 OR 累积 seen 标记，不因暂停／恢复重建流水变回初次 waiting。暂停 HR 用现有 `processPausedHeartRate` 的有效值保留 seen 状态，GPS 保留暂停时观察值；新跑和进程恢复清观察，不推测恢复前数据新鲜。只有可用的 HR 才在指标区域显示 bpm。
+- [x] **Step 2: 最小数据实现。** 无新增 samples 订阅。流水在输出 frame 时报告已取得有效样本；Coordinator 在当前会话 OR 累积 seen 标记，不因暂停／恢复重建流水变回初次 waiting。暂停 HR 用现有 `processPausedHeartRate` 的有效值保留 seen 状态，GPS 保留暂停时观察值；新跑和进程恢复清观察，不推测恢复前数据新鲜。只有可用的 HR 才在指标区域显示 bpm。
 
 ```kotlin
 val gps = when {
@@ -189,7 +189,7 @@ val heartRate = when {
 }
 ```
 
-- [ ] **Step 3: 先写 Web RED，再同批接线。** GPS waiting 显示“等待定位”，stale 显示“定位暂未更新”；HR waiting 显示“等待心率”，stale 显示“心率暂未更新”；not_available 保留无手环文案。多个状态与已有安全提示并存，连接 badge 仍取 wearable.state，不把 dataQuality 转成蓝牙错误。
+- [x] **Step 3: 先写 Web RED，再同批接线。** GPS waiting 显示“等待定位”，stale 显示“定位暂未更新”；HR waiting 显示“等待心率”，stale 显示“心率暂未更新”；not_available 保留无手环文案。多个状态与已有安全提示并存，连接 badge 仍取 wearable.state，不把 dataQuality 转成蓝牙错误。
 
 ```typescript
 expect(screen.getByText('定位暂未更新')).toBeInTheDocument();
@@ -208,7 +208,7 @@ dataQuality: z.object({
 
 从 frontend 目录运行 `corepack pnpm test:unit src/features/running/RunningPage.test.tsx src/bridge/schemas.test.ts` 观察 RED；同步 Kotlin wire/mapper 与全部严格 fixture 后 GREEN，不能用 optional 新字段或全局宽松解码掩盖缺失。
 
-- [ ] **Step 4: 完整门禁与交付。**
+- [x] **Step 4: 完整门禁与交付。**
 
 ```powershell
 $env:JAVA_HOME='C:/Users/fangr/.jdks/ms-17.0.20'
@@ -225,7 +225,7 @@ preBuild 应执行前端全量检查、测试与构建。统计当前 XML 测试
 - [x] 接口一致：观察 generation 与 pipeline/runGeneration 分离；短暂恢复换连续 fault id 但保留 episode；root dataQuality 与 wearable.state 分开；SpeechNoticeToken 只作用于其请求。
 - [x] 占位扫描：所有数值、类型、主要算法、测试断言和命令已给出，无等待用户补全的实现项。
 - [x] Task 1 完成。
-- [ ] Task 2 完成。
+- [x] Task 2 完成。
 
 初始基线：`0a63fa8`；心率第一批已通过 658 JVM／102 前端，本计划必须另取新代码验证结果。
 
@@ -235,3 +235,13 @@ preBuild 应执行前端全量检查、测试与构建。统计当前 XML 测试
 - 独立复审发现关闭后旧 collector 等锁返回仍可刷新，补真实多线程交错测试，RED 为快照 revision 期望 7、实际 8。增加锁内关闭标记后修复，定点复审确认原 P2 关闭，无剩余 Important／Critical。
 - 最终 JVM 全量重新运行：72 个套件，686 项，失败／错误／跳过均为 0。前端尚未修改，双 APK 门禁在 Task 2 执行。
 - 未安装、未试听、未联网调用；14 音频内容未变，旧四份取证／语音文档未纳入提交。
+
+### Task 2 实绩（2026-09-11）
+
+- 流水与 Coordinator 行为 RED：70 项中 6 项失败；Kotlin 契约 RED：7 项中 1 项失败；前端契约／页面 RED：74 项中 3 项失败。实现后全部通过。
+- 在原单一采样归约回调记录已接收样本，覆盖首次帧前暂停、有效零米、非法样本不推进源时间戳、首次帧已过期、暂停后首次 HR、暂停／恢复保留 seen、新跑与进程恢复重置。无新增 samples 消费者。
+- 独立复审发现两个 P2：暂停 GPS 比较跨时钟域、快速继续再暂停时旧 HR 质量可能永久 fresh。补充 900,000 毫秒时钟偏移及快速切换测试，RED 为 61 项中 2 项失败。GPS 新鲜度改由管道使用自身时钟查询；暂停按本次 seed 建立 HR 质量，恢复清指标时同步清 fresh。复审确认全部关闭，无剩余 Important／Critical。
+- 最终完整门禁重新执行成功：72 个 JVM 套件／696 项，105 项前端测试，失败／错误／跳过均为 0；前端 lint、format、typecheck、build、bundle 验证通过；主 APK 与测试 APK 均构建成功。测试 APK 仅构建，未在手机执行 instrumentation。
+- 双 APK 原签名一致：`ebad2b92cff0324810062be3e8116645cfd352780ad79141be61be148774c603`；14 条原音频哈希一致，主／测试包凭据审计均无发现。
+- 主 APK SHA256：`ed863a882c21ae0b80c45c05b328715d62e37b5a66484d6ffdd416460bb1ef25`；测试 APK SHA256：`ada45aad6bc6f2a01a2562ec6447493143d0423a01ef5cdf5f9a4d1428c53ffd`。
+- Task 1 已提交 `e710ce7`；本批原地提交、不 push。尚未安装、未联网生成或试听；真实户外弱定位、锁屏、故障恢复仍须真机验收。DeepSeek 私密配置／专属接入为下一批，不使用聊天中的密钥。

@@ -105,6 +105,12 @@ export const appSnapshotSchema: z.ZodType<AppSnapshot> = z
       .strict(),
     theme: z.enum(['morning', 'night']),
     motionPolicy: z.enum(['expressive', 'balanced', 'reduced', 'off']),
+    dataQuality: z
+      .object({
+        gps: z.enum(['waiting', 'fresh', 'stale']),
+        heartRate: z.enum(['not_available', 'waiting', 'fresh', 'stale']),
+      })
+      .strict(),
     safetyState: z
       .object({
         level: z.enum(['normal', 'warning', 'emergency']),
@@ -290,6 +296,7 @@ const readyEnvelopeSchema = z
           z.literal('history.pagination'),
           z.literal('settings.v1'),
           z.literal('heart-rate-alerts.v1'),
+          z.literal('data-quality.v1'),
         ]),
         snapshot: appSnapshotSchema,
       })

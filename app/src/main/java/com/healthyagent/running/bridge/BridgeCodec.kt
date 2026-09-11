@@ -90,6 +90,7 @@ object BridgeCodec {
                 "history.pagination",
                 "settings.v1",
                 "heart-rate-alerts.v1",
+                "data-quality.v1",
             ),
         )
         validateSnapshotValue(value.snapshot)
@@ -118,6 +119,8 @@ object BridgeCodec {
         requireNonNegative(value.session.targetDistanceMeters)
 
         require(value.metrics.heartRate == null || value.metrics.heartRate >= 0)
+        require(value.dataQuality.gps in setOf("waiting", "fresh", "stale"))
+        require(value.dataQuality.heartRate in setOf("not_available", "waiting", "fresh", "stale"))
         requireNonNegative(value.metrics.paceSecPerKm)
         require(value.metrics.cadence == null || value.metrics.cadence >= 0)
         requireNonNegative(value.metrics.strideLengthCm)
@@ -365,6 +368,7 @@ private data class AppSnapshotWire(
     val wearable: WearableWire,
     val session: SessionWire,
     val metrics: MetricsWire,
+    val dataQuality: DataQualityWire,
     val completedRun: CompletedRunWire?,
     val persistenceState: String,
     val healthSync: HealthSyncWire,
@@ -375,6 +379,9 @@ private data class AppSnapshotWire(
     val motionPolicy: String,
     val safetyState: SafetyStateWire,
 )
+
+@Serializable
+private data class DataQualityWire(val gps: String, val heartRate: String)
 
 @Serializable
 private data class ConnectionWire(

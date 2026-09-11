@@ -36,6 +36,8 @@ data class MetricsFrame(
 
     // 心率质量与总数据质量分离：手机 GPS 正常时，手环心率仍可能陈旧。
     val isHeartRateFresh: Boolean = isDataFresh,
+    val hasDistanceSample: Boolean = isDataFresh,
+    val hasHeartRateSample: Boolean = heartRate != null || heartRateSmoothed != null,
 )
 
 /**

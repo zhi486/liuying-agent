@@ -5,6 +5,7 @@
   "sentAt": "2026-08-26T12:00:02Z",
   "payload": {
     "revision": 7,
+    "dataQuality": { "gps": "fresh", "heartRate": "fresh" },
     "generatedAt": "2026-08-26T12:00:02Z",
     "connection": {
       "state": "connected",

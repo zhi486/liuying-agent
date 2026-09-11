@@ -22,6 +22,56 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RunningDataPipelineTest {
+    @Test fun `质量标记区分从未收到与首次出帧时已过期的零米及心率`() = runTest {
+        val samples = sampleFlow()
+        val ticks = tickFlow()
+        pipeline.process(samples, ticks).test {
+            ticks.emit(0)
+            val waiting = awaitItem()
+            assertFalse(waiting.hasDistanceSample)
+            assertFalse(waiting.hasHeartRateSample)
+            emit(samples, SampleType.DISTANCE, 0.0)
+            emit(samples, SampleType.HEART_RATE, 140.0)
+            runCurrent()
+            nowMillis = 5_000
+            ticks.emit(nowMillis)
+            val expired = awaitItem()
+            assertTrue(expired.hasDistanceSample)
+            assertTrue(expired.hasHeartRateSample)
+            assertFalse(expired.isDataFresh)
+            assertFalse(expired.isHeartRateFresh)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test fun `非法样本不建立质量基线且不能阻止较早时间戳的有效样本`() = runTest {
+        val samples = sampleFlow()
+        val ticks = tickFlow()
+        pipeline.process(samples, ticks).test {
+            listOf(Double.NaN, Double.POSITIVE_INFINITY, -1.0).forEach {
+                samples.emit(sample(10_000, SampleType.DISTANCE, it))
+            }
+            listOf(Double.NaN, 0.0, 301.0, 140.5).forEach {
+                samples.emit(sample(10_000, SampleType.HEART_RATE, it))
+            }
+            runCurrent()
+            ticks.emit(0)
+            val invalid = awaitItem()
+            assertFalse(invalid.hasDistanceSample)
+            assertFalse(invalid.hasHeartRateSample)
+            assertNull(invalid.heartRate)
+            assertEquals(0.0, invalid.distanceMeters, 0.0)
+            emit(samples, SampleType.DISTANCE, 0.0)
+            emit(samples, SampleType.HEART_RATE, 140.0)
+            runCurrent()
+            ticks.emit(0)
+            val valid = awaitItem()
+            assertTrue(valid.isDataFresh)
+            assertTrue(valid.isHeartRateFresh)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private var nowMillis = 0L
     private val pipeline = RunningDataPipeline(
         initialConfig = RunConfig(llmEnabled = false),

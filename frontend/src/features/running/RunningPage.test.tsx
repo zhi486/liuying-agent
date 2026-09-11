@@ -9,6 +9,7 @@ import { formatPace } from './formatters';
 import { RunningPage } from './RunningPage';
 
 const baseSnapshot: AppSnapshot = {
+  dataQuality: { gps: 'waiting', heartRate: 'waiting' },
   revision: 1,
   generatedAt: '2026-09-01T12:00:00Z',
   connection: {
@@ -92,6 +93,35 @@ function renderRunning(snapshot?: AppSnapshot) {
 }
 
 describe('跑步页真实数据', () => {
+  it('定位与心率同时停更仍显示手环已连接且保留安全提示', () => {
+    renderRunning(
+      createSnapshot({
+        session: { ...baseSnapshot.session, state: 'running' },
+        wearable: { ...baseSnapshot.wearable, state: 'connected' },
+        dataQuality: { gps: 'stale', heartRate: 'stale' },
+        metrics: { ...baseSnapshot.metrics, heartRate: 190, hrZone: 'z5' },
+        safetyState: { level: 'warning', message: '请留意身体感受' },
+      }),
+    );
+    expect(screen.getByText('定位暂未更新')).toBeVisible();
+    expect(screen.getByText('心率暂未更新')).toBeVisible();
+    expect(screen.getByText('Keep B5 已连接')).toBeVisible();
+    expect(screen.getByText('请留意身体感受')).toBeVisible();
+    expect(screen.queryByRole('meter')).not.toBeInTheDocument();
+  });
+
+  it('开跑尚无样本显示等待而不是中断', () => {
+    renderRunning(
+      createSnapshot({
+        session: { ...baseSnapshot.session, state: 'running' },
+        dataQuality: { gps: 'waiting', heartRate: 'waiting' },
+      }),
+    );
+    expect(screen.getByText('等待定位')).toBeVisible();
+    expect(screen.getByText('等待心率')).toBeVisible();
+    expect(screen.queryByText('定位暂未更新')).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     vi.restoreAllMocks();
     useBridgeStore.setState({ status: 'unavailable', snapshot: null });
@@ -226,6 +256,7 @@ describe('跑步页真实数据', () => {
   it('分别展示 GPS 主源和未连接的 Keep B5', () => {
     renderRunning(
       createSnapshot({
+        dataQuality: { gps: 'fresh', heartRate: 'waiting' },
         connection: {
           state: 'connected',
           deviceName: '手机 GPS',
@@ -354,6 +385,7 @@ describe('跑步页真实数据', () => {
           heartRate: 152,
           hrZone: 'z3',
         },
+        dataQuality: { gps: 'waiting', heartRate: 'fresh' },
         settings: {
           ...baseSnapshot.settings,
           maxHeartRate: 190,

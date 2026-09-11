@@ -35,6 +35,28 @@ function fixtureByType(type: string): unknown {
 }
 
 describe('Bridge v1 schema', () => {
+  it('数据质量支持独立枚举并严格拒绝缺失及未知字段', () => {
+    const envelope = fixtureByType('snapshot') as { payload: Record<string, unknown> };
+    const base = { ...envelope.payload };
+    delete base.dataQuality;
+    for (const gps of ['waiting', 'fresh', 'stale']) {
+      for (const heartRate of ['not_available', 'waiting', 'fresh', 'stale']) {
+        expect(
+          appSnapshotSchema.safeParse({ ...base, dataQuality: { gps, heartRate } }).success,
+        ).toBe(true);
+      }
+    }
+    expect(appSnapshotSchema.safeParse(base).success).toBe(false);
+    for (const dataQuality of [
+      { heartRate: 'fresh' },
+      { gps: 'lost', heartRate: 'fresh' },
+      { gps: 'fresh', heartRate: 'lost' },
+      { gps: 'fresh', heartRate: 'fresh', connected: true },
+    ]) {
+      expect(appSnapshotSchema.safeParse({ ...base, dataQuality }).success).toBe(false);
+    }
+  });
+
   it('接受心率警戒空值与整数边界', () => {
     for (const threshold of [null, 80, 240]) {
       for (const interval of [30, 300]) {

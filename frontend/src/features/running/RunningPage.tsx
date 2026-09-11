@@ -360,7 +360,8 @@ export function RunningPage() {
   }
 
   const paused = displayPhase === 'paused';
-  const heartRate = nativeSnapshot?.metrics.heartRate ?? null;
+  const heartRate =
+    nativeSnapshot?.dataQuality.heartRate === 'fresh' ? nativeSnapshot.metrics.heartRate : null;
   const maxHeartRate = nativeSnapshot?.settings.maxHeartRate ?? null;
   const intensityPercent =
     heartRate != null && maxHeartRate != null && maxHeartRate > 0
@@ -385,15 +386,31 @@ export function RunningPage() {
           <div>
             <span>定位主源</span>
             <strong>
-              {!paused && !isPreview && nativeSnapshot?.metrics.isDataFresh === false
-                ? 'GPS 数据暂不可用，计时继续'
-                : connectionText(nativeSnapshot?.connection, isPreview)}
+              {!isPreview && nativeSnapshot?.dataQuality.gps === 'waiting'
+                ? '等待定位'
+                : !isPreview && nativeSnapshot?.dataQuality.gps === 'stale'
+                  ? '定位暂未更新'
+                  : connectionText(nativeSnapshot?.connection, isPreview)}
             </strong>
           </div>
           <div>
             <span>Keep B5</span>
             <strong>{wearableText(nativeSnapshot?.wearable, isPreview)}</strong>
           </div>
+          {!isPreview && nativeSnapshot?.wearable.supported && (
+            <div>
+              <span>心率数据</span>
+              <strong>
+                {nativeSnapshot.dataQuality.heartRate === 'waiting'
+                  ? '等待心率'
+                  : nativeSnapshot.dataQuality.heartRate === 'stale'
+                    ? '心率暂未更新'
+                    : nativeSnapshot.dataQuality.heartRate === 'fresh'
+                      ? '心率正常更新'
+                      : '心率不可用'}
+              </strong>
+            </div>
+          )}
         </div>
 
         <div className={styles.activePlan} aria-label="本次冻结目标">
@@ -544,11 +561,12 @@ function SafetyNotice({
 }
 
 function buildLiveMetrics(snapshot: AppSnapshot | null) {
+  const heartRate = snapshot?.dataQuality.heartRate === 'fresh' ? snapshot.metrics.heartRate : null;
   return [
     {
       label: '心率',
-      value: snapshot?.metrics.heartRate?.toString() ?? '--',
-      unit: snapshot?.metrics.heartRate == null ? '' : 'bpm',
+      value: heartRate?.toString() ?? '--',
+      unit: heartRate == null ? '' : 'bpm',
     },
     {
       label: '步频',

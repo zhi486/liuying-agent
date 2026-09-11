@@ -21,6 +21,10 @@ export type BridgeErrorCode =
   | 'INTERNAL_ERROR';
 
 export interface AppSnapshot {
+  dataQuality: {
+    gps: 'waiting' | 'fresh' | 'stale';
+    heartRate: 'not_available' | 'waiting' | 'fresh' | 'stale';
+  };
   revision: number;
   generatedAt: string;
   connection: {
@@ -158,7 +162,13 @@ export interface HelloPayload {
 export interface ReadyPayload {
   helloId: string;
   buildId: string;
-  capabilities: ['snapshot.v1', 'history.pagination', 'settings.v1', 'heart-rate-alerts.v1'];
+  capabilities: [
+    'snapshot.v1',
+    'history.pagination',
+    'settings.v1',
+    'heart-rate-alerts.v1',
+    'data-quality.v1',
+  ];
   snapshot: AppSnapshot;
 }
 

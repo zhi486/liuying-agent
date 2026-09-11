@@ -66,6 +66,26 @@ class BridgeCodecInvalidFixtureTest(private val resource: String) {
 }
 
 class BridgeCodecTest {
+    @Test fun `数据质量接受全部枚举且拒绝缺失未知枚举及额外字段`() {
+        val raw = checkNotNull(javaClass.getResource("/v1/fixtures/valid/snapshot.json")).readText()
+        val envelope = Json.parseToJsonElement(raw).jsonObject
+        val payload = envelope.getValue("payload").jsonObject
+        fun withQuality(quality: JsonObject?) = JsonObject(envelope + ("payload" to JsonObject(
+            (payload - "dataQuality") + (quality?.let { mapOf("dataQuality" to it) } ?: emptyMap()),
+        ))).toString()
+        for (gps in listOf("waiting", "fresh", "stale")) {
+            for (heartRate in listOf("not_available", "waiting", "fresh", "stale")) {
+                assertTrue(BridgeCodec.decode(withQuality(JsonObject(mapOf(
+                    "gps" to JsonPrimitive(gps), "heartRate" to JsonPrimitive(heartRate),
+                )))) is BridgeDecodeResult.Accepted)
+            }
+        }
+        val valid = mapOf("gps" to JsonPrimitive("fresh"), "heartRate" to JsonPrimitive("fresh"))
+        listOf(null, JsonObject(valid - "gps"), JsonObject(valid + ("gps" to JsonPrimitive("lost"))),
+            JsonObject(valid + ("heartRate" to JsonPrimitive("lost"))),
+            JsonObject(valid + ("connected" to JsonPrimitive(true))),
+        ).forEach { assertTrue(BridgeCodec.decode(withQuality(it)) is BridgeDecodeResult.Rejected) }
+    }
 
     @Test
     fun `心率警戒更新接受空值和合法整数边界`() {

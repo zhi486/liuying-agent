@@ -38,6 +38,9 @@ class RunningDataPipeline(
         this.config = config
     }
 
+    /** 接收时刻只与本管道的时钟比较，不能混用含休眠差值的协调器时钟。 */
+    fun isReceiptFresh(receivedAtMillis: Long?): Boolean = isFresh(receivedAtMillis, monotonicClockMillis())
+
     companion object {
         const val HR_SMOOTH_WINDOW = 5
         const val PACE_WINDOW_SEC = 10
@@ -91,6 +94,7 @@ class RunningDataPipeline(
     fun process(
         samples: Flow<SensorSample>,
         ticks: Flow<Long> = tickSource ?: defaultTicks(),
+        onOrderedDistanceReceived: (receivedAtMillis: Long) -> Unit = {},
         onOrderedHeartRateReceived: (sample: SensorSample, receivedAtMillis: Long) -> Unit = { _, _ -> },
     ): Flow<MetricsFrame> = flow {
         // 状态位于冷流内部，每次 collect 都从全新窗口开始。
@@ -101,6 +105,7 @@ class RunningDataPipeline(
                     state = state,
                     sample = event.value,
                     receivedAtMillis = event.receivedAtMillis,
+                    onOrderedDistanceReceived = onOrderedDistanceReceived,
                     onOrderedHeartRateReceived = onOrderedHeartRateReceived,
                 )
 
@@ -152,8 +157,15 @@ class RunningDataPipeline(
         state: PipelineState,
         sample: SensorSample,
         receivedAtMillis: Long,
+        onOrderedDistanceReceived: (receivedAtMillis: Long) -> Unit,
         onOrderedHeartRateReceived: (sample: SensorSample, receivedAtMillis: Long) -> Unit,
     ) {
+        // 无效值不能建立接收基线，也不能推进源时间戳而挡住后续有效值。
+        if (sample.type == SampleType.DISTANCE && (!sample.value.isFinite() || sample.value < 0)) return
+        if (sample.type == SampleType.HEART_RATE &&
+            (!sample.value.isFinite() || sample.value != sample.value.toInt().toDouble() ||
+                sample.value.toInt() !in 1..300)
+        ) return
         val previousSourceTimestamp = state.lastSourceTimestampByType[sample.type]
         if (previousSourceTimestamp != null && sample.timestampMillis < previousSourceTimestamp) return
         state.lastSourceTimestampByType[sample.type] = sample.timestampMillis
@@ -173,7 +185,10 @@ class RunningDataPipeline(
                 state.lastCadenceReceiptMillis = receivedAtMillis
             }
 
-            SampleType.DISTANCE -> acceptDistance(state, sample.value, receivedAtMillis)
+            SampleType.DISTANCE -> {
+                acceptDistance(state, sample.value, receivedAtMillis)
+                onOrderedDistanceReceived(receivedAtMillis)
+            }
             SampleType.STEPS -> state.totalSteps = sample.value.toLong()
             else -> Unit
         }
@@ -254,6 +269,8 @@ class RunningDataPipeline(
             totalSteps = state.totalSteps,
             isDataFresh = isDataFresh,
             isHeartRateFresh = isHeartRateFresh,
+            hasDistanceSample = state.lastDistanceReceiptMillis != null,
+            hasHeartRateSample = state.lastHeartRateReceiptMillis != null,
             hrPaceRatio = heartRatePaceRatio,
         )
     }
