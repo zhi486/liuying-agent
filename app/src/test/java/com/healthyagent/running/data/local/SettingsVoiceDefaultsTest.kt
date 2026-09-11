@@ -5,12 +5,26 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
 class SettingsVoiceDefaultsTest {
+    @Test fun `DeepSeek开关不继承旧LLM开关且只写新键`() = runTest {
+        val oldKey = booleanPreferencesKey("llm_enabled")
+        val newKey = booleanPreferencesKey("deepseek_companion_enabled")
+        val store = MemoryStore(preferencesOf(oldKey to true))
+        val repository = SettingsDataStore(store)
+        assertFalse(repository.current().llmEnabled)
+        repository.update(SettingsPatch(llmEnabled = true))
+        assertEquals(true, store.data.value[newKey])
+        repository.update(SettingsPatch(llmEnabled = false))
+        assertEquals(true, store.data.value[oldKey])
+        assertEquals(false, store.data.value[newKey])
+    }
+
     @Test fun `空偏好与默认快照不提供私人声线`() = runTest {
         assertTrue(SettingsSnapshot().fishReferenceId.isEmpty())
         assertTrue(SettingsDataStore(MemoryStore()).current().fishReferenceId.isEmpty())

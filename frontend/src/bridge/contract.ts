@@ -7,6 +7,7 @@ export type CommandName =
   | 'run.stop'
   | 'history.query'
   | 'settings.query'
+  | 'settings.configureDeepseek'
   | 'settings.update'
   | 'permission.request';
 
@@ -75,6 +76,7 @@ export interface AppSnapshot {
     fishReferenceId: string;
     fishApiKeyConfigured: boolean;
     llmApiKeyConfigured: boolean;
+    deepseekApiKeyConfigured: boolean;
     themePreference: 'system' | 'morning' | 'night';
     motionPreference: 'system' | 'expressive' | 'balanced' | 'reduced' | 'off';
   };
@@ -168,6 +170,7 @@ export interface ReadyPayload {
     'settings.v1',
     'heart-rate-alerts.v1',
     'data-quality.v1',
+    'deepseek-companion.v1',
   ];
   snapshot: AppSnapshot;
 }
@@ -181,6 +184,7 @@ export interface CommandBodyMap {
   'run.stop': Record<string, never>;
   'history.query': { page: number; pageSize: number };
   'settings.query': Record<string, never>;
+  'settings.configureDeepseek': Record<string, never>;
   'settings.update': SettingsUpdateBody;
   'permission.request': { kind: 'runningSensors' };
 }

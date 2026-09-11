@@ -35,6 +35,45 @@ function fixtureByType(type: string): unknown {
 }
 
 describe('Bridge v1 schema', () => {
+  it('DeepSeek 配置只接受无参数命令且配置状态严格为布尔', () => {
+    const command = {
+      contractVersion: 1,
+      type: 'command',
+      id: '00000000-0000-4000-8000-000000000011',
+      sentAt: '2026-09-11T12:00:00Z',
+      payload: {
+        helloId: '00000000-0000-4000-8000-000000000001',
+        name: 'settings.configureDeepseek',
+        body: {},
+      },
+    };
+    expect(webToNativeEnvelopeSchema.safeParse(command).success).toBe(true);
+    expect(
+      webToNativeEnvelopeSchema.safeParse({
+        ...command,
+        payload: { ...command.payload, body: { apiKey: 'test-only-value' } },
+      }).success,
+    ).toBe(false);
+    const envelope = fixtureByType('snapshot') as {
+      payload: { settings: Record<string, unknown> };
+    };
+    const settings = { ...envelope.payload.settings };
+    delete settings.deepseekApiKeyConfigured;
+    expect(appSnapshotSchema.safeParse({ ...envelope.payload, settings }).success).toBe(false);
+    expect(
+      appSnapshotSchema.safeParse({
+        ...envelope.payload,
+        settings: { ...settings, deepseekApiKeyConfigured: true },
+      }).success,
+    ).toBe(true);
+    expect(
+      appSnapshotSchema.safeParse({
+        ...envelope.payload,
+        settings: { ...settings, deepseekApiKeyConfigured: 'true' },
+      }).success,
+    ).toBe(false);
+  });
+
   it('数据质量支持独立枚举并严格拒绝缺失及未知字段', () => {
     const envelope = fixtureByType('snapshot') as { payload: Record<string, unknown> };
     const base = { ...envelope.payload };
@@ -188,6 +227,7 @@ describe('Bridge v1 schema', () => {
         fishReferenceId: 'default',
         fishApiKeyConfigured: false,
         llmApiKeyConfigured: false,
+        deepseekApiKeyConfigured: false,
         themePreference: 'night',
         motionPreference: 'reduced',
       },

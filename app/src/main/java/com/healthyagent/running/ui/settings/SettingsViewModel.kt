@@ -2,7 +2,8 @@ package com.healthyagent.running.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.healthyagent.running.ai.LlmConfig
+import com.healthyagent.running.coordinator.AppCoordinator
+import com.healthyagent.running.coordinator.CommandOutcome
 import com.healthyagent.running.data.local.NullableSettingUpdate
 import com.healthyagent.running.data.local.SettingsPatch
 import com.healthyagent.running.data.local.SettingsRepository
@@ -15,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 /** 迁移期 Compose 设置页的聚合状态适配器。 */
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
+    private val coordinator: AppCoordinator? = null,
 ) : ViewModel() {
 
     private val _targetPaceMin = MutableStateFlow("6")
@@ -123,10 +125,22 @@ class SettingsViewModel(
     private val _fishApiKey = MutableStateFlow("")
     val fishApiKey: StateFlow<String> = _fishApiKey.asStateFlow()
 
-    private val _llmApiKey = MutableStateFlow("")
-    val llmApiKey: StateFlow<String> = _llmApiKey.asStateFlow()
+    private val _deepseekConfigured = MutableStateFlow(false)
+    val deepseekConfigured: StateFlow<Boolean> = _deepseekConfigured.asStateFlow()
+    private val _canConfigureDeepseek = MutableStateFlow(false)
+    val canConfigureDeepseek: StateFlow<Boolean> = _canConfigureDeepseek.asStateFlow()
+    private val _deepseekError = MutableStateFlow<String?>(null)
+    val deepseekError: StateFlow<String?> = _deepseekError.asStateFlow()
 
     init {
+        coordinator?.let { app -> viewModelScope.launch {
+            app.snapshot.collect { snapshot ->
+                _llmEnabled.value = snapshot.settings.llmEnabled
+                _deepseekConfigured.value = snapshot.settings.deepseekApiKeyConfigured
+                // 恢复是否完成由命令入口实时校验，不能锁存在一次快照中。
+                _canConfigureDeepseek.value = snapshot.session.state !in setOf("running", "paused", "preparing")
+            }
+        } }
         viewModelScope.launch {
             settingsRepository.settings.collect { snapshot ->
                 snapshot.targetPaceSecPerKm?.let { pace ->
@@ -140,11 +154,8 @@ class SettingsViewModel(
                 if (!hrIntervalDirty) _hrAlertRepeatIntervalSec.value = snapshot.hrAlertRepeatIntervalSec.toString()
                 _ttsEnabled.value = snapshot.ttsEnabled
                 _ttsMinInterval.value = snapshot.ttsMinIntervalSec.toString()
-                _llmEnabled.value = snapshot.llmEnabled
                 _mockScenario.value = snapshot.mockScenario
                 _fishApiKey.value = snapshot.fishApiKey
-                _llmApiKey.value = snapshot.llmApiKey
-                LlmConfig.apiKey = snapshot.llmApiKey
             }
         }
     }
@@ -200,10 +211,15 @@ class SettingsViewModel(
     }
 
     fun setLlmEnabled(enabled: Boolean) {
-        _llmEnabled.value = enabled
         viewModelScope.launch {
-            settingsRepository.update(SettingsPatch(llmEnabled = enabled))
+            val result = coordinator?.updateSettings(SettingsPatch(llmEnabled = enabled))
+            _deepseekError.value = (result as? CommandOutcome.Rejected)?.message
         }
+    }
+
+    fun configureDeepseek() {
+        val result = coordinator?.requestDeepseekConfiguration()
+        _deepseekError.value = (result as? CommandOutcome.Rejected)?.message
     }
 
     fun setMockScenario(scenario: String) {
@@ -221,12 +237,4 @@ class SettingsViewModel(
         }
     }
 
-    fun setLlmApiKey(key: String) {
-        _llmApiKey.value = key
-        if (key.length > 512) return
-        LlmConfig.apiKey = key
-        viewModelScope.launch {
-            settingsRepository.update(SettingsPatch(llmApiKey = key))
-        }
-    }
 }

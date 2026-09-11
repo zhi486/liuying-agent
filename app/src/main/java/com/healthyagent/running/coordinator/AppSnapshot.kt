@@ -141,6 +141,7 @@ data class SettingsContractSnapshot(
     val llmApiKeyConfigured: Boolean,
     val themePreference: String,
     val motionPreference: String,
+    val deepseekApiKeyConfigured: Boolean = false,
 ) {
     companion object {
         fun from(config: RunConfig): SettingsContractSnapshot = SettingsContractSnapshot(

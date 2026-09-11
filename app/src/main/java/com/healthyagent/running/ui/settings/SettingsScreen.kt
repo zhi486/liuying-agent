@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -47,6 +48,8 @@ fun SettingsScreen(
 ) {
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
     val llmEnabled by viewModel.llmEnabled.collectAsState()
+    val deepseekConfigured by viewModel.deepseekConfigured.collectAsState()
+    val canConfigureDeepseek by viewModel.canConfigureDeepseek.collectAsState()
     val mockScenario by viewModel.mockScenario.collectAsState()
 
     Scaffold(
@@ -177,21 +180,18 @@ fun SettingsScreen(
             HorizontalDivider()
 
             // ── AI 教练 ──
-            SectionHeader("AI 教练")
+            SectionHeader("DeepSeek 实时陪伴")
 
-            SwitchRow("启用 LLM 深度分析", checked = llmEnabled) {
+            SwitchRow("AI 陪伴", checked = llmEnabled, enabled = deepseekConfigured) {
                 viewModel.setLlmEnabled(it)
             }
 
-            OutlinedTextField(
-                value = viewModel.llmApiKey.collectAsState().value,
-                onValueChange = { viewModel.setLlmApiKey(it) },
-                label = { Text("Anthropic API Key") },
-                supportingText = { Text("直连 Claude API，户外跑步也能用") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = llmEnabled,
-            )
+            Text(if (!deepseekConfigured) "未配置" else if (llmEnabled) "AI 陪伴已启用，尚未验证连接" else "已配置，AI 陪伴关闭")
+            OutlinedButton(onClick = viewModel::configureDeepseek, enabled = canConfigureDeepseek) {
+                Text(if (deepseekConfigured) "更换 DeepSeek 密钥" else "配置 DeepSeek 密钥")
+            }
+            Text("密钥仅在私密窗口填写，保存不会自动开启、检测或试听。跑步及暂停期间不可更换。")
+            viewModel.deepseekError.collectAsState().value?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             Spacer(modifier = Modifier.height(20.dp))
             HorizontalDivider()
@@ -242,7 +242,7 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
+private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean = true, onToggle: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -251,6 +251,6 @@ private fun SwitchRow(label: String, checked: Boolean, onToggle: (Boolean) -> Un
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onToggle)
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onToggle)
     }
 }

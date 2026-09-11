@@ -81,6 +81,7 @@ object BridgeCodec {
     }
 
     private fun validateReady(payload: JsonObject) {
+        validateDeepseekConfiguration(payload.getValue("snapshot").jsonObject)
         val value = json.decodeFromJsonElement<ReadyPayloadWire>(payload)
         requireCanonicalUuidV4(value.helloId)
         require(value.buildId.isNotBlank())
@@ -91,13 +92,20 @@ object BridgeCodec {
                 "settings.v1",
                 "heart-rate-alerts.v1",
                 "data-quality.v1",
+                "deepseek-companion.v1",
             ),
         )
         validateSnapshotValue(value.snapshot)
     }
 
     private fun validateSnapshot(payload: JsonObject) {
+        validateDeepseekConfiguration(payload)
         validateSnapshotValue(json.decodeFromJsonElement<AppSnapshotWire>(payload))
+    }
+
+    private fun validateDeepseekConfiguration(snapshot: JsonObject) {
+        val value = snapshot.getValue("settings").jsonObject.getValue("deepseekApiKeyConfigured").jsonPrimitive
+        require(!value.isString && value.booleanOrNull != null)
     }
 
     private fun validateSnapshotValue(value: AppSnapshotWire) {
@@ -181,6 +189,7 @@ object BridgeCodec {
             "run.resume",
             "run.stop",
             "settings.query",
+            "settings.configureDeepseek",
             -> require(body.isEmpty())
 
             "history.query" -> {
@@ -458,6 +467,7 @@ private data class SettingsWire(
     val fishReferenceId: String,
     val fishApiKeyConfigured: Boolean,
     val llmApiKeyConfigured: Boolean,
+    val deepseekApiKeyConfigured: Boolean,
     val themePreference: String,
     val motionPreference: String,
 )

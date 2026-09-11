@@ -16,6 +16,7 @@ import com.healthyagent.running.core.model.RunState
 import com.healthyagent.running.core.pipeline.RunningDataPipeline
 import com.healthyagent.running.core.session.RunSessionManager
 import com.healthyagent.running.data.local.SettingsPatch
+import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.data.local.SettingsRepository
 import com.healthyagent.running.data.local.SettingsSnapshot
 import com.healthyagent.running.data.local.toRunConfig
@@ -85,7 +86,43 @@ class AppCoordinator(
     private val pausedHeartRateMonitor: PausedHeartRateMonitor = PausedHeartRateMonitor(),
     private val onVoiceSettingsChanged: (SettingsSnapshot) -> Unit = {},
     private val diagnosticLogger: DiagnosticLogger = NoOpDiagnosticLogger,
+    private val deepseekCredentialsStore: DeepseekCredentialsStore? = null,
 ) {
+    private val _deepseekConfigurationRequest = MutableStateFlow<Long?>(null)
+    val deepseekConfigurationRequest: StateFlow<Long?> = _deepseekConfigurationRequest.asStateFlow()
+    private var deepseekConfigurationGeneration = 0L
+
+    @Synchronized
+    fun requestDeepseekConfiguration(): CommandOutcome {
+        if (isRestoring || sessionManager.currentState in CONFIG_FROZEN_RUN_STATES || _deepseekConfigurationRequest.value != null) {
+            return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "请在跑步结束后配置 DeepSeek，或先关闭已打开的输入窗口")
+        }
+        if (deepseekCredentialsStore == null) return CommandOutcome.Rejected(BridgeErrorCode.RESOURCE_UNAVAILABLE, "私密配置暂不可用")
+        _deepseekConfigurationRequest.value = ++deepseekConfigurationGeneration
+        return CommandOutcome.Accepted
+    }
+
+    @Synchronized
+    fun cancelDeepseekConfiguration(token: Long) {
+        if (_deepseekConfigurationRequest.value == token) _deepseekConfigurationRequest.value = null
+    }
+
+    /** 由原生输入窗口在 IO 线程调用；与开跑、关闭窗口共用同一临界区。 */
+    @Synchronized
+    fun saveDeepseekKey(token: Long, input: String): CommandOutcome {
+        if (_deepseekConfigurationRequest.value != token || isRestoring || sessionManager.currentState in CONFIG_FROZEN_RUN_STATES) {
+            return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "输入窗口已失效，请在跑步结束后重新打开")
+        }
+        if (deepseekCredentialsStore?.save(input) != true) {
+            return CommandOutcome.Rejected(BridgeErrorCode.RESOURCE_UNAVAILABLE, "保存失败：请输入非空、至多 512 字符且不含内部空白的密钥")
+        }
+        speechBus.stop()
+        updateSnapshot { current -> current.copy(settings = voiceSettings?.let(::settingsContract)
+            ?: current.settings.copy(deepseekApiKeyConfigured = true, llmEnabled = false)) }
+        _deepseekConfigurationRequest.value = null
+        return CommandOutcome.Accepted
+    }
+
     private val _snapshot = MutableStateFlow(
         AppSnapshot.initial(runConfig, nowMillis()).copy(
             connection = ConnectionSnapshot(
@@ -245,6 +282,9 @@ class AppCoordinator(
         if (patch.validate().isNotEmpty()) {
             return CommandOutcome.Rejected(BridgeErrorCode.INVALID_MESSAGE, "设置值超出有效范围")
         }
+        if (patch.llmEnabled == true && deepseekCredentialsStore?.configured?.value != true) {
+            return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "请先配置 DeepSeek 密钥")
+        }
 
         return runCatching {
             settingsAcceptanceMutex.withLock {
@@ -329,6 +369,9 @@ class AppCoordinator(
 
     @Synchronized
     fun startRun(): CommandOutcome {
+        if (_deepseekConfigurationRequest.value != null) {
+            return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "请先关闭 DeepSeek 密钥输入窗口")
+        }
         if (isRestoring) {
             return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "正在恢复上次跑步，请稍候")
         }
@@ -541,6 +584,7 @@ class AppCoordinator(
 
     @Synchronized
     fun close() {
+        _deepseekConfigurationRequest.value = null
         wearableAlertsClosed = true
         resetWearableAlerts()
         cancelPipeline()
@@ -684,6 +728,10 @@ class AppCoordinator(
 
     // Flow可能携带已经过期的快照；只把它当通知，在同一临界区重新读取并接纳。
     private suspend fun refreshPersistedSettings(): SettingsSnapshot = settingsAcceptanceMutex.withLock {
+        // 备份或损坏文件可能留下无凭据的 true；清为关闭，避免后来填写时意外启用。
+        if (settingsRepository.current().llmEnabled && deepseekCredentialsStore?.configured?.value != true) {
+            settingsRepository.update(SettingsPatch(llmEnabled = false))
+        }
         settingsRepository.current().also(::acceptPersistedSettings)
     }
 
@@ -716,7 +764,7 @@ class AppCoordinator(
             }
             current.copy(
                 session = session,
-                settings = SettingsContractSnapshot.from(settings),
+                settings = settingsContract(settings),
                 theme = settings.themePreference.toTheme(),
                 motionPolicy = settings.motionPreference.toPolicy(),
             )
@@ -748,8 +796,16 @@ class AppCoordinator(
             "settings",
             BridgeCodec.json.encodeToJsonElement(
                 SettingsContractSnapshot.serializer(),
-                SettingsContractSnapshot.from(settings),
+                settingsContract(settings),
             ).jsonObject,
+        )
+    }
+
+    private fun settingsContract(settings: SettingsSnapshot): SettingsContractSnapshot {
+        val configured = deepseekCredentialsStore?.configured?.value == true
+        return SettingsContractSnapshot.from(settings).copy(
+            deepseekApiKeyConfigured = configured,
+            llmEnabled = settings.llmEnabled && configured,
         )
     }
 

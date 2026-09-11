@@ -26,6 +26,7 @@ import com.healthyagent.running.core.model.SpeechPriority
 import com.healthyagent.running.core.pipeline.RunningDataPipeline
 import com.healthyagent.running.core.session.RunSessionManager
 import com.healthyagent.running.data.local.SettingsPatch
+import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.data.local.NullableSettingUpdate
 import com.healthyagent.running.data.local.SettingsRepository
 import com.healthyagent.running.data.local.SettingsSnapshot
@@ -84,6 +85,12 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
+import androidx.lifecycle.viewModelScope
+import com.healthyagent.running.ui.settings.SettingsViewModel
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.jsonArray
@@ -93,6 +100,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Rule as JunitRule
+import org.junit.rules.TemporaryFolder
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
@@ -102,6 +111,88 @@ import kotlin.time.TestTimeSource
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppCoordinatorTest {
+    @get:JunitRule val deepseekFolder = TemporaryFolder()
+
+    @Test fun `恢复期间拒绝配置且恢复无活动记录后原生入口不会卡在禁用`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val gate = CompletableDeferred<Unit>()
+        val store = DeepseekCredentialsStore(File(deepseekFolder.root, "deepseek/key"))
+        val settings = FakeSettingsRepository()
+        val coordinator = createCoordinator(FakeRunRepository(restoreGate = gate), settingsRepository = settings, deepseekCredentialsStore = store)
+        val viewModel = SettingsViewModel(settings, coordinator)
+        try {
+            runCurrent()
+            assertTrue(coordinator.isRestoring)
+            assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Rejected)
+            gate.complete(Unit)
+            runCurrent()
+            assertEquals(false, coordinator.isRestoring)
+            assertTrue(viewModel.canConfigureDeepseek.value)
+            viewModel.configureDeepseek()
+            assertTrue(coordinator.deepseekConfigurationRequest.value != null)
+        } finally {
+            viewModel.viewModelScope.cancel()
+            coordinator.close()
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test fun `DeepSeek未配不能开启且保存不自动启用也不泄漏到快照`() = runTest {
+        val store = DeepseekCredentialsStore(File(deepseekFolder.root, "deepseek/key"))
+        val settings = FakeSettingsRepository(SettingsSnapshot(llmApiKey = "old-provider-marker"))
+        val coordinator = createCoordinator(FakeRunRepository(), settingsRepository = settings, deepseekCredentialsStore = store)
+        assertTrue(coordinator.updateSettings(SettingsPatch(llmEnabled = true)) is CommandOutcome.Rejected)
+        assertEquals(false, coordinator.snapshot.value.settings.deepseekApiKeyConfigured)
+        assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Accepted)
+        val token = coordinator.deepseekConfigurationRequest.value!!
+        assertTrue(coordinator.saveDeepseekKey(token, "test-only-deepseek") is CommandOutcome.Accepted)
+        assertNull(coordinator.deepseekConfigurationRequest.value)
+        assertEquals(true, coordinator.snapshot.value.settings.deepseekApiKeyConfigured)
+        assertEquals(false, coordinator.snapshot.value.settings.llmEnabled)
+        assertEquals("old-provider-marker", settings.current().llmApiKey)
+        assertTrue(coordinator.updateSettings(SettingsPatch(llmEnabled = true)) is CommandOutcome.AcceptedWithData)
+        assertEquals(true, coordinator.snapshot.value.settings.llmEnabled)
+        assertEquals(false, coordinator.querySettings().toString().contains("test-only-deepseek"))
+        assertEquals(false, coordinator.snapshot.value.toString().contains("test-only-deepseek"))
+        coordinator.close()
+    }
+
+    @Test fun `配置窗口与开跑互斥且旧令牌不能保存或取消新窗口`() = runTest {
+        val store = DeepseekCredentialsStore(File(deepseekFolder.root, "deepseek/key"))
+        val coordinator = createCoordinator(FakeRunRepository(), deepseekCredentialsStore = store)
+        assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Accepted)
+        val first = coordinator.deepseekConfigurationRequest.value!!
+        assertTrue(coordinator.startRun() is CommandOutcome.Rejected)
+        coordinator.cancelDeepseekConfiguration(first)
+        assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Accepted)
+        val second = coordinator.deepseekConfigurationRequest.value!!
+        coordinator.cancelDeepseekConfiguration(first)
+        assertEquals(second, coordinator.deepseekConfigurationRequest.value)
+        assertTrue(coordinator.saveDeepseekKey(first, "test-only-stale") is CommandOutcome.Rejected)
+        coordinator.cancelDeepseekConfiguration(second)
+        assertTrue(coordinator.startRun() is CommandOutcome.Accepted)
+        assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Rejected)
+        coordinator.pauseRun()
+        assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Rejected)
+        assertTrue(coordinator.updateSettings(SettingsPatch(llmEnabled = false)) is CommandOutcome.AcceptedWithData)
+        assertEquals(false, store.configured.value)
+        coordinator.close()
+    }
+
+    @Test fun `无效密钥保持原值与窗口且缺凭据时旧true偏好不代表启用`() = runTest {
+        val store = DeepseekCredentialsStore(File(deepseekFolder.root, "deepseek/key"))
+        val coordinator = createCoordinator(FakeRunRepository(), deepseekCredentialsStore = store,
+            settingsRepository = FakeSettingsRepository(SettingsSnapshot(llmEnabled = true)))
+        assertEquals(false, coordinator.snapshot.value.settings.llmEnabled)
+        assertTrue(coordinator.requestDeepseekConfiguration() is CommandOutcome.Accepted)
+        val token = coordinator.deepseekConfigurationRequest.value!!
+        assertTrue(coordinator.saveDeepseekKey(token, "bad key") is CommandOutcome.Rejected)
+        assertEquals(token, coordinator.deepseekConfigurationRequest.value)
+        assertEquals(false, store.configured.value)
+        coordinator.cancelDeepseekConfiguration(token)
+        coordinator.close()
+    }
+
     @Test fun `暂停定位查询使用流水自己的时钟而非含深睡偏移的协调器时钟`() = runTest {
         val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
         val coordinator = createCoordinator(FakeRunRepository(), sensor,
@@ -920,6 +1011,9 @@ class AppCoordinatorTest {
             speechBus = speechBus,
             ruleEngine = ruleEngine,
             settingsRepository = FakeSettingsRepository(SettingsSnapshot(llmEnabled = true, ttsMinIntervalSec = 0)),
+            deepseekCredentialsStore = DeepseekCredentialsStore(File(deepseekFolder.root, "split/key")).also {
+                assertTrue(it.save("test-only-deepseek"))
+            },
             llmClient = object : LlmClient {
                 override suspend fun analyze(request: LlmAnalyzeRequest): Result<LlmAnalyzeResponse> {
                     independentAnalysisCalls++
@@ -1625,6 +1719,7 @@ class AppCoordinatorTest {
         coordinatorScope: CoroutineScope = backgroundScope,
         coordinatorRealtimeMillis: () -> Long = { sensorDataSource.monotonicMillis },
         onVoiceSettingsChanged: (SettingsSnapshot) -> Unit = {},
+        deepseekCredentialsStore: DeepseekCredentialsStore? = null,
         llmClient: LlmClient = object : LlmClient {
             override suspend fun analyze(request: LlmAnalyzeRequest): Result<LlmAnalyzeResponse> =
                 Result.failure(IllegalStateException("测试中不调用网络"))
@@ -1658,6 +1753,7 @@ class AppCoordinatorTest {
             realtimeMillis = coordinatorRealtimeMillis,
             pausedHeartRateMonitor = pausedHeartRateMonitor,
             onVoiceSettingsChanged = onVoiceSettingsChanged,
+            deepseekCredentialsStore = deepseekCredentialsStore,
         )
         runCurrent()
         return coordinator
@@ -2237,6 +2333,7 @@ private class FakeRunRepository(
     private var activeSession: RunSession? = null,
     private val saveError: Throwable? = null,
     private val saveGate: CompletableDeferred<Unit>? = null,
+    private val restoreGate: CompletableDeferred<Unit>? = null,
 ) : RunRepository {
     val savedSessions = mutableListOf<RunSession>()
     val checkpoints = mutableListOf<RunSession>()
@@ -2255,7 +2352,10 @@ private class FakeRunRepository(
         activeSession = session
     }
 
-    override suspend fun getActiveSession(): RunSession? = activeSession
+    override suspend fun getActiveSession(): RunSession? {
+        restoreGate?.await()
+        return activeSession
+    }
 
     override suspend fun getAllSessions(): List<RunSession> = savedSessions
 

@@ -31,6 +31,7 @@ class BridgeCodecValidFixtureTest(private val resource: String) {
             "/v1/fixtures/valid/command.run-start.json",
             "/v1/fixtures/valid/command.history-query.json",
             "/v1/fixtures/valid/command.settings-query.json",
+            "/v1/fixtures/valid/command.settings-configure-deepseek.json",
             "/v1/fixtures/valid/command.settings-update.json",
             "/v1/fixtures/valid/result.accepted.json",
             "/v1/fixtures/valid/result.error.json",
@@ -66,6 +67,22 @@ class BridgeCodecInvalidFixtureTest(private val resource: String) {
 }
 
 class BridgeCodecTest {
+    @Test fun `DeepSeek配置命令只接受空body且配置状态必须是布尔`() {
+        val command = checkNotNull(javaClass.getResource("/v1/fixtures/valid/command.settings-query.json")).readText()
+            .replace("settings.query", "settings.configureDeepseek")
+        assertTrue(BridgeCodec.decode(command) is BridgeDecodeResult.Accepted)
+        assertTrue(BridgeCodec.decode(command.replace("\"body\": {}", "\"body\": {\"apiKey\": \"test-only-value\"}")) is BridgeDecodeResult.Rejected)
+        val raw = checkNotNull(javaClass.getResource("/v1/fixtures/valid/snapshot.json")).readText()
+        val root = Json.parseToJsonElement(raw).jsonObject
+        val payload = root.getValue("payload").jsonObject
+        val settings = payload.getValue("settings").jsonObject
+        fun modified(value: kotlinx.serialization.json.JsonElement?) = JsonObject(root + ("payload" to JsonObject(payload +
+            ("settings" to JsonObject((settings - "deepseekApiKeyConfigured") + (value?.let { mapOf("deepseekApiKeyConfigured" to it) } ?: emptyMap())))))).toString()
+        assertTrue(BridgeCodec.decode(modified(JsonPrimitive(true))) is BridgeDecodeResult.Accepted)
+        assertTrue(BridgeCodec.decode(modified(null)) is BridgeDecodeResult.Rejected)
+        assertTrue(BridgeCodec.decode(modified(JsonPrimitive("true"))) is BridgeDecodeResult.Rejected)
+    }
+
     @Test fun `数据质量接受全部枚举且拒绝缺失未知枚举及额外字段`() {
         val raw = checkNotNull(javaClass.getResource("/v1/fixtures/valid/snapshot.json")).readText()
         val envelope = Json.parseToJsonElement(raw).jsonObject

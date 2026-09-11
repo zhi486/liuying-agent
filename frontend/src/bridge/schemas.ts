@@ -41,6 +41,7 @@ const settingsSnapshotSchema = z
     fishReferenceId: z.string(),
     fishApiKeyConfigured: z.boolean(),
     llmApiKeyConfigured: z.boolean(),
+    deepseekApiKeyConfigured: z.boolean(),
     themePreference: z.enum(['system', 'morning', 'night']),
     motionPreference: z.enum(['system', 'expressive', 'balanced', 'reduced', 'off']),
   })
@@ -205,6 +206,13 @@ const commandPayloadSchema = z.discriminatedUnion('name', [
   z
     .object({
       helloId: canonicalUuidV4Schema,
+      name: z.literal('settings.configureDeepseek'),
+      body: emptyBodySchema,
+    })
+    .strict(),
+  z
+    .object({
+      helloId: canonicalUuidV4Schema,
       name: z.literal('device.connect'),
       body: emptyBodySchema,
     })
@@ -297,6 +305,7 @@ const readyEnvelopeSchema = z
           z.literal('settings.v1'),
           z.literal('heart-rate-alerts.v1'),
           z.literal('data-quality.v1'),
+          z.literal('deepseek-companion.v1'),
         ]),
         snapshot: appSnapshotSchema,
       })

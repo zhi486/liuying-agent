@@ -55,6 +55,7 @@ const baseSnapshot: AppSnapshot = {
     fishReferenceId: 'default',
     fishApiKeyConfigured: false,
     llmApiKeyConfigured: false,
+    deepseekApiKeyConfigured: false,
     themePreference: 'system',
     motionPreference: 'balanced',
   },

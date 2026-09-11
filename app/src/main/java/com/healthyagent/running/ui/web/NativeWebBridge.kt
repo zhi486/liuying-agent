@@ -74,6 +74,7 @@ class NativeWebBridge(
             pageSize = body.getValue("pageSize").jsonPrimitive.int,
         )
         "settings.query" -> coordinator.querySettings()
+        "settings.configureDeepseek" -> coordinator.requestDeepseekConfiguration()
         "settings.update" -> coordinator.updateSettings(body.toSettingsPatch())
         "permission.request" -> coordinator.requestRunningPermissions()
         else -> CommandOutcome.Rejected(BridgeErrorCode.INVALID_MESSAGE, "未知命令")

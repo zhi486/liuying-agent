@@ -39,6 +39,9 @@ class AndroidRunCommandDispatcher(
     override fun disconnectSensor(): CommandOutcome = coordinator.disconnectSensor()
 
     override fun startRun(): CommandOutcome {
+        if (coordinator.deepseekConfigurationRequest.value != null) {
+            return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "请先关闭 DeepSeek 密钥输入窗口")
+        }
         if (coordinator.isRestoring) {
             return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "正在恢复上次跑步，请稍候")
         }

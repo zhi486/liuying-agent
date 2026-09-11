@@ -47,7 +47,7 @@ class BridgeSessionTest {
             decoded.envelope.payload.getValue("helloId").jsonPrimitive.content,
         )
         assertEquals(
-            listOf("snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1"),
+            listOf("snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1", "deepseek-companion.v1"),
             decoded.envelope.payload.getValue("capabilities").jsonArray.map {
                 it.jsonPrimitive.content
             },

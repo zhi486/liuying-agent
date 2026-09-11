@@ -13,6 +13,60 @@ vi.mock('../../bridge/bridgeStore', async (importOriginal) => {
 });
 
 describe('真实本地设置', () => {
+  it('已配置但关闭时不会说连接成功，也不会自动开启或试听', async () => {
+    const configured = { ...settings, deepseekApiKeyConfigured: true, llmEnabled: false };
+    sendNativeCommandMock.mockResolvedValue(accepted(configured));
+    useBridgeStore.setState({ status: 'ready', snapshot: { ...snapshot, settings: configured } });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    expect(screen.getByText('已配置，AI 陪伴关闭')).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: /AI 陪伴/ })).not.toBeChecked();
+    expect(sendNativeCommandMock).toHaveBeenCalledTimes(1);
+    expect(sendNativeCommandMock).toHaveBeenCalledWith('settings.query', {});
+  });
+
+  it.each(['running', 'paused'] as const)('在 %s 状态禁更换但可立即关闭 AI', async (state) => {
+    const enabled = { ...settings, deepseekApiKeyConfigured: true, llmEnabled: true };
+    sendNativeCommandMock
+      .mockResolvedValueOnce(accepted(enabled))
+      .mockResolvedValue(accepted({ ...enabled, llmEnabled: false }));
+    useBridgeStore.setState({
+      status: 'ready',
+      snapshot: { ...snapshot, settings: enabled, session: { ...snapshot.session, state } },
+    });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    expect(screen.getByText('AI 陪伴已启用，尚未验证连接')).toBeVisible();
+    expect(screen.getByRole('button', { name: '更换 DeepSeek 密钥' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox', { name: /AI 陪伴/ }));
+    await waitFor(() =>
+      expect(sendNativeCommandMock).toHaveBeenLastCalledWith('settings.update', {
+        llmEnabled: false,
+      }),
+    );
+    expect(await screen.findByText('已配置，AI 陪伴关闭')).toBeVisible();
+  });
+
+  it('未配置 DeepSeek 时不可开启且配置按钮只发送无参数命令', async () => {
+    sendNativeCommandMock.mockResolvedValue(accepted(settings));
+    useBridgeStore.setState({
+      status: 'ready',
+      snapshot: { ...snapshot, session: { ...snapshot.session, state: 'idle' } },
+    });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    expect(screen.getByText('未配置')).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: /AI 陪伴/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '配置 DeepSeek 密钥' }));
+    await waitFor(() =>
+      expect(sendNativeCommandMock).toHaveBeenLastCalledWith('settings.configureDeepseek', {}),
+    );
+    expect(screen.queryByLabelText(/API Key/)).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     sendNativeCommandMock.mockReset();
     useBridgeStore.setState({ status: 'unavailable', snapshot: null });
@@ -218,6 +272,7 @@ const settings: AppSnapshot['settings'] = {
   fishReferenceId: 'default',
   fishApiKeyConfigured: false,
   llmApiKeyConfigured: false,
+  deepseekApiKeyConfigured: false,
   themePreference: 'night',
   motionPreference: 'system',
 };

@@ -7,7 +7,7 @@ import {
   type SetStateAction,
 } from 'react';
 
-import { useBridgeStore } from '../../bridge/bridgeStore';
+import { sendNativeCommand, useBridgeStore } from '../../bridge/bridgeStore';
 import type { AppSnapshot, SettingsUpdateBody } from '../../bridge/contract';
 import styles from './SettingsPage.module.css';
 import { useNativeSettings } from './useNativeSettings';
@@ -38,6 +38,29 @@ export function SettingsPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [configurationError, setConfigurationError] = useState<string | null>(null);
+  const [isConfiguring, setIsConfiguring] = useState(false);
+
+  const configureDeepseek = async () => {
+    setConfigurationError(null);
+    setIsConfiguring(true);
+    try {
+      const result = await sendNativeCommand('settings.configureDeepseek', {});
+      if (result.status === 'rejected') setConfigurationError(result.error.message);
+    } catch {
+      setConfigurationError('无法打开私密配置，请稍后重试');
+    } finally {
+      setIsConfiguring(false);
+    }
+  };
+
+  const updateCompanion = async (enabled: boolean) => {
+    try {
+      await update({ llmEnabled: enabled });
+    } catch {
+      // 设置错误由 useNativeSettings 统一显示。
+    }
+  };
 
   useEffect(() => {
     if (settings && !isDirty) setDraft(toDraft(settings));
@@ -146,6 +169,47 @@ export function SettingsPage() {
             <small>沉静深色</small>
           </button>
         </div>
+      </section>
+
+      <section className="setting-section" aria-labelledby="deepseek-title">
+        <div className="section-heading">
+          <div>
+            <h2 id="deepseek-title">DeepSeek 实时陪伴</h2>
+            <p>
+              {!settings.deepseekApiKeyConfigured
+                ? '未配置'
+                : settings.llmEnabled
+                  ? 'AI 陪伴已启用，尚未验证连接'
+                  : '已配置，AI 陪伴关闭'}
+            </p>
+          </div>
+        </div>
+        <label className={styles.switchRow}>
+          <span>
+            <strong>AI 陪伴</strong>
+            <small>在线时尝试追加短鼓励；失败只保留核心提示</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={settings.llmEnabled}
+            disabled={isSaving || !settings.deepseekApiKeyConfigured}
+            onChange={(event) => void updateCompanion(event.target.checked)}
+          />
+        </label>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={isRunActive || isConfiguring || bridgeSnapshot?.session.state === 'preparing'}
+          onClick={() => void configureDeepseek()}
+        >
+          {settings.deepseekApiKeyConfigured ? '更换 DeepSeek 密钥' : '配置 DeepSeek 密钥'}
+        </button>
+        <p>密钥仅在原生私密窗口填写；保存不会自动开启、检测或试听。跑步及暂停期间不可更换。</p>
+        {configurationError ? (
+          <p className={styles.error} role="alert">
+            {configurationError}
+          </p>
+        ) : null}
       </section>
 
       <form className={styles.form} onSubmit={(event) => void saveRunPreferences(event)}>

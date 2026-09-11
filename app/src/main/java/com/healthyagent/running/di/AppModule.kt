@@ -2,7 +2,8 @@ package com.healthyagent.running.di
 
 import android.os.Build
 import android.os.SystemClock
-import com.healthyagent.running.ai.AnthropicCompanionTextSource
+import com.healthyagent.running.ai.DeepseekCompanionTextSource
+import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.coordinator.PausedHeartRateMonitor
 import com.healthyagent.running.core.engine.RuleCatalog
 import com.healthyagent.running.core.engine.RuleEngine
@@ -55,6 +56,7 @@ import org.koin.dsl.module
  * Koin DI 模块定义
  */
 val appModule = module {
+    single { DeepseekCredentialsStore(File(androidContext().noBackupFilesDir, "deepseek/key")) }
 
     single<DiagnosticLogger> {
         FileDiagnosticLogger(File(androidContext().filesDir, "diagnostics"))
@@ -80,7 +82,7 @@ val appModule = module {
             maxHeartRate = 180,
             ttsEnabled = true,
             ttsMinIntervalSec = 4,
-            llmEnabled = true,             // 默认启用，直连 Anthropic Claude API
+            llmEnabled = false,            // 新 AI 陪伴必须由用户显式开启。
         )
     }
 
@@ -137,7 +139,7 @@ val appModule = module {
                     )
                 }
             },
-            companionTextSource = AnthropicCompanionTextSource(),
+            companionTextSource = DeepseekCompanionTextSource(diagnosticLogger = get()),
             playerFactory = { PreparedVoicePlayer({ AndroidAudioPlayerPort() }, focus, logger) },
             diagnosticLogger = logger,
             timeSource = get(),
@@ -214,6 +216,7 @@ val appModule = module {
             onVoiceSettingsChanged = get<AtomicReference<SettingsSnapshot>>()::set,
             realtimeMillis = SystemClock::elapsedRealtime,
             diagnosticLogger = get(),
+            deepseekCredentialsStore = get(),
         )
     }
     single<RunCommandDispatcher> {
@@ -231,7 +234,7 @@ val appModule = module {
         )
     }
     viewModel { HistoryViewModel(repository = get()) }
-    viewModel { SettingsViewModel(settingsRepository = get()) }
+    viewModel { SettingsViewModel(settingsRepository = get(), coordinator = get()) }
 }
 
 /** 将持久化键映射为模拟场景；未知旧值安全回退到轻松跑。 */

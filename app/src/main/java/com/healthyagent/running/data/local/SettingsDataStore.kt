@@ -132,7 +132,7 @@ class SettingsDataStore(
         private val KEY_HR_ALERT_INTERVAL = intPreferencesKey("hr_alert_repeat_interval_sec")
         private val KEY_TTS_ENABLED = booleanPreferencesKey("tts_enabled")
         private val KEY_TTS_INTERVAL = intPreferencesKey("tts_interval")
-        private val KEY_LLM_ENABLED = booleanPreferencesKey("llm_enabled")
+        private val KEY_LLM_ENABLED = booleanPreferencesKey("deepseek_companion_enabled")
         private val KEY_MOCK_SCENARIO = stringPreferencesKey("mock_scenario")
         private val KEY_COACH_TONE = stringPreferencesKey("coach_tone")
         private val KEY_FISH_API_KEY = stringPreferencesKey("fish_api_key")

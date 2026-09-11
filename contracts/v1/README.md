@@ -19,10 +19,17 @@
 
 ## 独立数据质量
 
-ready 能力清单按顺序为 `snapshot.v1`、`history.pagination`、`settings.v1`、`heart-rate-alerts.v1`、`data-quality.v1`；原生与同包 Web 同步更新。
+ready 能力清单按顺序为 `snapshot.v1`、`history.pagination`、`settings.v1`、`heart-rate-alerts.v1`、`data-quality.v1`、`deepseek-companion.v1`；原生与同包 Web 同步更新。
 
 - 根 `dataQuality` 是必填严格对象：`gps` 为 `waiting | fresh | stale`；`heartRate` 为 `not_available | waiting | fresh | stale`。两端均拒绝缺失字段、未知枚举及额外字段。
 - `waiting` 表示当前会话尚未取得有效样本，有效的零米定位属于已取得样本。曾取得样本后，接收时间满 5 秒为 `stale`。无手环能力时心率为 `not_available`。
 - GPS 停更时不增加距离并清空当前配速，HR 停更时清空心率和区间。暂停时 GPS 保留暂停时的观察状态，HR 仍依据现有暂停心率来源更新。
 - 新跑和进程恢复重新建立观察基线；恢复的历史距离不能证明 GPS 当前新鲜。
 - 数据质量不改变 `wearable.state`，也不覆盖 `safetyState`。只有独立真实 BLE 故障观察才能提交手环中断语音。
+
+## DeepSeek 私密配置
+
+- 必填布尔 `settings.deepseekApiKeyConfigured` 仅表示本地有凭据，不表示认证或连接成功；旧 `llmApiKeyConfigured` 不能用于此判断。
+- `settings.configureDeepseek` 的 body 必须为 `{}`，只请求 Activity 打开原生遮罩输入框；任何密钥字段或额外字段均拒绝，结果和快照不返回密钥。
+- `settings.llmEnabled` 使用独立持久化键 `deepseek_companion_enabled`，默认关闭，不继承旧 `llm_enabled`。未配置不可开启；缺失凭据的旧 true 安全清为关闭，避免后续填写导致意外启用。
+- 保存不自动开启、检测或试听；运行／暂停／恢复期间不能配置，配置窗口与开跑互斥。更换已配置密钥保留新开关，关闭开关立即取消旧准备。

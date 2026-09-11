@@ -25,6 +25,11 @@ import androidx.lifecycle.lifecycleScope
 import com.healthyagent.running.ui.navigation.AppNavHost
 import com.healthyagent.running.ui.theme.HealthyAgentTheme
 import com.healthyagent.running.ui.web.WebPreviewHost
+import com.healthyagent.running.ui.settings.DeepseekKeyDialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.healthyagent.running.coordinator.AppCoordinator
 import com.healthyagent.running.coordinator.CoordinatorEvent
 import com.healthyagent.running.coordinator.PermissionsSnapshot
@@ -42,6 +47,8 @@ class MainActivity : ComponentActivity() {
     private val healthConnectSync: HealthConnectSync by inject()
     private var healthPermissionRequestLaunched = false
     private var runningPermissionRequestAttempted = false
+    private var deepseekDialog: DeepseekKeyDialog? = null
+    private var deepseekDialogToken: Long? = null
 
     companion object {
         /** 首次启动一起申请手机 GPS、可选 BLE 与通知权限。 */
@@ -63,6 +70,36 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                coordinator.deepseekConfigurationRequest.collect { token ->
+                    if (token == null) {
+                        deepseekDialog?.dismiss()
+                        deepseekDialog = null
+                        deepseekDialogToken = null
+                    } else if (deepseekDialogToken != token) {
+                        deepseekDialog?.dismiss()
+                        deepseekDialogToken = token
+                        val prompt = DeepseekKeyDialog(
+                            activity = this@MainActivity,
+                            scope = lifecycleScope,
+                            isCurrent = { coordinator.deepseekConfigurationRequest.value == token &&
+                                !coordinator.isRestoring && coordinator.snapshot.value.session.state !in setOf("running", "paused", "preparing") },
+                            onSave = { input -> withContext(Dispatchers.IO) { coordinator.saveDeepseekKey(token, input) } },
+                            onClosed = {
+                                coordinator.cancelDeepseekConfiguration(token)
+                                if (deepseekDialogToken == token) {
+                                    deepseekDialog = null
+                                    deepseekDialogToken = null
+                                }
+                            },
+                        )
+                        deepseekDialog = prompt
+                        prompt.show()
+                    }
+                }
+            }
+        }
         if (BuildConfig.WEB_UI_ENABLED) {
             configurePreviewSystemBars()
         } else {
@@ -170,6 +207,20 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         publishPermissionSnapshot(requested = runningPermissionRequestAttempted)
         recoverActiveSessionIfNeeded()
+    }
+
+    override fun onStop() {
+        deepseekDialog?.dismiss()
+        deepseekDialog = null
+        deepseekDialogToken = null
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        deepseekDialog?.dismiss()
+        deepseekDialog = null
+        deepseekDialogToken = null
+        super.onDestroy()
     }
 
     /** 只有精确定位仍获授权时，才恢复 Android 14 的 location 前台服务。 */

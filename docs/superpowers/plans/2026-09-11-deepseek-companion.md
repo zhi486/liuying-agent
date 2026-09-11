@@ -86,7 +86,7 @@ assertTrue(call.respond(validResponse).closed)
 
 **Interfaces:** Coordinator 新增 `requestDeepseekConfiguration(): CommandOutcome`、`cancelDeepseekConfiguration(token: Long)`、`saveDeepseekKey(token: Long, input: String): CommandOutcome`。专用只读 `deepseekConfigurationRequest: StateFlow<Long?>` 仅含非秘密token，由当前Activity消费，不使用已有多消费者Channel，避免Compose页截走事件。保存操作在 IO dispatcher 调用，Coordinator 锁内复核 token 与会话并原子保存；开跑在配置窗口期间拒绝，避免异步save与start竞态。无效／旧token不能清新弹窗。
 
-- [ ] **Step 1：偏好与互斥 RED。** DataStore 预填旧 llm_enabled=true，新值仍false；新键true不写旧键。Coordinator 测试未配不能开启，活动／恢复不能打开，窗口期间不能开跑，保存失败保旧，cancel无写入，过期save拒绝，保存不自动打开AI。查询及快照只出现新布尔、不出现测试凭据。
+- [x] **Step 1：偏好与互斥 RED。** DataStore 预填旧 llm_enabled=true，新值仍false；新键true不写旧键。Coordinator 测试未配不能开启，活动／恢复不能打开，窗口期间不能开跑，保存失败保旧，cancel无写入，过期save拒绝，保存不自动打开AI。查询及快照只出现新布尔、不出现测试凭据。
 
 ```kotlin
 assertFalse(SettingsDataStore(dataStoreWithOldEnabled).current().llmEnabled)
@@ -97,9 +97,9 @@ coordinator.cancelDeepseekConfiguration(token)
 assertTrue(coordinator.startRun() is CommandOutcome.Accepted)
 ```
 
-- [ ] **Step 2：接入存储与有效状态。** DI 构造 `DeepseekCredentialsStore(File(androidContext().noBackupFilesDir, "deepseek/key"))`。Coordinator 合同映射统一经过 `settingsContract(settings)`，新 deepseekApiKeyConfigured 布尔读取存储，llmEnabled 用新偏好且已配置。原生设置AI开关调用Coordinator.updateSettings；旧Claude输入替换为打开同一私密入口，旧llmApiKey仍不迁移或作为新已配置判断。
+- [x] **Step 2：接入存储与有效状态。** DI 构造 `DeepseekCredentialsStore(File(androidContext().noBackupFilesDir, "deepseek/key"))`。Coordinator 合同映射统一经过 `settingsContract(settings)`，新 deepseekApiKeyConfigured 布尔读取存储，llmEnabled 用新偏好且已配置。原生设置AI开关调用Coordinator.updateSettings；旧Claude输入替换为打开同一私密入口，旧llmApiKey仍不迁移或作为新已配置判断。
 
-- [ ] **Step 3：弹窗安全实现和测试。** 原生AlertDialog/EditText只使用实例态，非rememberSaveable，无回填／显示按钮／自动读剪贴板；禁suggestions/autofill/personalized learning、isSaveEnabled=false；Activity及Dialog都设置FLAG_SECURE且结束恢复原flag，所有dismiss/destroy清输入并取消token。保存成功后清空关闭，失败显示固定错误，不展示异常。Android测试验证实际窗口flag、输入配置、dismiss清空和原状态恢复；仅编译不冒充真机执行。
+- [x] **Step 3：弹窗安全实现和测试。** 原生AlertDialog/EditText只使用实例态，非rememberSaveable，无回填／显示按钮／自动读剪贴板；禁suggestions/autofill/personalized learning、isSaveEnabled=false；Activity及Dialog都设置FLAG_SECURE且结束恢复原flag，所有dismiss/destroy清输入并取消token。保存成功后清空关闭，失败显示固定错误，不展示异常。Android测试验证实际窗口flag、输入配置、dismiss清空和原状态恢复；仅编译不冒充真机执行。
 
 ```kotlin
 input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
@@ -108,7 +108,7 @@ input.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
 input.imeOptions = input.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
 ```
 
-- [ ] **Step 4：Web/契约 RED→GREEN。** 新无参数settings.configureDeepseek，body携带key任何字段必须拒绝；只调用协调器打开。新增严格布尔及第六能力，所有fixture同批；UI未配置禁开启但可点配置，运行/暂停禁配置；三种状态文案不把保存说成连接成功。保存密钥无自动网络；关闭开关不要求退出跑步。
+- [x] **Step 4：Web/契约 RED→GREEN。** 新无参数settings.configureDeepseek，body携带key任何字段必须拒绝；只调用协调器打开。新增严格布尔及第六能力，所有fixture同批；UI未配置禁开启但可点配置，运行/暂停禁配置；三种状态文案不把保存说成连接成功。保存密钥无自动网络；关闭开关不要求退出跑步。
 
 ```typescript
 expect(sendNativeCommand).toHaveBeenCalledWith('settings.configureDeepseek', {});
@@ -116,7 +116,7 @@ expect(screen.getByText('已配置，AI 陪伴关闭')).toBeVisible();
 expect(screen.queryByDisplayValue('test-only-deepseek')).not.toBeInTheDocument();
 ```
 
-- [ ] **Step 5：前后端回归、自审、独立复审和提交。** 定向 Settings/Coordinator/Bridge、全量前端与JVM、两APK构建；主与测试包签名、凭据、14音频审计通过；提交「增加手机 DeepSeek 私密配置与独立陪伴开关」。尚不安装或真实认证。
+- [x] **Step 5：前后端回归、自审、独立复审和提交。** 定向 Settings/Coordinator/Bridge、全量前端与JVM、两APK构建；主与测试包签名、凭据、14音频审计通过；提交「增加手机 DeepSeek 私密配置与独立陪伴开关」。尚不安装或真实认证。
 
 ## Task 3：接纳时捕获并贯通整句语音
 
@@ -151,7 +151,7 @@ $env:Path='C:/Program Files/nodejs;' + $env:Path
 - [x] 接口一致：SpeechRequest末尾可空配置、capture在接纳前；凭据只在专属对象/noBackup存储；同一Coordinator锁负责配置与开跑互斥。
 - [x] 官方文档2026-09-11复核：兼容基址仍为 https://api.deepseek.com/anthropic ，显式deepseek-flash，x-api-key/max_tokens/thinking均支持；网页工具404后通过只读公开HTTP读取，不调用真实API。
 - [x] Task 1 完成。
-- [ ] Task 2 完成。
+- [x] Task 2 完成。
 - [ ] Task 3 完成。
 
 ### Task 1 验证记录（2026-09-11）
@@ -160,3 +160,13 @@ $env:Path='C:/Program Files/nodejs;' + $env:Path
 - 自审／独立复审补测并修复：损坏 UTF-8 不得显示已配置；核心换标点不得重复；“一小时／壹小时”不得新增数字。保留“一起／一直”等非数值词组。
 - 最终完整 JVM：717 项、0 失败、0 错误。未切换生产文字源、未安装、未请求真实 API、未试听。
 - 独立复核：2 项 Important 与 1 项 Minor 已关闭，可进入 Task 2。
+
+### Task 2 验证记录（2026-09-11）
+
+- 独立开关、配置／保存与开跑互斥、过期令牌、恢复阶段限制、无密钥不可开启均有 RED→GREEN 测试；恢复后的新开关若缺少私密凭据则清为关闭，避免后来填写意外启用。
+- Web 只发空 body 并接收布尔状态；新增第六能力，两端对新布尔拒绝字符串 true，全部快照样例同步。
+- 为避免中间提交的新开关误触发旧 Anthropic，生产文字源提前切为 DeepSeek；Task 3 捕获配置前不会发送文字请求。
+- 复审修复：原生恢复完成无新快照的按钮禁用滞留；Dialog 异步 OnDismiss 的同步幂等清理及旧窗口身份保护；OnShow 测试分主线程回调。独立复核全部关闭。
+- 完整门禁：724 JVM、111 前端，lint／格式／类型／bundle、主和测试 APK 构建通过；3 项新 Android 窗口测试仅编译，未在真机执行。
+- 主 APK SHA-256：ECCF32EA3E5741FCBAB8EB3F11C5BE049012557FE00ECA97902CE8AF6C601773；测试 APK：378497E0CFB1C423EE5A039CAE25D0E1BDC12D76B47C3AFDBB663024A5EA7568。
+- 两包原签名不变，14 条音频哈希一致，主／测试包凭据扫描无发现。未安装、未联网生成、未试听。
