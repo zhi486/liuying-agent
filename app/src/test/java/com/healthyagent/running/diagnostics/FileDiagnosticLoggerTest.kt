@@ -77,6 +77,7 @@ class FileDiagnosticLoggerTest {
             Case(DiagnosticEvent.SpeechOutcome("rule", SpeechOutcomeReason.PLAYBACK_TIMEOUT), "speech", "speech_outcome", setOf("ruleId", "reason")),
             Case(DiagnosticEvent.TtsProviderEvent(TtsProvider.ANDROID, TtsEventKind.INITIALIZATION_FAILED), "tts", "tts_provider_event", setOf("provider", "kind", "failure")),
             Case(DiagnosticEvent.AudioFocusEvent(TtsProvider.FISH, AudioFocusResult.RELEASED), "audio", "audio_focus_event", setOf("provider", "result")),
+            Case(DiagnosticEvent.BleLinkLostNotice(2, 3, 4, 5), "ble", "ble_link_lost", setOf("sessionGeneration", "observationGeneration", "faultId", "episodeId")),
         )
 
         cases.forEach { logger.record(it.event) }
@@ -110,6 +111,10 @@ class FileDiagnosticLoggerTest {
         assertEquals(JsonNull, lines[4].getValue("payload").jsonObject.getValue("activityAgeMillis"))
         assertEquals(JsonNull, lines[5].getValue("payload").jsonObject.getValue("gattToken"))
         assertEquals(JsonNull, lines[11].getValue("payload").jsonObject.getValue("failure"))
+        assertEquals("2", lines[13].payloadValue("sessionGeneration"))
+        assertEquals("3", lines[13].payloadValue("observationGeneration"))
+        assertEquals("4", lines[13].payloadValue("faultId"))
+        assertEquals("5", lines[13].payloadValue("episodeId"))
     }
 
     @Test

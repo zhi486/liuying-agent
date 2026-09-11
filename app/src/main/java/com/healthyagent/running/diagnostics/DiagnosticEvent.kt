@@ -55,6 +55,7 @@ internal fun String.takeCodePoints(maxCount: Int): String {
 }
 
 sealed interface DiagnosticEvent {
+    data class BleLinkLostNotice(val sessionGeneration: Long, val observationGeneration: Long, val faultId: Long, val episodeId: Long) : DiagnosticEvent
     data class BleLifecycleChanged(val from: DiagnosticBleLifecycle, val to: DiagnosticBleLifecycle, val epoch: Long, val lifecycleRevision: Long) : DiagnosticEvent
     data class BleLinkChanged(val from: DiagnosticBleLink, val to: DiagnosticBleLink, val attemptToken: Long, val gattToken: Long?, val reason: BleFailureReason? = null) : DiagnosticEvent
     data class BleReconnect(val stage: BleReconnectStage, val epoch: Long, val attemptToken: Long, val reason: BleFailureReason? = null) : DiagnosticEvent

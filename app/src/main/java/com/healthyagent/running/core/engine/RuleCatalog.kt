@@ -2,7 +2,6 @@ package com.healthyagent.running.core.engine
 
 import com.healthyagent.running.core.engine.rules.CadenceDropRule
 import com.healthyagent.running.core.engine.rules.CadenceTooHighRule
-import com.healthyagent.running.core.engine.rules.DataStaleRule
 import com.healthyagent.running.core.engine.rules.EfficiencyAbnormalRule
 import com.healthyagent.running.core.engine.rules.GoalAchievedRule
 import com.healthyagent.running.core.engine.rules.HrRapidRiseRule
@@ -23,7 +22,6 @@ object RuleCatalog {
         PaceDeviationRule(),
         StartTooFastRule(),
         EfficiencyAbnormalRule(),
-        DataStaleRule(),
         KmSplitRule(),
         GoalAchievedRule(),
     )

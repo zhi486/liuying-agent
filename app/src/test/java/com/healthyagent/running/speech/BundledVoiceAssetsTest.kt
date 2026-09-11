@@ -20,7 +20,7 @@ class BundledVoiceAssetsTest {
     fun `真实规则与会话事件的固定语音资源可由store逐个恢复`() = runBlocking {
         val ruleIds = RuleCatalog.defaultRules().filterNot { it.id == "km_split" }.map { it.id }
         val sessionIds = SessionSpeechEvent.entries.map { SessionSpeechTriggerFactory.create(it).ruleId }
-        val requiredIds = ruleIds + sessionIds
+        val requiredIds = ruleIds + sessionIds + WearableLinkSpeech.create().ruleId
         assertEquals(14, requiredIds.size)
         assertEquals(requiredIds.toSet().size, requiredIds.size)
         assertEquals(BundledVoiceCatalog.entries.map { it.ruleId }.toSet(), requiredIds.toSet())

@@ -29,6 +29,128 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpeechBusTest {
+    @Test fun `源已恢复而取消收集尚未到达时迟到完成不能发布通知字幕或历史`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = newBus(tts, minIntervalSec = 120)
+        var relevant = true
+        val notice = trigger("data_stale", "手环数据中断，请检查")
+        bus.enqueue(SpeechRequest(notice, noticeToken = SpeechNoticeToken { relevant }))
+        runCurrent()
+        relevant = false
+        tts.completeNextSuccessfully()
+        runCurrent()
+        assertNull(bus.latestMessage.value)
+        bus.enqueue(SpeechRequest(notice, noticeToken = SpeechNoticeToken()))
+        runCurrent()
+        assertEquals(2, tts.requests.size)
+        bus.shutdown()
+        runCurrent()
+    }
+
+    @Test fun `单独取消正在播放的通知立即释放且不发布字幕`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = newBus(tts)
+        val token = SpeechNoticeToken()
+        bus.enqueue(SpeechRequest(trigger("data_stale", "手环数据中断，请检查"), noticeToken = token))
+        runCurrent()
+        assertTrue(tts.isSpeaking)
+        bus.cancelNotice(token)
+        runCurrent()
+        assertFalse(tts.isSpeaking)
+        assertEquals(1, tts.stopCalls)
+        assertNull(bus.latestMessage.value)
+        bus.shutdown()
+        runCurrent()
+    }
+
+    @Test fun `定向取消排队通知后不播放且普通提示不受影响`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = newBus(tts)
+        val token = SpeechNoticeToken()
+        bus.enqueue(SpeechRequest(trigger("data_stale", "手环数据中断，请检查"), noticeToken = token))
+        bus.cancelNotice(token)
+        bus.enqueue(trigger("other", "继续保持"))
+        runCurrent()
+        assertEquals(listOf("继续保持"), tts.requests.map { it.text })
+        assertEquals(0, tts.stopCalls)
+        bus.shutdown()
+        runCurrent()
+    }
+
+    @Test fun `已取消通知令牌阻止迟到接纳`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = newBus(tts)
+        val token = SpeechNoticeToken()
+        bus.cancelNotice(token)
+        bus.enqueue(SpeechRequest(trigger("data_stale", "手环数据中断，请检查"), noticeToken = token))
+        runCurrent()
+        assertTrue(tts.requests.isEmpty())
+        assertNull(bus.latestMessage.value)
+        bus.shutdown()
+        runCurrent()
+    }
+
+    @Test fun `取消正在播放的通知不污染字幕历史且不打断后来的紧急语音`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = newBus(tts, minIntervalSec = 120)
+        val token = SpeechNoticeToken()
+        val notice = trigger("data_stale", "手环数据中断，请检查")
+        bus.enqueue(SpeechRequest(notice, noticeToken = token))
+        runCurrent()
+        bus.cancelNotice(token)
+        bus.enqueue(trigger("urgent", "心率过高", SpeechPriority.URGENT))
+        runCurrent()
+        assertEquals(listOf(notice.speakText, "心率过高"), tts.requests.map { it.text })
+        assertTrue(tts.isSpeaking)
+        assertEquals(1, tts.stopCalls)
+        assertNull(bus.latestMessage.value)
+        bus.cancelNotice(token)
+        runCurrent()
+        assertEquals(1, tts.stopCalls)
+        tts.completeNextSuccessfully()
+        runCurrent()
+        bus.enqueue(SpeechRequest(notice, noticeToken = SpeechNoticeToken()))
+        runCurrent()
+        assertEquals(3, tts.requests.size)
+        bus.shutdown()
+        runCurrent()
+    }
+
+    @Test fun `取消尚未执行的替换通知不会留下旧播放与新提示重叠`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = newBus(tts)
+        bus.enqueue(trigger("low", "低优先级提示", SpeechPriority.APP))
+        runCurrent()
+        val token = SpeechNoticeToken()
+        bus.enqueue(SpeechRequest(trigger("notice", "可撤销提示", SpeechPriority.SPLIT), noticeToken = token))
+        bus.cancelNotice(token)
+        bus.enqueue(trigger("other", "新提示"))
+        runCurrent()
+        assertEquals(listOf("低优先级提示", "新提示"), tts.requests.map { it.text })
+        assertEquals(1, tts.stopCalls)
+        bus.shutdown()
+        runCurrent()
+    }
+
+    @Test fun `通知被紧急语音替换后旧取消保留待播暂停事件`() = runTest {
+        val tts = FakeTtsEngine()
+        val bus = newBus(tts)
+        val token = SpeechNoticeToken()
+        bus.enqueue(SpeechRequest(trigger("data_stale", "手环数据中断，请检查"), noticeToken = token))
+        runCurrent()
+        bus.enqueue(trigger("urgent", "心率过高", SpeechPriority.URGENT))
+        runCurrent()
+        bus.enqueueSessionStatus(session(SessionSpeechEvent.PAUSED))
+        bus.cancelNotice(token)
+        runCurrent()
+        assertEquals(2, tts.requests.size)
+        tts.completeNextSuccessfully()
+        runCurrent()
+        assertEquals("跑步已暂停。", tts.requests.last().text)
+        bus.shutdown()
+        runCurrent()
+    }
+
     @Test
     fun `真实Policy到Player播放超时使provider和Bus使用相同超时诊断`() = runTest {
         val logger = FakeDiagnosticLogger()

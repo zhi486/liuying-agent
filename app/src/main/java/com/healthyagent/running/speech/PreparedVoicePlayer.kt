@@ -91,6 +91,7 @@ class PreparedVoicePlayer(
         }
         try {
             try {
+                context[SpeechNoticeToken]?.ensureValid()
                 val lease = audioFocusController.request()
                 synchronized(lock) { operation.lease = lease }
                 record(DiagnosticEvent.AudioFocusEvent(operation.provider,
@@ -100,6 +101,7 @@ class PreparedVoicePlayer(
                 operation.player!!.startPrepared { start ->
                     synchronized(operation.startGate) {
                         context.ensureActive()
+                        context[SpeechNoticeToken]?.ensureValid()
                         if (operation.terminal.get() == null) {
                             operation.started = true
                             start()

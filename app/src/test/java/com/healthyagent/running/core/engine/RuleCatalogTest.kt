@@ -6,7 +6,7 @@ import org.junit.Test
 class RuleCatalogTest {
 
     @Test
-    fun returnsElevenUniqueRulesInStableOrder() {
+    fun returnsTenUniqueMetricRulesInStableOrder() {
         val ids = RuleCatalog.defaultRules().map(Rule::id)
 
         assertEquals(
@@ -19,12 +19,11 @@ class RuleCatalogTest {
                 "pace_deviation",
                 "start_too_fast",
                 "efficiency_abnormal",
-                "data_stale",
                 "km_split",
                 "goal_achieved",
             ),
             ids,
         )
-        assertEquals(11, ids.distinct().size)
+        assertEquals(10, ids.distinct().size)
     }
 }

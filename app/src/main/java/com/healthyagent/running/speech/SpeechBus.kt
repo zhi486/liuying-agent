@@ -20,7 +20,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.EmptyCoroutineContext
 
 data class SpeechPolicy(
     val enabled: Boolean,
@@ -82,6 +84,7 @@ class SpeechBus(
             val pending: PendingSessionStatus?,
             val shutdown: Boolean,
         ) : Command
+        data class CancelNotice(val speech: ScheduledSpeech) : Command
     }
 
     private val stateLock = Any()
@@ -115,6 +118,7 @@ class SpeechBus(
                     is Command.Replace -> handleReplace(command)
                     is Command.Terminal -> handleTerminal(command)
                     is Command.HardStop -> handleHardStop(command)
+                    is Command.CancelNotice -> handleCancelNotice(command.speech)
                 }
             }
         }
@@ -143,6 +147,7 @@ class SpeechBus(
         val now = nowMillis()
         synchronized(stateLock) {
             when {
+                request.noticeToken?.isValid == false -> record(trigger, SpeechOutcomeReason.CANCELLED)
                 !activePolicy.enabled -> record(trigger, SpeechOutcomeReason.POLICY_DISABLED)
                 sessionGeneration != expectedSessionGeneration -> record(
                     trigger,
@@ -230,6 +235,18 @@ class SpeechBus(
         hardStop(clearHistory = true, clearMessage = true, shutdown = false)
     }
 
+    fun cancelNotice(token: SpeechNoticeToken) {
+        // 取消媒体准备不必等待 actor，且不能持有总线锁调用外部取消处理器。
+        token.cancel()
+        synchronized(stateLock) {
+            val speech = activeSpeech?.takeIf { it.request.noticeToken === token } ?: return
+            activeOperationId++
+            activeSpeech = null
+            currentPriority = null
+            check(commandChannel.trySend(Command.CancelNotice(speech)).isSuccess)
+        }
+    }
+
     fun stop() {
         hardStop(clearHistory = false, clearMessage = false, shutdown = false)
     }
@@ -281,14 +298,26 @@ class SpeechBus(
         if (actorPlaybackOperationId != null) {
             ttsEngine.stop()
         }
+        actorPlaybackOperationId = null
         startPlayback(command.speech)
     }
 
     private fun startPlayback(speech: ScheduledSpeech) {
+        if (!isCurrent(speech)) return
+        // 被撤销的 Replace 可能尚未执行；新的 Start 也必须释放残留的旧播放。
+        if (actorPlaybackOperationId != null && actorPlaybackOperationId != speech.operationId) {
+            activePlaybackJob?.cancel()
+            ttsEngine.stop()
+        }
         actorPlaybackOperationId = speech.operationId
-        activePlaybackJob = actorScope.launch {
+        activePlaybackJob = actorScope.launch(speech.request.noticeToken ?: EmptyCoroutineContext) {
             var delivery: SpeechDelivery? = null
             val reason = try {
+                if (!isCurrent(speech)) throw CancellationException("语音操作已失效")
+                speech.request.noticeToken?.let {
+                    it.bind(checkNotNull(currentCoroutineContext()[Job]))
+                    it.ensureValid()
+                }
                 val result = ttsEngine.speak(speech.request)
                 delivery = result.getOrNull()
                 val error = result.exceptionOrNull()
@@ -312,6 +341,7 @@ class SpeechBus(
     }
 
     private fun handleTerminal(command: Command.Terminal) {
+        var reason = command.reason
         val promoted = synchronized(stateLock) {
             val current = activeSpeech
             if (
@@ -322,16 +352,18 @@ class SpeechBus(
                 return@synchronized null
             }
 
+            if (command.speech.request.noticeToken?.isValid == false) reason = SpeechOutcomeReason.CANCELLED
+
             activeSpeech = null
             currentPriority = null
             if (actorPlaybackOperationId == command.speech.operationId) {
                 activePlaybackJob = null
                 actorPlaybackOperationId = null
             }
-            if (command.reason == SpeechOutcomeReason.TTS_SUCCESS) {
+            if (reason == SpeechOutcomeReason.TTS_SUCCESS) {
                 speakHistory[command.speech.trigger.speakText] = command.speech.acceptedAtMillis
             }
-            if (command.reason != SpeechOutcomeReason.CANCELLED) {
+            if (reason != SpeechOutcomeReason.CANCELLED) {
                 _latestMessage.value = CoachMessage(
                     id = newMessageId(),
                     text = command.delivery?.takeIf { it.played }?.text
@@ -359,7 +391,7 @@ class SpeechBus(
                 }
         }
 
-        recordTerminal(command.speech, command.reason)
+        recordTerminal(command.speech, reason)
         promoted?.let(::startPlayback)
     }
 
@@ -380,6 +412,16 @@ class SpeechBus(
         actorPlaybackOperationId = null
         ttsEngine.stop()
         if (command.shutdown) ttsEngine.shutdown()
+    }
+
+    private fun handleCancelNotice(speech: ScheduledSpeech) {
+        if (actorPlaybackOperationId == speech.operationId) {
+            activePlaybackJob?.cancel()
+            activePlaybackJob = null
+            actorPlaybackOperationId = null
+            ttsEngine.stop()
+        }
+        recordTerminal(speech, SpeechOutcomeReason.CANCELLED)
     }
 
     private fun isCurrent(speech: ScheduledSpeech): Boolean = synchronized(stateLock) {

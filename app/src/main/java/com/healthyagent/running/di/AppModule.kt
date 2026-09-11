@@ -212,6 +212,8 @@ val appModule = module {
             emergencyPhraseCache = get(),
             pausedHeartRateMonitor = get(),
             onVoiceSettingsChanged = get<AtomicReference<SettingsSnapshot>>()::set,
+            realtimeMillis = SystemClock::elapsedRealtime,
+            diagnosticLogger = get(),
         )
     }
     single<RunCommandDispatcher> {

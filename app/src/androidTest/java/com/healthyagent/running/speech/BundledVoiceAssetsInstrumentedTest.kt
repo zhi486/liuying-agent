@@ -16,7 +16,7 @@ class BundledVoiceAssetsInstrumentedTest {
     fun apk内固定语音覆盖真实规则和会话事件并可恢复到私有目录() = runBlocking {
         val ruleIds = RuleCatalog.defaultRules().filterNot { it.id == "km_split" }.map { it.id }
         val sessionIds = SessionSpeechEvent.entries.map { SessionSpeechTriggerFactory.create(it).ruleId }
-        val requiredIds = ruleIds + sessionIds
+        val requiredIds = ruleIds + sessionIds + WearableLinkSpeech.create().ruleId
         assertEquals(14, requiredIds.size)
         assertEquals(BundledVoiceCatalog.entries.map { it.ruleId }.toSet(), requiredIds.toSet())
 

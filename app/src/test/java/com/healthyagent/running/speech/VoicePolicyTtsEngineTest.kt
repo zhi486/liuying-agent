@@ -38,6 +38,16 @@ class VoicePolicyTtsEngineTest {
     @get:Rule
     val temporaryFolder = TemporaryFolder()
 
+    @Test fun `手环中断通知保持APP优先级且零AI和Fish调用`() = runTest {
+        val fixture = Fixture(testScheduler.timeSource)
+        val result = fixture.engine.speak(request("data_stale", SpeechPriority.APP, companion = true)).getOrThrow()
+        assertEquals(SpeechDelivery("手环数据中断，请检查", true), result)
+        assertEquals(0, fixture.onlineCalls)
+        assertEquals(0, fixture.aiCalls)
+        assertEquals(listOf("data_stale"), fixture.opened)
+        assertEquals(VoiceAudioSource.BUNDLED, fixture.players.single().sources.single())
+    }
+
     @Test
     fun `紧急事件零网络直接播放对应固定原文`() = runTest {
         val fixture = Fixture(testScheduler.timeSource)

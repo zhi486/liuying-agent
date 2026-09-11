@@ -3,6 +3,9 @@ package com.healthyagent.running.data.sensor.ble
 import com.healthyagent.running.core.model.ConnectionState
 import com.healthyagent.running.core.model.DeviceInfo
 import com.healthyagent.running.core.model.SensorSample
+import com.healthyagent.running.data.sensor.WearableLinkObservation
+import com.healthyagent.running.data.sensor.WearableLinkFault
+import com.healthyagent.running.data.sensor.WearableLinkPhase
 import com.healthyagent.running.diagnostics.BleFailureReason
 import com.healthyagent.running.diagnostics.BleReconnectStage
 import com.healthyagent.running.diagnostics.BleResumeDecision
@@ -139,6 +142,11 @@ internal sealed interface KeepB5WriteResolution {
 internal class KeepB5SessionSupervisor(
     private val privateActivityStaleAfterMillis: Long = 12_000L,
 ) {
+    var linkObservation = WearableLinkObservation()
+        private set
+    private var linkFailureAccepted = false
+    private var faultRevision = 0L
+    private var faultEpisode = 0L
     private var lifecycle = KeepB5Lifecycle.STOPPED
     private var linkState: KeepB5LinkState = KeepB5LinkState.Disconnected
     private var maintainConnection = false
@@ -163,7 +171,52 @@ internal class KeepB5SessionSupervisor(
         const val MAX_CONSECUTIVE_SYNC_REJECTS = 3
     }
 
-    fun handle(event: KeepB5SessionEvent, nowMillis: Long): List<KeepB5SessionAction> = when (event) {
+    fun handle(event: KeepB5SessionEvent, nowMillis: Long): List<KeepB5SessionAction> {
+        if (event is KeepB5SessionEvent.RunStarted || event == KeepB5SessionEvent.RunStopped ||
+            event == KeepB5SessionEvent.ExplicitDisconnect
+        ) {
+            linkObservation = WearableLinkObservation(generation = linkObservation.generation + 1)
+            faultRevision = 0
+            faultEpisode = 0
+        }
+        linkFailureAccepted = false
+        val actions = reduce(event, nowMillis)
+        updateLinkObservation(nowMillis)
+        return actions
+    }
+
+    /** 只记录归约后的事实；不得改变传输动作或重连决策。 */
+    private fun updateLinkObservation(nowMillis: Long) {
+        val previous = linkObservation
+        linkObservation = when {
+            !maintainConnection -> previous.copy(phase = WearableLinkPhase.IDLE, fault = null)
+            lifecycle == KeepB5Lifecycle.STOPPED -> previous.copy(phase = WearableLinkPhase.PREPARING)
+            linkState is KeepB5LinkState.Ready -> if (previous.phase == WearableLinkPhase.READY) {
+                previous
+            } else {
+                previous.copy(
+                    phase = WearableLinkPhase.READY,
+                    readyRevision = previous.readyRevision + 1,
+                    readySinceMillis = nowMillis,
+                    fault = null,
+                )
+            }
+            else -> {
+                val fault = if (linkFailureAccepted && previous.readyRevision > 0 && previous.fault == null) {
+                    if (faultEpisode == 0L || previous.readySinceMillis?.let { nowMillis - it >= 10_000L } == true) {
+                        faultEpisode++
+                    }
+                    WearableLinkFault(++faultRevision, faultEpisode, nowMillis)
+                } else previous.fault
+                previous.copy(
+                    phase = if (fault != null) WearableLinkPhase.RECOVERING else WearableLinkPhase.CONNECTING,
+                    fault = fault,
+                )
+            }
+        }
+    }
+
+    private fun reduce(event: KeepB5SessionEvent, nowMillis: Long): List<KeepB5SessionAction> = when (event) {
         KeepB5SessionEvent.PrepareConnection -> handleExplicitConnect(preparing = true)
         KeepB5SessionEvent.ExplicitConnect -> handleExplicitConnect()
         KeepB5SessionEvent.ExplicitDisconnect -> handleTerminalDisconnect(changeLifecycle = false)
@@ -711,6 +764,7 @@ internal class KeepB5SessionSupervisor(
         oldGuard: KeepB5AttemptGuard,
         reason: BleFailureReason,
     ): List<KeepB5SessionAction> {
+        linkFailureAccepted = true
         connectionAttemptToken++
         val retryGuard = KeepB5AttemptGuard(epoch, connectionAttemptToken)
         currentAttempt = retryGuard
@@ -732,6 +786,7 @@ internal class KeepB5SessionSupervisor(
 
     private fun failCurrentGatt(reason: BleFailureReason): List<KeepB5SessionAction> {
         val oldGatt = requireNotNull(currentGatt)
+        linkFailureAccepted = true
         val oldLink = linkState.toDiagnostic()
         clearGattState()
         connectionAttemptToken++

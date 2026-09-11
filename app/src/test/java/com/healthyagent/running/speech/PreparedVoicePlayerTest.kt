@@ -18,6 +18,33 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PreparedVoicePlayerTest {
+    @Test fun `取得焦点时通知已失效则不启动媒体且释放焦点`() = runTest {
+        val fixture = Fixture()
+        var relevant = true
+        val token = SpeechNoticeToken { relevant }
+        fixture.onRequest = { relevant = false }
+        fixture.onStart = { it.listener.onCompletion() }
+        val result = async(token) { fixture.play() }
+        runCurrent()
+        assertTrue(result.isCancelled)
+        assertEquals(0, fixture.ports.single().starts)
+        fixture.assertCleaned()
+    }
+
+    @Test fun `已准备音频在通知撤销后不取焦点且释放媒体`() = runTest {
+        val fixture = Fixture()
+        val token = SpeechNoticeToken()
+        fixture.onStart = { it.listener.onCompletion() }
+        assertTrue(fixture.player.prepare(File("test.mp3"), VoiceAudioSource.BUNDLED).isSuccess)
+        token.cancel()
+        val result = async(token) { fixture.player.play() }
+        runCurrent()
+        assertTrue(result.isCancelled)
+        assertTrue(fixture.leases.isEmpty())
+        assertEquals(0, fixture.ports.single().starts)
+        assertEquals(1, fixture.ports.single().releases)
+    }
+
     @Test fun `只有完成回调成功且使用助手语音配置`() = runTest {
         val fixture = Fixture()
         val result = async { fixture.play() }

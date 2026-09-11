@@ -319,26 +319,6 @@ class RulesTest {
         assertNull(rule.evaluate(ctx, config))
     }
 
-    // ==================== 规则 9: DataStaleRule ====================
-
-    @Test
-    fun `DataStaleRule — 数据不新鲜触发`() {
-        val rule = DataStaleRule()
-        val frames = listOf(makeFrame(1, isDataFresh = false))
-        val ctx = RuleContext(recentFrames = frames)
-        val trigger = rule.evaluate(ctx, config)
-        assertNotNull(trigger)
-        assertEquals("data_stale", trigger!!.ruleId)
-    }
-
-    @Test
-    fun `DataStaleRule — 数据正常不触发`() {
-        val rule = DataStaleRule()
-        val frames = listOf(makeFrame(1, isDataFresh = true))
-        val ctx = RuleContext(recentFrames = frames)
-        assertNull(rule.evaluate(ctx, config))
-    }
-
     // ==================== 规则 10: KmSplitRule ====================
 
     @Test

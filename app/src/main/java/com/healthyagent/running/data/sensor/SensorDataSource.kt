@@ -21,6 +21,10 @@ interface SensorDataSource {
     val wearableConnectionState: StateFlow<ConnectionState>?
         get() = null
 
+    /** 可选运动链路事实；预连接、初次握手不等同于运动就绪。 */
+    val wearableLinkObservation: StateFlow<WearableLinkObservation>?
+        get() = null
+
     /** 传感器原始样本流（1Hz 为主） */
     val samples: Flow<SensorSample>
 

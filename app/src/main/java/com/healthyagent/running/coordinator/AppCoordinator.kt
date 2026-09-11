@@ -25,9 +25,16 @@ import com.healthyagent.running.data.health.HealthConnectSyncResult
 import com.healthyagent.running.data.repository.RunRepository
 import com.healthyagent.running.data.sensor.RunLifecycleAwareSensor
 import com.healthyagent.running.data.sensor.SensorDataSource
+import com.healthyagent.running.data.sensor.WearableLinkObservation
+import com.healthyagent.running.data.sensor.WearableLinkPhase
+import com.healthyagent.running.diagnostics.DiagnosticEvent
+import com.healthyagent.running.diagnostics.DiagnosticLogger
+import com.healthyagent.running.diagnostics.NoOpDiagnosticLogger
 import com.healthyagent.running.speech.SpeechBus
 import com.healthyagent.running.speech.SpeechPolicy
 import com.healthyagent.running.speech.SpeechRequest
+import com.healthyagent.running.speech.SpeechNoticeToken
+import com.healthyagent.running.speech.WearableLinkSpeech
 import com.healthyagent.running.speech.SessionSpeechEvent
 import com.healthyagent.running.speech.SessionSpeechTriggerFactory
 import java.time.Instant
@@ -48,6 +55,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonNull
@@ -76,6 +84,7 @@ class AppCoordinator(
     private val realtimeMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val pausedHeartRateMonitor: PausedHeartRateMonitor = PausedHeartRateMonitor(),
     private val onVoiceSettingsChanged: (SettingsSnapshot) -> Unit = {},
+    private val diagnosticLogger: DiagnosticLogger = NoOpDiagnosticLogger,
 ) {
     private val _snapshot = MutableStateFlow(
         AppSnapshot.initial(runConfig, nowMillis()).copy(
@@ -115,9 +124,12 @@ class AppCoordinator(
     private var lastCommittedDistanceMeters = 0.0
     private var sourceWasFresh = false
     private var lastCheckpointElapsed = -1L
-    private var wearableWasConnected =
-        sensorDataSource.wearableConnectionState?.value == ConnectionState.CONNECTED
-    private var wearableDisconnectNotified = false
+    private val wearableAlertGate = WearableLinkAlertGate()
+    private var wearableAlertsClosed = false
+    @Volatile private var wearableAlertSession = 0L
+    private var wearableAlertTimer: Job? = null
+    private var wearableAlertIdentity: Pair<Long, Long>? = null
+    private var wearableNoticeToken: SpeechNoticeToken? = null
     @Volatile
     private var activeCompletionId: String? = null
     @Volatile
@@ -133,6 +145,7 @@ class AppCoordinator(
     init {
         observeConnection()
         observeWearableConnection()
+        observeWearableLink()
         observeRoutePoints()
         observeCoachMessages()
         observeSettings()
@@ -323,6 +336,7 @@ class AppCoordinator(
         }
 
         val config = pendingRunConfig
+        resetWearableAlerts()
         runGeneration++
         cancelPipeline()
         activeCompletionId = null
@@ -450,6 +464,8 @@ class AppCoordinator(
             return CommandOutcome.Rejected(BridgeErrorCode.COMMAND_NOT_ALLOWED, "当前没有可结束的跑步")
         }
 
+        resetWearableAlerts()
+
         if (sessionManager.currentState == RunState.RUNNING) {
             val frozenElapsedMillis = currentActiveElapsedMillis()
             val frozenElapsed = maxOf(lastCommittedElapsedSeconds, frozenElapsedMillis / 1_000L)
@@ -510,6 +526,8 @@ class AppCoordinator(
 
     @Synchronized
     fun close() {
+        wearableAlertsClosed = true
+        resetWearableAlerts()
         cancelPipeline()
         speechBus.shutdown()
         scope.cancel()
@@ -544,38 +562,77 @@ class AppCoordinator(
         val wearableState = sensorDataSource.wearableConnectionState ?: return
         scope.launch {
             wearableState.collect { state ->
-                when (state) {
-                    ConnectionState.CONNECTED -> {
-                        wearableWasConnected = true
-                        wearableDisconnectNotified = false
-                        updateSnapshot {
-                            it.copy(
-                                wearable = wearableSnapshot(state),
-                                safetyState = if (it.safetyState.message == WEARABLE_DISCONNECTED_MESSAGE) {
-                                    SafetySnapshot()
-                                } else {
-                                    it.safetyState
-                                },
-                            )
-                        }
-                    }
-                    ConnectionState.CONNECTING,
-                    ConnectionState.DISCONNECTED,
-                    ConnectionState.ERROR,
-                    -> {
-                        val running = sessionManager.currentState in ACTIVE_RUN_STATES
-                        updateSnapshot { it.copy(wearable = wearableSnapshot(state)) }
-                        if (running && wearableWasConnected && !wearableDisconnectNotified) {
-                            wearableDisconnectNotified = true
-                            updateSnapshot {
-                                it.copy(
-                                    safetyState = SafetySnapshot(
-                                        "warning",
-                                        WEARABLE_DISCONNECTED_MESSAGE,
-                                    ),
-                                )
-                            }
-                        }
+                updateSnapshot { it.copy(wearable = wearableSnapshot(state)) }
+            }
+        }
+    }
+
+    private fun observeWearableLink() {
+        val observations = sensorDataSource.wearableLinkObservation ?: return
+        scope.launch {
+            observations.collect {
+                synchronized(this@AppCoordinator) { refreshWearableAlert() }
+            }
+        }
+    }
+
+    /** 调用者持有协调器锁；暂停保留此状态，只有会话边界建立新基线。 */
+    private fun resetWearableAlerts() {
+        wearableAlertSession++
+        cancelWearableNotice()
+        wearableAlertGate.reset(sensorDataSource.wearableLinkObservation?.value ?: WearableLinkObservation())
+    }
+
+    private fun cancelWearableNotice() {
+        wearableAlertTimer?.cancel()
+        wearableAlertTimer = null
+        wearableNoticeToken?.let(speechBus::cancelNotice)
+        wearableNoticeToken = null
+        wearableAlertIdentity = null
+    }
+
+    private fun refreshWearableAlert() {
+        if (wearableAlertsClosed) return
+        val observations = sensorDataSource.wearableLinkObservation ?: return
+        // 不用 collect 参数：恢复可能已到达 source，但 collector 尚未处理。
+        val observation = observations.value
+        if (sessionManager.currentState !in ACTIVE_RUN_STATES) {
+            cancelWearableNotice()
+            return
+        }
+        val fault = observation.fault?.takeIf { observation.phase == WearableLinkPhase.RECOVERING }
+        val identity = fault?.let { observation.generation to it.id }
+        if (identity != wearableAlertIdentity) {
+            cancelWearableNotice()
+            wearableAlertIdentity = identity
+        }
+        updateSnapshot { current ->
+            current.copy(safetyState = when {
+                fault == null && current.safetyState.message == WEARABLE_DISCONNECTED_MESSAGE -> SafetySnapshot()
+                fault != null && current.safetyState.message == null -> SafetySnapshot("warning", WEARABLE_DISCONNECTED_MESSAGE)
+                else -> current.safetyState
+            })
+        }
+        if (fault == null) return
+        val session = wearableAlertSession
+        val now = realtimeMillis()
+        val due = wearableAlertGate.evaluate(observation, now)
+        if (due != null) {
+            val token = SpeechNoticeToken {
+                val current = observations.value
+                wearableAlertSession == session && current.generation == observation.generation &&
+                    current.phase == WearableLinkPhase.RECOVERING && current.fault?.id == due.id
+            }
+            wearableNoticeToken = token
+            diagnosticLogger.record(DiagnosticEvent.BleLinkLostNotice(session, observation.generation, due.id, due.episodeId))
+            speechBus.enqueue(SpeechRequest(WearableLinkSpeech.create(), noticeToken = token))
+        } else if (wearableAlertTimer == null && now - fault.startedAtMillis < 10_000L) {
+            wearableAlertTimer = scope.launch {
+                delay((10_000L - (now - fault.startedAtMillis)).coerceAtLeast(1))
+                synchronized(this@AppCoordinator) {
+                    if (wearableAlertSession == session && wearableAlertIdentity == identity) {
+                        wearableAlertTimer = null
+                        refreshWearableAlert()
                     }
                 }
             }
@@ -949,6 +1006,7 @@ class AppCoordinator(
                     } else {
                         synchronized(this) {
                             if (sessionManager.currentState == RunState.IDLE) {
+                                resetWearableAlerts()
                                 runGeneration++
                                 applyActiveRunConfig(restoredConfig)
                                 sessionManager.restoreSession(session)

@@ -37,6 +37,9 @@ import com.healthyagent.running.data.repository.RunRepository
 import com.healthyagent.running.data.repository.RunHistoryPage
 import com.healthyagent.running.data.sensor.RunLifecycleAwareSensor
 import com.healthyagent.running.data.sensor.SensorDataSource
+import com.healthyagent.running.data.sensor.WearableLinkObservation
+import com.healthyagent.running.data.sensor.WearableLinkPhase
+import com.healthyagent.running.data.sensor.WearableLinkFault
 import com.healthyagent.running.diagnostics.DiagnosticEvent
 import com.healthyagent.running.diagnostics.DiagnosticLogger
 import com.healthyagent.running.diagnostics.SpeechOutcomeReason
@@ -68,9 +71,17 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.FlowCollector
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.withContext
@@ -91,6 +102,204 @@ import kotlin.time.TestTimeSource
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppCoordinatorTest {
+    @Test fun `关闭时已等待协调器锁的旧观察不能再写快照或提交故障`() = runTest {
+        val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+        val source = MutableStateFlow(WearableLinkObservation())
+        val entered = CountDownLatch(1)
+        val emitted = CountDownLatch(1)
+        val observations = object : StateFlow<WearableLinkObservation> by source {
+            override suspend fun collect(collector: FlowCollector<WearableLinkObservation>): Nothing =
+                source.collect(FlowCollector { observation ->
+                    if (observation.generation == 1L) entered.countDown()
+                    collector.emit(observation)
+                    if (observation.generation == 1L) emitted.countDown()
+                })
+        }
+        val sensor = FakeSensorDataSource(
+            initialWearableState = ConnectionState.CONNECTED,
+            wearableLinkObservation = observations,
+        )
+        val bus = SpeechBus(FakeTtsEngine(), dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(
+            FakeRunRepository(), sensor, speechBus = bus,
+            coordinatorScope = CoroutineScope(SupervisorJob() + dispatcher),
+        )
+        try {
+            coordinator.awaitRestoration()
+            assertTrue(coordinator.startRun() is CommandOutcome.Accepted)
+            runCurrent()
+            withContext(dispatcher) { }
+            val closedRevision = synchronized(coordinator) {
+                source.value = lostLink()
+                assertTrue("观察应已抵达被占用的协调器锁", entered.await(5, TimeUnit.SECONDS))
+                coordinator.close()
+                source.value = lostLink().copy(generation = 2)
+                sensor.advanceClockTo(20_000)
+                coordinator.snapshot.value.revision
+            }
+            assertTrue("等待中的观察应已返回", emitted.await(5, TimeUnit.SECONDS))
+            withContext(dispatcher) { }
+            assertEquals(closedRevision, coordinator.snapshot.value.revision)
+            runCurrent()
+        } finally {
+            coordinator.close()
+            runCurrent()
+            dispatcher.close()
+        }
+    }
+
+    @Test fun `无GPS帧时真实手环故障连续十秒仅播一次且恢复立即取消`() = runTest {
+        val fixture = linkFixture()
+        fixture.observations.value = lostLink()
+        runCurrent()
+        fixture.sensor.advanceClockTo(9_999)
+        advanceTimeBy(9_999)
+        runCurrent()
+        assertEquals(1, fixture.tts.requests.size)
+        fixture.sensor.advanceClockTo(10_000)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals("手环数据中断，请检查", fixture.tts.requests.last().text)
+        assertEquals(2, fixture.tts.requests.size)
+        assertTrue(fixture.tts.isSpeaking)
+        fixture.observations.value = WearableLinkObservation(1, WearableLinkPhase.READY, 2, 10_000)
+        runCurrent()
+        assertTrue(!fixture.tts.isSpeaking)
+        assertNull(fixture.coordinator.snapshot.value.latestCoachMessage?.takeIf { it.text == "手环数据中断，请检查" })
+        fixture.observations.value = lostLink(2, 2, 1, 11_000)
+        runCurrent()
+        fixture.sensor.advanceClockTo(21_000)
+        advanceTimeBy(11_000)
+        runCurrent()
+        assertEquals(2, fixture.tts.requests.size)
+        fixture.coordinator.close()
+        runCurrent()
+    }
+
+    @Test fun `暂停时仍监听真实故障且恢复后未满十秒不播`() = runTest {
+        val fixture = linkFixture()
+        fixture.coordinator.pauseRun()
+        runCurrent()
+        fixture.tts.completeNextSuccessfully()
+        runCurrent()
+        fixture.observations.value = lostLink()
+        runCurrent()
+        fixture.sensor.advanceClockTo(10_000)
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertEquals("手环数据中断，请检查", fixture.tts.requests.last().text)
+        fixture.coordinator.close()
+        runCurrent()
+    }
+
+    @Test fun `恢复连接发生在资格定时器到期前不产生迟到通知`() = runTest {
+        val fixture = linkFixture()
+        fixture.observations.value = lostLink()
+        runCurrent()
+        fixture.sensor.advanceClockTo(9_999)
+        advanceTimeBy(9_999)
+        fixture.observations.value = WearableLinkObservation(1, WearableLinkPhase.READY, 2, 9_999)
+        fixture.sensor.advanceClockTo(10_000)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, fixture.tts.requests.size)
+        fixture.coordinator.close()
+        runCurrent()
+    }
+
+    @Test fun `恢复进程建立基线不补播旧故障但新Ready后的故障可播`() = runTest {
+        val fixture = linkFixture(
+            RunSession(id = "restored", startTimeMillis = 1_000, runState = RunState.PAUSED),
+            lostLink(),
+        )
+        fixture.sensor.advanceClockTo(20_000)
+        advanceTimeBy(20_000)
+        runCurrent()
+        assertTrue(fixture.tts.requests.isEmpty())
+        fixture.observations.value = lostLink(2, 2, 1, 20_000)
+        runCurrent()
+        fixture.sensor.advanceClockTo(30_000)
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertEquals(listOf("手环数据中断，请检查"), fixture.tts.requests.map { it.text })
+        fixture.coordinator.close()
+        runCurrent()
+    }
+
+    @Test fun `停止和新跑取消旧资格定时器与通知`() = runTest {
+        val fixture = linkFixture()
+        fixture.observations.value = lostLink()
+        runCurrent()
+        fixture.coordinator.stopRun()
+        runCurrent()
+        fixture.tts.completeNextSuccessfully()
+        runCurrent()
+        fixture.coordinator.startRun()
+        runCurrent()
+        fixture.tts.completeNextSuccessfully()
+        runCurrent()
+        fixture.sensor.advanceClockTo(20_000)
+        advanceTimeBy(20_000)
+        runCurrent()
+        assertTrue(fixture.tts.requests.none { it.text == "手环数据中断，请检查" })
+        fixture.coordinator.close()
+        runCurrent()
+    }
+
+    @Test fun `仅定位或心率陈旧都不能派发手环中断规则`() = runTest {
+        for (type in listOf(SampleType.HEART_RATE, SampleType.DISTANCE)) {
+            val sensor = FakeSensorDataSource(initialWearableState = ConnectionState.CONNECTED)
+            val logger = FakeDiagnosticLogger()
+            val coordinator = createCoordinator(
+                FakeRunRepository(), sensor,
+                ruleEngine = RuleEngine(RuleCatalog.defaultRules(), RunConfig(), diagnosticLogger = logger),
+            )
+            coordinator.startRun()
+            runCurrent()
+            repeat(15) { index ->
+                val time = index * 1_000L
+                sensor.emitSample(type, if (type == SampleType.HEART_RATE) 140.0 else index * 2.0, time)
+                sensor.emitTick(time)
+                runCurrent()
+            }
+            assertTrue(logger.events.filterIsInstance<DiagnosticEvent.RuleTriggered>().none { it.ruleId == "data_stale" })
+            coordinator.close()
+            runCurrent()
+        }
+    }
+
+    private data class LinkFixture(
+        val sensor: FakeSensorDataSource,
+        val observations: MutableStateFlow<WearableLinkObservation>,
+        val tts: FakeTtsEngine,
+        val coordinator: AppCoordinator,
+    )
+
+    private fun kotlinx.coroutines.test.TestScope.linkFixture(
+        activeSession: RunSession? = null,
+        baseline: WearableLinkObservation = WearableLinkObservation(),
+    ): LinkFixture {
+        val observations = MutableStateFlow(baseline)
+        val sensor = FakeSensorDataSource(
+            wearableInfo = DeviceInfo("Keep B5"),
+            initialWearableState = ConnectionState.CONNECTED,
+            wearableLinkObservation = observations,
+        )
+        val tts = FakeTtsEngine()
+        val bus = SpeechBus(tts, dispatcher = StandardTestDispatcher(testScheduler))
+        val coordinator = createCoordinator(FakeRunRepository(activeSession), sensor, speechBus = bus)
+        if (activeSession == null) {
+            coordinator.startRun()
+            runCurrent()
+            tts.completeNextSuccessfully()
+            runCurrent()
+        }
+        return LinkFixture(sensor, observations, tts, coordinator)
+    }
+
+    private fun lostLink(readyRevision: Long = 1, id: Long = 1, episode: Long = 1, at: Long = 0) =
+        WearableLinkObservation(1, WearableLinkPhase.RECOVERING, readyRevision, 0, WearableLinkFault(id, episode, at))
+
     @Test
     fun `运行与暂停中保存警戒偏好不改变本跑而下一跑使用新阈值和间隔`() = runTest {
         val clock = TestTimeSource()
@@ -1260,6 +1469,7 @@ class AppCoordinatorTest {
         ruleEngine: RuleEngine? = null,
         sessionManager: RunSessionManager = RunSessionManager(),
         pausedHeartRateMonitor: PausedHeartRateMonitor = PausedHeartRateMonitor(),
+        coordinatorScope: CoroutineScope = backgroundScope,
         onVoiceSettingsChanged: (SettingsSnapshot) -> Unit = {},
         llmClient: LlmClient = object : LlmClient {
             override suspend fun analyze(request: LlmAnalyzeRequest): Result<LlmAnalyzeResponse> =
@@ -1289,7 +1499,7 @@ class AppCoordinatorTest {
             healthConnectSync = healthConnectSync,
             analysisManager = AnalysisManager(llmClient),
             emergencyPhraseCache = EmergencyPhraseCache(llmClient),
-            scope = backgroundScope,
+            scope = coordinatorScope,
             nowMillis = { 1_787_745_600_000L },
             realtimeMillis = { sensorDataSource.monotonicMillis },
             pausedHeartRateMonitor = pausedHeartRateMonitor,
@@ -1609,7 +1819,8 @@ class AppCoordinatorTest {
         assertEquals("error", coordinator.snapshot.value.wearable.state)
         assertEquals("Keep B5", coordinator.snapshot.value.wearable.deviceName)
         assertEquals(null, coordinator.snapshot.value.wearable.batteryPercent)
-        assertEquals("Keep B5 已断开，GPS 跑步仍在继续", coordinator.snapshot.value.safetyState.message)
+        // 只有连接枚举，没有已运动 Ready 后真实故障的证据，不冒充跑中断开。
+        assertNull(coordinator.snapshot.value.safetyState.message)
     }
 
     @Test
@@ -1687,6 +1898,7 @@ private class FakeSensorDataSource(
     private val connectFailure: Throwable? = null,
     private val disconnectGate: CompletableDeferred<Unit>? = null,
     private val trace: MutableList<String>? = null,
+    override val wearableLinkObservation: StateFlow<WearableLinkObservation>? = null,
 ) : SensorDataSource, RunLifecycleAwareSensor {
     private val mutableConnectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val mutableWearableConnectionState = initialWearableState?.let(::MutableStateFlow)

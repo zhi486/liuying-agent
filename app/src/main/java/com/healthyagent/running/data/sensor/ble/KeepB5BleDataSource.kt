@@ -53,6 +53,8 @@ class KeepB5BleDataSource internal constructor(
     private val sampleQueue = Channel<SensorSample>(Channel.UNLIMITED)
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState = _connectionState.asStateFlow()
+    private val _wearableLinkObservation = MutableStateFlow(supervisor.linkObservation)
+    override val wearableLinkObservation = _wearableLinkObservation.asStateFlow()
     override val samples: Flow<SensorSample> = sampleQueue.receiveAsFlow()
 
     @Volatile private var deviceInfoSnapshot = DeviceInfo(name = "Keep B5")
@@ -86,6 +88,7 @@ class KeepB5BleDataSource internal constructor(
     private fun reducerDispatch(event: KeepB5SessionEvent) {
         synchronized(reducerLock) {
             val actions = supervisor.handle(event, monotonicMillis())
+            _wearableLinkObservation.value = supervisor.linkObservation
             if (event == KeepB5SessionEvent.PrepareConnection ||
                 event == KeepB5SessionEvent.ExplicitConnect || event == KeepB5SessionEvent.ExplicitDisconnect ||
                 event == KeepB5SessionEvent.RunStopped ||

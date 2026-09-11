@@ -18,6 +18,7 @@ class CompositeSensorDataSource(
 ) : SensorDataSource, RunLifecycleAwareSensor {
     override val connectionState: StateFlow<ConnectionState> = phone.connectionState
     override val wearableConnectionState: StateFlow<ConnectionState>? = wearable?.connectionState
+    override val wearableLinkObservation: StateFlow<WearableLinkObservation>? = wearable?.wearableLinkObservation
 
     override val samples: Flow<SensorSample> = wearable?.let {
         merge(phone.samples, it.samples)

@@ -60,9 +60,9 @@ class VoicePolicyTtsEngine(
                 val ruleId = request.trigger.ruleId
                 val bundled = BundledVoiceCatalog.find(ruleId)
                 val core = bundled?.text ?: request.trigger.speakText
-                val urgent = request.trigger.ttsPriority == SpeechPriority.URGENT
+                val localOnly = request.trigger.ttsPriority == SpeechPriority.URGENT || ruleId == "data_stale"
                 val kilometer = ruleId == "km_split"
-                val online = if (urgent) null else prepareOnline(operation, acceptedRequest, core, kilometer)
+                val online = if (localOnly) null else prepareOnline(operation, acceptedRequest, core, kilometer)
                 currentCoroutineContext().ensureActive()
                 val prepared = online ?: run {
                     if (kilometer) {
@@ -75,11 +75,12 @@ class VoicePolicyTtsEngine(
                         record(TtsEventKind.FAILED, provider = TtsProvider.BUNDLED)
                         return@withContext Result.failure(IllegalStateException("固定语音资源不可用"))
                     }
-                    if (!urgent) record(TtsEventKind.LOCAL_FALLBACK, provider = TtsProvider.BUNDLED)
+                    if (!localOnly) record(TtsEventKind.LOCAL_FALLBACK, provider = TtsProvider.BUNDLED)
                     prepareAudio(operation, Prepared(file, core, VoiceAudioSource.BUNDLED))
                 }
                 val player = checkNotNull(operation.player)
                 currentCoroutineContext().ensureActive()
+                request.noticeToken?.ensureValid()
                 synchronized(lock) {
                     if (active !== operation) throw CancellationException("语音操作已失效")
                     operation.playing = true
@@ -92,7 +93,7 @@ class VoicePolicyTtsEngine(
         } catch (error: CancellationException) {
             cancel(operation)
             if (!operation.playing) record(TtsEventKind.CANCELLED, provider =
-                if (request.trigger.ttsPriority == SpeechPriority.URGENT) TtsProvider.BUNDLED else TtsProvider.FISH)
+                if (request.trigger.ttsPriority == SpeechPriority.URGENT || request.trigger.ruleId == "data_stale") TtsProvider.BUNDLED else TtsProvider.FISH)
             throw error
         } catch (error: Exception) {
             return Result.failure(error)

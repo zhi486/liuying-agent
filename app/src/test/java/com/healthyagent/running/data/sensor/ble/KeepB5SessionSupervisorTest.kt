@@ -4,6 +4,8 @@ import com.healthyagent.running.core.model.ConnectionState
 import com.healthyagent.running.core.model.DeviceInfo
 import com.healthyagent.running.core.model.SampleType
 import com.healthyagent.running.core.model.SensorSample
+import com.healthyagent.running.data.sensor.WearableLinkFault
+import com.healthyagent.running.data.sensor.WearableLinkPhase
 import com.healthyagent.running.diagnostics.BleFailureReason
 import com.healthyagent.running.diagnostics.BleStaleEventKind
 import com.healthyagent.running.diagnostics.BleSyncKind as DiagnosticSyncKind
@@ -17,6 +19,94 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KeepB5SessionSupervisorTest {
+    @Test
+    fun `预连接与初次握手失败没有运动故障资格`() {
+        val supervisor = KeepB5SessionSupervisor()
+        val guard = preparedPrivate(supervisor)
+        assertEquals(WearableLinkPhase.PREPARING, supervisor.linkObservation.phase)
+        assertEquals(0L, supervisor.linkObservation.readyRevision)
+        supervisor.handle(KeepB5SessionEvent.RunStarted(0L), 1_000)
+        assertEquals(WearableLinkPhase.CONNECTING, supervisor.linkObservation.phase)
+        supervisor.handle(KeepB5SessionEvent.StartWriteCompleted(guard, false), 2_000)
+        assertNull(supervisor.linkObservation.fault)
+        assertEquals(0L, supervisor.linkObservation.readyRevision)
+    }
+
+    @Test
+    fun `标准心率预连接的内部Ready不冒充运动Ready`() {
+        val supervisor = KeepB5SessionSupervisor()
+        readyStandard(supervisor)
+        assertEquals(WearableLinkPhase.PREPARING, supervisor.linkObservation.phase)
+        assertEquals(0L, supervisor.linkObservation.readyRevision)
+        supervisor.handle(KeepB5SessionEvent.RunStarted(0L), 2_000)
+        assertEquals(WearableLinkPhase.READY, supervisor.linkObservation.phase)
+        assertEquals(1L, supervisor.linkObservation.readyRevision)
+        assertEquals(2_000L, supervisor.linkObservation.readySinceMillis)
+    }
+
+    @Test
+    fun `真实失败保留故障起点和曾Ready证据而重试与旧回调不重置`() {
+        val supervisor = KeepB5SessionSupervisor()
+        val guard = workoutReady(supervisor)
+        val failed = supervisor.handle(KeepB5SessionEvent.LinkFailed(guard, BleFailureReason.REMOTE_DISCONNECTED), 1_000)
+        val fault = WearableLinkFault(1, 1, 1_000)
+        assertEquals(fault, supervisor.linkObservation.fault)
+        assertEquals(1L, supervisor.linkObservation.readyRevision)
+        val retry = failed.filterIsInstance<KeepB5SessionAction.ScheduleReconnect>().single().guard
+        supervisor.handle(KeepB5SessionEvent.ReconnectDue(retry), 2_000)
+        assertEquals(WearableLinkPhase.RECOVERING, supervisor.linkObservation.phase)
+        supervisor.handle(KeepB5SessionEvent.ScanFailed(retry, BleFailureReason.SCAN_TIMEOUT), 5_000)
+        assertEquals(fault, supervisor.linkObservation.fault)
+        supervisor.handle(KeepB5SessionEvent.LinkFailed(guard, BleFailureReason.GATT_ERROR), 6_000)
+        assertEquals(fault, supervisor.linkObservation.fault)
+    }
+
+    @Test
+    fun `短暂Ready换连续故障身份但稳定十秒后才换通知episode`() {
+        val supervisor = KeepB5SessionSupervisor()
+        var guard = workoutReady(supervisor)
+        var retry = supervisor.handle(KeepB5SessionEvent.LinkFailed(guard, BleFailureReason.REMOTE_DISCONNECTED), 1_000)
+            .filterIsInstance<KeepB5SessionAction.ScheduleReconnect>().single().guard
+        supervisor.handle(KeepB5SessionEvent.ReconnectDue(retry), 2_000)
+        guard = readyPrivate(supervisor, retry, 2, activityAtMillis = 3_000)
+        assertNull(supervisor.linkObservation.fault)
+        retry = supervisor.handle(KeepB5SessionEvent.LinkFailed(guard, BleFailureReason.REMOTE_DISCONNECTED), 12_999)
+            .filterIsInstance<KeepB5SessionAction.ScheduleReconnect>().single().guard
+        assertEquals(WearableLinkFault(2, 1, 12_999), supervisor.linkObservation.fault)
+        supervisor.handle(KeepB5SessionEvent.ReconnectDue(retry), 13_000)
+        guard = readyPrivate(supervisor, retry, 3, activityAtMillis = 14_000)
+        supervisor.handle(KeepB5SessionEvent.LinkFailed(guard, BleFailureReason.REMOTE_DISCONNECTED), 24_000)
+        assertEquals(WearableLinkFault(3, 2, 24_000), supervisor.linkObservation.fault)
+        assertEquals(3L, supervisor.linkObservation.readyRevision)
+    }
+
+    @Test
+    fun `暂停不清观察而主动断开和新跑换代清资格`() {
+        val supervisor = KeepB5SessionSupervisor()
+        val guard = workoutReady(supervisor)
+        val generation = supervisor.linkObservation.generation
+        supervisor.handle(KeepB5SessionEvent.RunPaused(1), 1_000)
+        supervisor.handle(KeepB5SessionEvent.LinkFailed(guard, BleFailureReason.REMOTE_DISCONNECTED), 2_000)
+        assertEquals(generation, supervisor.linkObservation.generation)
+        assertNotNull(supervisor.linkObservation.fault)
+        supervisor.handle(KeepB5SessionEvent.ExplicitDisconnect, 3_000)
+        assertEquals(WearableLinkPhase.IDLE, supervisor.linkObservation.phase)
+        assertNull(supervisor.linkObservation.fault)
+        assertTrue(supervisor.linkObservation.generation > generation)
+        supervisor.handle(KeepB5SessionEvent.RunStopped, 4_000)
+        supervisor.handle(KeepB5SessionEvent.RunStarted(0), 5_000)
+        assertEquals(0L, supervisor.linkObservation.readyRevision)
+        assertNull(supervisor.linkObservation.fault)
+    }
+
+    private fun workoutReady(supervisor: KeepB5SessionSupervisor): KeepB5GattGuard {
+        val guard = preparedPrivate(supervisor)
+        supervisor.handle(KeepB5SessionEvent.RunStarted(0), 0)
+        supervisor.handle(KeepB5SessionEvent.StartWriteCompleted(guard, true), 0)
+        supervisor.handle(KeepB5SessionEvent.PrivateActivity(PrivateWorkoutActivity(guard, 0)), 0)
+        return guard
+    }
+
     @Test
     fun `孤立同步拒绝不重连且同类成功清零拒绝计数`() {
         KeepB5SyncKind.entries.forEach { kind ->
