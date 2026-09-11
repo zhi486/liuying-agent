@@ -167,6 +167,17 @@ class FileDiagnosticLoggerTest {
     }
 
     @Test
+    fun deepseekDiagnosticsContainOnlyFixedOutcome() = runTest {
+        val logger = newLogger()
+        DeepseekOutcome.entries.forEach { logger.record(DiagnosticEvent.DeepseekCompanionResult(it)) }
+        logger.flush()
+        val lines = currentLog().readLines().map(::decode)
+        assertEquals(listOf("attempted", "success", "missing_config", "auth", "rate_limit", "network", "timeout", "cancelled", "invalid_response", "server"), lines.map { it.payloadValue("outcome") })
+        assertTrue(lines.all { it["module"]!!.jsonPrimitive.content == "ai" && it["eventName"]!!.jsonPrimitive.content == "deepseek_companion_result" })
+        assertTrue(lines.all { it["payload"]!!.jsonObject.keys == setOf("outcome") })
+    }
+
+    @Test
     fun doesNotPersistThrowableSecrets() = runTest {
         val failure = DiagnosticFailure.from(
             IllegalStateException("Bearer secret-token"),

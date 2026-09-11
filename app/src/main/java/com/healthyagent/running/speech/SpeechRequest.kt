@@ -1,6 +1,7 @@
 package com.healthyagent.running.speech
 
 import com.healthyagent.running.ai.LlmAnalyzeRequest
+import com.healthyagent.running.ai.DeepseekRequestConfig
 import com.healthyagent.running.core.model.RuleTrigger
 import kotlin.time.TimeMark
 import kotlin.coroutines.AbstractCoroutineContextElement
@@ -17,6 +18,7 @@ data class SpeechRequest(
     /** 标记携带单调时钟源；排队和 pending 提升不得重置在线准备预算。 */
     val preparationAcceptedAt: TimeMark? = null,
     val noticeToken: SpeechNoticeToken? = null,
+    val deepseekConfig: DeepseekRequestConfig? = null,
 )
 
 /** 单条通知的撤销凭证；随协程传至媒体启动门，不影响其他语音。 */
