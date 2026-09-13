@@ -9,7 +9,9 @@ import com.healthyagent.running.core.model.Severity
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.SpeechPriority
 import com.healthyagent.running.core.model.Split
+import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.data.local.SettingsRepository
+import com.healthyagent.running.data.repository.RunRepository
 import com.healthyagent.running.diagnostics.DiagnosticLogger
 import com.healthyagent.running.diagnostics.DiagnosticEvent
 import com.healthyagent.running.diagnostics.SpeechOutcomeReason
@@ -27,6 +29,51 @@ import org.koin.core.context.GlobalContext
 /** 仅经用户明确授权并传入开关时合成一句；普通测试运行不访问云端。 */
 @RunWith(AndroidJUnit4::class)
 class FishVoiceLiveTest {
+    /** 只播一条“固定核心＋实时陪伴”；不启动跑步、不写入记录。 */
+    @Test
+    fun configuredDeepseekAndFishSpeakOneWholePhrase() {
+        assumeTrue(
+            "整句实听必须显式开启，可能各消耗一次 DeepSeek 与 Fish API 额度",
+            InstrumentationRegistry.getArguments().getString("allowDeepseekFishPreview") == "true",
+        )
+        runBlocking {
+            val koin = GlobalContext.get()
+            val settings = koin.get<SettingsRepository>().current()
+            val repository = koin.get<RunRepository>()
+            val sessionsBefore = repository.getAllSessions().size
+            assertTrue("手机语音提醒未开启", settings.ttsEnabled)
+            assertTrue("AI 陪伴未开启", settings.llmEnabled)
+            assertTrue("手机未配置 Fish Key", settings.fishApiKey.isNotBlank())
+            assertTrue("手机未配置流萤音色", settings.fishReferenceId.isNotBlank())
+            assertTrue("当前存在未结束的跑步，拒绝试听", repository.getActiveSession() == null)
+            val deepseekConfig = requireNotNull(
+                koin.get<DeepseekCredentialsStore>().capture(settings.coachTone),
+            ) { "手机未配置 DeepSeek Key" }
+            val core = "跑步已暂停。"
+            val engine = koin.get<TtsEngine>()
+            val logger = koin.get<DiagnosticLogger>()
+            try {
+                val result = withTimeout(90_000L) {
+                    engine.speak(SpeechRequest(
+                        trigger = RuleTrigger(
+                            "session_paused", Severity.NORMAL, core, SpeechPriority.APP,
+                        ),
+                        companionEnabled = true,
+                        deepseekConfig = deepseekConfig,
+                    ))
+                }
+                val delivery = result.getOrThrow()
+                assertTrue("整句试听未实际完成，请检查脱敏诊断", delivery.played)
+                assertTrue("DeepSeek 未返回有效陪伴句", delivery.text.startsWith(core) && delivery.text.length > core.length)
+                assertEquals("试听不应创建跑步记录", sessionsBefore, repository.getAllSessions().size)
+                assertTrue("试听不应创建活动跑步", repository.getActiveSession() == null)
+            } finally {
+                engine.stop()
+                logger.flush()
+            }
+        }
+    }
+
     /** 仅模拟一个已完成公里事件，不启动定位、不保存虚拟跑步记录。 */
     @Test
     fun configuredVoiceSpeaksSimulatedKmSplit() {
