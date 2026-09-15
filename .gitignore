@@ -56,3 +56,8 @@ frontend/dist/
 frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
+
+# === Agent core ===
+agent-server/node_modules/
+agent-server/coverage/
+agent-server/.wrangler/

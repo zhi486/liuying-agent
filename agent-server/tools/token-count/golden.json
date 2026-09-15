@@ -1,0 +1,341 @@
+[
+  {
+    "name": "plain-chinese",
+    "request": {
+      "model": "deepseek-flash",
+      "thinking": {
+        "type": "disabled"
+      },
+      "stream": false,
+      "max_tokens": 600,
+      "messages": [
+        {
+          "role": "system",
+          "content": "只读助手"
+        },
+        {
+          "role": "user",
+          "content": "你好"
+        }
+      ],
+      "tools": []
+    },
+    "expected": {
+      "inputTokens": 9,
+      "promptSha256": "fd61fec2f9052a80c06e9449ca0f3537e66798fa75e553f5449c3796014ee7f7",
+      "tokenIdsSha256": "5f13790d5dd1fa11db56ad85f21e547cba2ccf88f6a40e03b73cddb98a0a09c6"
+    }
+  },
+  {
+    "name": "production-round-1",
+    "request": {
+      "model": "deepseek-flash",
+      "thinking": {
+        "type": "disabled"
+      },
+      "stream": false,
+      "max_tokens": 600,
+      "messages": [
+        {
+          "role": "system",
+          "content": "只读助手"
+        },
+        {
+          "role": "user",
+          "content": "请复盘最近一次跑步🏃，只使用已授权摘要。"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "runs_list",
+            "description": "读取当前用户明确授权的跑步摘要列表；无原始轨迹和连续心率。",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "runs_summary",
+            "description": "根据 runId 读取授权范围内的一条跑步摘要。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string"
+                }
+              },
+              "required": ["runId"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "inputTokens": 347,
+      "promptSha256": "04aa6d8d481ebdba232504a7755ebbb05e6266dd8657ab36c3873ee581f91aa8",
+      "tokenIdsSha256": "87212c17da4d2baf123d37f1866175f031ed51875785154118aff1ebddad7cdf"
+    }
+  },
+  {
+    "name": "production-round-2",
+    "request": {
+      "model": "deepseek-flash",
+      "thinking": {
+        "type": "disabled"
+      },
+      "stream": false,
+      "max_tokens": 600,
+      "messages": [
+        {
+          "role": "system",
+          "content": "只读助手"
+        },
+        {
+          "role": "user",
+          "content": "请复盘最近一次跑步🏃，只使用已授权摘要。"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_list",
+              "type": "function",
+              "function": {
+                "name": "runs_list",
+                "arguments": "{}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_list",
+          "content": "{\"runs\":[{\"runId\":\"r_1\",\"distanceMeters\":4000,\"durationSeconds\":1800,\"averagePaceSecPerKm\":450,\"averageHeartRate\":150}]}"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "runs_list",
+            "description": "读取当前用户明确授权的跑步摘要列表；无原始轨迹和连续心率。",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "runs_summary",
+            "description": "根据 runId 读取授权范围内的一条跑步摘要。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string"
+                }
+              },
+              "required": ["runId"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "inputTokens": 421,
+      "promptSha256": "6c74f2fe0352537ea704d87472bc470039c065ab931ddbcee56aa8b91d19b566",
+      "tokenIdsSha256": "e4a43af289b219b1dd5c08c904ccec2c20dd25a755afad060666ab6776ad7a1d"
+    }
+  },
+  {
+    "name": "production-round-3",
+    "request": {
+      "model": "deepseek-flash",
+      "thinking": {
+        "type": "disabled"
+      },
+      "stream": false,
+      "max_tokens": 600,
+      "messages": [
+        {
+          "role": "system",
+          "content": "只读助手"
+        },
+        {
+          "role": "user",
+          "content": "请复盘最近一次跑步🏃，只使用已授权摘要。"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_list",
+              "type": "function",
+              "function": {
+                "name": "runs_list",
+                "arguments": "{}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_list",
+          "content": "{\"runs\":[{\"runId\":\"r_1\",\"distanceMeters\":4000,\"durationSeconds\":1800,\"averagePaceSecPerKm\":450,\"averageHeartRate\":150}]}"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_summary",
+              "type": "function",
+              "function": {
+                "name": "runs_summary",
+                "arguments": "{\"runId\":\"r_1\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_summary",
+          "content": "{\"run\":{\"runId\":\"r_1\",\"distanceMeters\":4000,\"durationSeconds\":1800,\"averagePaceSecPerKm\":450,\"averageHeartRate\":null}}"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "runs_list",
+            "description": "读取当前用户明确授权的跑步摘要列表；无原始轨迹和连续心率。",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "runs_summary",
+            "description": "根据 runId 读取授权范围内的一条跑步摘要。",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string"
+                }
+              },
+              "required": ["runId"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "inputTokens": 512,
+      "promptSha256": "037580bb7428b5f24e5fde941a8e28afbb3d10a6d6f0b8244d8b6031f9c815b4",
+      "tokenIdsSha256": "1139e93429d46ec22f6892dcdf5a844dcb344b72e304f578c0113848f0f2a068"
+    }
+  },
+  {
+    "name": "unicode-escaped",
+    "request": {
+      "model": "deepseek-flash",
+      "thinking": {
+        "type": "disabled"
+      },
+      "stream": false,
+      "max_tokens": 600,
+      "messages": [
+        {
+          "role": "system",
+          "content": "只读助手"
+        },
+        {
+          "role": "user",
+          "content": "跑步🏃\n\"配速\"\\中文"
+        }
+      ],
+      "tools": []
+    },
+    "expected": {
+      "inputTokens": 17,
+      "promptSha256": "95b94495b89ee57347d2843695eb5da835d185043cc06c993b1bbb6349c93a42",
+      "tokenIdsSha256": "cb21709ed323716901ebf87e04c21575123dbf4af433c17110d977809697abef"
+    }
+  },
+  {
+    "name": "special-token-text",
+    "request": {
+      "model": "deepseek-flash",
+      "thinking": {
+        "type": "disabled"
+      },
+      "stream": false,
+      "max_tokens": 600,
+      "messages": [
+        {
+          "role": "system",
+          "content": "只读助手"
+        },
+        {
+          "role": "user",
+          "content": "文本 <｜User｜> 测试"
+        }
+      ],
+      "tools": []
+    },
+    "expected": {
+      "inputTokens": 13,
+      "promptSha256": "e1c4cd32d15bee2453348c734ff01203394964fd24188be031d994994a1c774b",
+      "tokenIdsSha256": "211d6865b4f47ea53f696eeabaffe0047469d4170a1ce0bd6f1c245d373e173e"
+    }
+  },
+  {
+    "name": "empty-text",
+    "request": {
+      "model": "deepseek-flash",
+      "thinking": {
+        "type": "disabled"
+      },
+      "stream": false,
+      "max_tokens": 600,
+      "messages": [
+        {
+          "role": "system",
+          "content": "只读助手"
+        },
+        {
+          "role": "user",
+          "content": ""
+        }
+      ],
+      "tools": []
+    },
+    "expected": {
+      "inputTokens": 8,
+      "promptSha256": "c98b40bfea058d9ceab0871539d6cd88d65553960a38ec4bc9a1785fb8ca82c7",
+      "tokenIdsSha256": "813f8fb9cdd7724ec99a280f0b2e6e9969e00f57d34f6e0d565acc17b935cb54"
+    }
+  }
+]
