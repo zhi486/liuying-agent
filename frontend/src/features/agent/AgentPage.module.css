@@ -1,0 +1,1022 @@
+.page {
+  padding: 1.35rem 1.4rem 2rem;
+}
+
+.selectionFieldset {
+  margin: 1rem 0 0;
+  padding: 1.05rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--canvas-raised);
+  min-width: 0;
+}
+
+.selectionFieldset legend {
+  padding: 0 0.35rem;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.selectionFieldset > label:not(:has(input)) {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.selectionFieldset select {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.selectionFieldset > label:has(input) {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.selectionFieldset input[type='checkbox'],
+.memoryList input[type='checkbox'] {
+  width: 1.12rem;
+  height: 1.12rem;
+  accent-color: var(--accent);
+}
+
+.selectionFieldset > p {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.detail {
+  overflow-wrap: anywhere;
+}
+
+.intro h1 {
+  position: relative;
+  z-index: 1;
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(1.85rem, 7vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.32;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.intro {
+  position: relative;
+  min-height: 9rem;
+  padding: 0.7rem 0 1.3rem;
+  overflow: hidden;
+}
+
+.intro::after {
+  position: absolute;
+  top: -5.5rem;
+  right: -6rem;
+  width: 15rem;
+  height: 15rem;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 0.95rem, var(--line) 1rem 1.04rem);
+  opacity: 0.3;
+  content: '';
+  pointer-events: none;
+}
+
+.intro > p:last-child,
+.recent p {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.intro > p:last-child {
+  position: relative;
+  z-index: 1;
+  max-width: 22rem;
+  margin: 0.7rem 0 0;
+}
+
+.recent {
+  margin: 1.8rem 0 1.7rem;
+}
+
+.recent h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.recent p {
+  margin: 0;
+}
+
+.composer {
+  padding: 1rem 1rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: var(--radius-lg);
+  background: var(--canvas-raised);
+  box-shadow: 0 0.8rem 2.5rem -2rem var(--shadow);
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 6.2rem;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.96rem;
+  line-height: 1.7;
+}
+
+.composer textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.quickPrompts {
+  display: flex;
+  gap: 0.55rem;
+  margin: 0.8rem 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.quickPrompts button {
+  flex: none;
+  min-height: 2.7rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-round);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.quickPrompts button:active {
+  transform: scale(0.98);
+}
+
+.onlineSection {
+  margin: 1.7rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.onlineSection h2 {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.onlineSection > p {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.composer textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.composerFooter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.voiceInput {
+  margin-bottom: 0.85rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.voiceInput button {
+  min-height: 2.75rem;
+  margin-right: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-round);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.voiceInput p {
+  margin: 0.5rem 0;
+}
+
+.composerAction {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.composerAction small {
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+
+.composerFooter button {
+  min-height: 3rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--canvas-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.composerFooter .saveButton:enabled {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.composerFooter .composerAction:last-child button:enabled {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.onlineInfo {
+  margin-top: 0.8rem;
+  padding: 0 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.onlineInfo summary {
+  padding: 0.65rem 0;
+  cursor: pointer;
+}
+
+.onlineInfo summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.onlineInfo p {
+  margin: 0 0 0.65rem;
+}
+
+.page button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.taskList {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.taskList button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-md);
+}
+
+.taskList span,
+.message {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.taskList small {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.taskList button,
+.taskControls button,
+.detail button {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.taskControls,
+.detailHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.detail {
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.detailHeader {
+  justify-content: space-between;
+}
+
+.detail h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.actions {
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.8;
+}
+
+.availability {
+  margin: 0.8rem 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.shortcuts a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.memorySelection {
+  margin: 1rem 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.memorySelection h2,
+.memorySelection h3 {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 550;
+}
+
+.memorySelection button {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.memoryList {
+  list-style: none;
+  padding: 0;
+}
+
+.memoryList label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.memoryList input {
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+  accent-color: var(--accent);
+}
+
+.memoryList span {
+  min-width: 0;
+  white-space: pre-wrap;
+}
+
+.memoryList small {
+  display: block;
+  color: var(--text-muted);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - env(safe-area-inset-top) - 4.4rem);
+  padding: 0 1.25rem 1.25rem;
+}
+
+.chatHeader,
+.accountHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.chatHeader span {
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.chatHeader button,
+.accountHeader button {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.7rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.conversation {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 9rem;
+}
+
+.intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 14rem;
+  padding: 1rem 0;
+  text-align: center;
+}
+
+.intro::after {
+  display: none;
+}
+
+.intro h1 {
+  max-width: none;
+  font-size: clamp(1.45rem, 5.5vw, 1.85rem);
+  letter-spacing: -0.035em;
+}
+
+.intro > p:last-child {
+  max-width: none;
+  margin: 0.55rem 0 0;
+}
+
+.onlineSection {
+  margin: 0;
+  padding: 0.75rem 0;
+  border-top: 0;
+}
+
+.composer {
+  padding: 0.75rem;
+  border-color: var(--line);
+  border-radius: 1.15rem;
+  box-shadow: 0 0.75rem 2rem -1.65rem var(--shadow);
+}
+
+.composer textarea {
+  min-height: 3.6rem;
+  max-height: 11rem;
+  resize: vertical;
+  padding: 0.2rem;
+  font-size: 0.93rem;
+}
+
+.referencePicker {
+  margin: 0.2rem 0 0.65rem;
+  font-size: 0.78rem;
+}
+
+.referencePicker > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.referencePicker .selectionFieldset {
+  margin: 0.55rem 0;
+}
+
+.composerFooter {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.voiceInput {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.voiceInput button {
+  min-height: 2.75rem;
+  margin: 0;
+}
+
+.composerFooter > button {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.7rem;
+  white-space: nowrap;
+}
+
+.composerFooter .saveButton {
+  border: 0;
+  background: transparent;
+}
+
+.composerFooter .sendButton:enabled {
+  border-color: var(--firefly);
+  background: var(--firefly);
+  color: var(--firefly-ink);
+}
+
+.availability {
+  margin: 0.35rem 0 0;
+  font-size: 0.69rem;
+  text-align: right;
+}
+
+.saveNotice {
+  margin: 0.75rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.accountHeader {
+  justify-content: flex-start;
+}
+
+.accountHeader h1 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.accountLinks {
+  display: grid;
+  margin: 1.3rem 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--canvas-raised);
+}
+
+.accountLinks a {
+  display: flex;
+  align-items: center;
+  min-height: 3.4rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.accountLinks a:last-child {
+  border-bottom: 0;
+}
+
+.accountSection {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.accountSection h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.accountSection p {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.chatTurn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.chatTurn > p {
+  margin: 0;
+}
+
+.chatTurn > p[role='status'] {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.userMessage {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 0.75rem 0.9rem;
+  border-radius: 1rem 1rem 0.2rem 1rem;
+  background: var(--accent-soft);
+  white-space: pre-wrap;
+}
+
+.chatTurn > section[aria-label='流萤的回答'] {
+  order: 1;
+  padding: 0.6rem 0.15rem;
+  line-height: 1.7;
+}
+
+.chatTurn > section[aria-label='流萤的回答'] h3 {
+  margin: 0 0 0.4rem;
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.chatTurn > section[aria-label='流萤的回答'] p {
+  margin: 0.35rem 0;
+}
+
+.messageMeta {
+  order: 2;
+  color: var(--text-muted);
+  font-size: 0.77rem;
+  line-height: 1.65;
+}
+
+.messageMeta summary {
+  width: fit-content;
+  min-height: 2.5rem;
+  padding: 0.45rem 0;
+  cursor: pointer;
+}
+
+.page {
+  min-height: calc(100dvh - env(safe-area-inset-bottom));
+  padding: env(safe-area-inset-top) 1rem 0.75rem;
+}
+
+.chatHeader {
+  min-height: 3.6rem;
+  border: 0;
+}
+
+.chatHeader span:not(.headerSpacer) {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.chatHeader button,
+.accountHeader button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  padding: 0;
+  color: var(--text);
+}
+
+.headerSpacer {
+  width: 5.1rem;
+}
+
+.intro {
+  min-height: 17rem;
+}
+
+.intro h1 {
+  font-weight: 620;
+}
+
+.composer {
+  padding: 0.8rem 0.8rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 1.45rem;
+  background: var(--canvas-raised);
+  box-shadow: 0 0.6rem 1.8rem -1.5rem var(--shadow);
+}
+
+.composer textarea {
+  display: block;
+  min-height: 3.3rem;
+  max-height: 11rem;
+  padding: 0.15rem 0.2rem;
+  font-size: 0.96rem;
+  line-height: 1.55;
+}
+
+.composerFooter {
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 2.9rem;
+}
+
+.toolsMenu {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.toolsMenu > summary {
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+}
+
+.toolsMenu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.toolsMenu > summary:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.toolsPanel {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 0.65rem);
+  left: -0.2rem;
+  width: min(19rem, calc(100vw - 2.5rem));
+  max-height: min(60dvh, 29rem);
+  overflow-y: auto;
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--canvas-raised);
+  box-shadow: 0 1rem 2.5rem -1rem var(--shadow);
+}
+
+.toolsPanel > button {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.toolsPanel > button:enabled:hover,
+.toolsMenu > summary:hover {
+  background: var(--surface);
+}
+
+.referencePicker {
+  margin: 0;
+}
+
+.referencePicker > summary {
+  width: 100%;
+  padding-left: 0.75rem;
+  color: var(--text);
+}
+
+.voiceInput {
+  flex: none;
+  width: auto;
+}
+
+.composerFooter .voiceTrigger,
+.composerFooter .sendButton {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+}
+
+.composerFooter .voiceTrigger {
+  background: transparent;
+  color: var(--text);
+}
+
+.composerFooter .sendButton {
+  background: var(--firefly);
+  color: var(--firefly-ink);
+}
+
+.composerFooter .sendButton:disabled {
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.availability {
+  margin: 0.15rem 0 0;
+  padding: 0 0.3rem;
+  font-size: 0.66rem;
+}
+
+.sidebarOverlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  width: 100%;
+}
+
+.sidebarBackdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(86vw, 21rem);
+  height: 100dvh;
+  padding: env(safe-area-inset-top) 0.95rem env(safe-area-inset-bottom);
+  background: var(--canvas);
+  box-shadow: 0.5rem 0 2rem -1rem var(--shadow);
+}
+
+.sidebar .accountHeader {
+  flex: none;
+  justify-content: space-between;
+  min-height: 3.5rem;
+}
+
+.sidebar .accountHeader h1 {
+  font-size: 1rem;
+}
+
+.sidebarScroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sidebarSectionTitle {
+  margin: 1.4rem 0 0.45rem;
+  padding: 0 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.sidebar .recent {
+  margin: 0;
+}
+
+.sidebar .taskList {
+  gap: 0;
+  margin: 0;
+}
+
+.sidebar .taskList button {
+  border: 0;
+  background: transparent;
+}
+
+.sidebar .accountLinks {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.sidebar .accountLinks a {
+  min-height: 3rem;
+  padding: 0.5rem 0.35rem;
+}
+
+.sidebar .accountSection {
+  margin-top: 0.6rem;
+}
+
+.sidebarChats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sidebarChats button {
+  display: block;
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.55rem 0.65rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebarChats button:hover {
+  background: var(--surface);
+}
+
+.sidebarEmpty {
+  margin: 0.3rem 0 0.8rem;
+  padding: 0 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.voiceInput {
+  position: relative;
+}
+
+.voicePanel,
+.voiceToast {
+  position: absolute;
+  z-index: 6;
+  right: -3.1rem;
+  bottom: calc(100% + 0.7rem);
+  width: min(19rem, calc(100vw - 2.5rem));
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--canvas-raised);
+  box-shadow: 0 1rem 2.5rem -1rem var(--shadow);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.voicePanel p,
+.voiceToast {
+  margin: 0 0 0.7rem;
+  font-size: 0.78rem;
+}
+
+.voiceToast {
+  bottom: calc(100% + 0.7rem);
+  padding: 0.55rem 0.8rem;
+}
+
+.voiceToast {
+  margin: 0;
+}

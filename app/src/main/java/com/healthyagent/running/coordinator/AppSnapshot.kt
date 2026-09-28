@@ -50,7 +50,7 @@ data class AppSnapshot(
             latestCoachMessage = null,
             settings = SettingsContractSnapshot.from(config),
             permissions = PermissionsSnapshot(),
-            theme = "night",
+            theme = "morning",
             motionPolicy = "balanced",
             safetyState = SafetySnapshot(),
             dataQuality = DataQualitySnapshot(),
@@ -241,8 +241,8 @@ internal fun CoachMessage.toSnapshot(): CoachMessageSnapshot = CoachMessageSnaps
 )
 
 internal fun ThemePreference.toTheme(): String = when (this) {
-    ThemePreference.MORNING -> "morning"
-    ThemePreference.NIGHT, ThemePreference.SYSTEM -> "night"
+    ThemePreference.NIGHT -> "night"
+    ThemePreference.MORNING, ThemePreference.SYSTEM -> "morning"
 }
 
 internal fun MotionPreference.toPolicy(): String = when (this) {

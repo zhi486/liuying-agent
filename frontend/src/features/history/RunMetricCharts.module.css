@@ -1,0 +1,214 @@
+.card {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cardHeader h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.cardHeader button {
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  min-height: 44px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.stats {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: 1.5rem 0 2rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.stats > span:first-child {
+  margin-right: auto;
+}
+.stats strong {
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.chart text {
+  fill: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.grid {
+  stroke: var(--line);
+  stroke-dasharray: 3 4;
+  opacity: 0.55;
+}
+.cursor {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.zoneStrip {
+  display: flex;
+  overflow: hidden;
+  height: 7px;
+  margin: 0.75rem 0 0.5rem;
+  border-radius: 8px;
+}
+.coverage,
+.notice {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.notice {
+  margin-top: 2rem;
+}
+.dialog {
+  color: var(--text);
+  background: var(--canvas);
+  border: none;
+  border-radius: 22px 22px 0 0;
+  box-sizing: border-box;
+  width: min(100%, 560px);
+  max-width: 100%;
+  height: calc(100dvh - 42px);
+  max-height: calc(100dvh - 42px);
+  padding: 82px 22px max(28px, env(safe-area-inset-bottom));
+  margin: auto auto 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dialog::backdrop {
+  background: rgb(0 0 0 / 52%);
+}
+.close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--canvas-raised);
+  color: var(--text-muted);
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+}
+.title {
+  margin: 0;
+  font-size: clamp(24px, 6.4vw, 32px);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+.subtitle {
+  color: var(--text-muted);
+  margin: 5px 0 22px;
+  font-size: 14px;
+}
+.dialog .stats {
+  margin: 1.25rem 0 2.3rem;
+}
+.dialog .stats strong {
+  font-size: 1.5rem;
+}
+.distributionTitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin: 1.8rem 0 1.2rem;
+}
+.zones {
+  display: grid;
+  gap: 14px;
+  font-size: clamp(10px, 3.2vw, 14px);
+  font-variant-numeric: tabular-nums;
+}
+.zone {
+  display: grid;
+  grid-template-columns: 5.7em 7.8em minmax(0, 1fr) 2.6em;
+  align-items: center;
+  gap: 5px;
+}
+.heartZones .zone {
+  grid-template-columns: 5.7em 4.4em minmax(0, 1fr) 2.6em;
+}
+.range,
+.barTime,
+.percent {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.barTime {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.bar {
+  display: block;
+  height: 9px;
+  border-radius: 20px;
+  min-width: 9px;
+  max-width: calc(100% - 3.6em);
+  flex-shrink: 0;
+}
+.percent {
+  text-align: right;
+}
+.selector {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.dialog:has(.selector:focus-visible) .chart {
+  outline: 1px dotted var(--accent);
+  outline-offset: 3px;
+}
+.selection {
+  font-size: 12px;
+  padding: 9px 10px;
+  background: var(--canvas-raised);
+  color: var(--text);
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.explanation {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.7;
+  margin-top: 24px;
+}
+.explanation summary {
+  cursor: pointer;
+  min-height: 30px;
+}
+@media (max-width: 350px) {
+  .dialog {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+  .stats {
+    gap: 0.4rem;
+    font-size: 0.75rem;
+  }
+  .dialog .stats strong {
+    font-size: 1.25rem;
+  }
+}

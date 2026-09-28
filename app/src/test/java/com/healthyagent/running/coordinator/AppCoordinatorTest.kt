@@ -30,6 +30,7 @@ import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.data.local.NullableSettingUpdate
 import com.healthyagent.running.data.local.SettingsRepository
 import com.healthyagent.running.data.local.SettingsSnapshot
+import com.healthyagent.running.data.local.ThemePreference
 import com.healthyagent.running.data.health.HealthConnectAvailability
 import com.healthyagent.running.data.health.HealthConnectPermissionState
 import com.healthyagent.running.data.health.HealthConnectSync
@@ -113,6 +114,12 @@ import kotlin.time.TestTimeSource
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppCoordinatorTest {
     @get:JunitRule val deepseekFolder = TemporaryFolder()
+
+    @Test fun `默认主题为白色但手动夜间仍生效`() {
+        assertEquals("morning", AppSnapshot.initial(RunConfig(), 0L).theme)
+        assertEquals("morning", ThemePreference.SYSTEM.toTheme())
+        assertEquals("night", ThemePreference.NIGHT.toTheme())
+    }
 
     @Test fun `生产接纳捕获专属配置和语气且旧分析不调用`() = runTest {
         val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))

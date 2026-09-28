@@ -26,6 +26,15 @@
   margin: 2rem 0 0;
 }
 
+.detailLink {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--accent);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
 .loadMore {
   width: 100%;
   margin-top: 1rem;
