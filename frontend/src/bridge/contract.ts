@@ -217,17 +217,26 @@ export interface HelloPayload {
 export interface ReadyPayload {
   helloId: string;
   buildId: string;
-  capabilities: [
-    'snapshot.v1',
-    'history.pagination',
-    'settings.v1',
-    'heart-rate-alerts.v1',
-    'data-quality.v1',
-    'deepseek-companion.v1',
-    'agent.tasks.v1',
-    'memory.v1',
-    'agent.cloud.tasks.v1',
-  ];
+  capabilities:
+    | [
+        'snapshot.v1',
+        'history.pagination',
+        'settings.v1',
+        'heart-rate-alerts.v1',
+        'data-quality.v1',
+        'deepseek-companion.v1',
+      ]
+    | [
+        'snapshot.v1',
+        'history.pagination',
+        'settings.v1',
+        'heart-rate-alerts.v1',
+        'data-quality.v1',
+        'deepseek-companion.v1',
+        'agent.tasks.v1',
+        'memory.v1',
+        'agent.cloud.tasks.v1',
+      ];
   snapshot: AppSnapshot;
 }
 

@@ -409,16 +409,26 @@ const readyEnvelopeSchema = z
       .object({
         helloId: canonicalUuidV4Schema,
         buildId: z.string().min(1),
-        capabilities: z.tuple([
-          z.literal('snapshot.v1'),
-          z.literal('history.pagination'),
-          z.literal('settings.v1'),
-          z.literal('heart-rate-alerts.v1'),
-          z.literal('data-quality.v1'),
-          z.literal('deepseek-companion.v1'),
-          z.literal('agent.tasks.v1'),
-          z.literal('memory.v1'),
-          z.literal('agent.cloud.tasks.v1'),
+        capabilities: z.union([
+          z.tuple([
+            z.literal('snapshot.v1'),
+            z.literal('history.pagination'),
+            z.literal('settings.v1'),
+            z.literal('heart-rate-alerts.v1'),
+            z.literal('data-quality.v1'),
+            z.literal('deepseek-companion.v1'),
+          ]),
+          z.tuple([
+            z.literal('snapshot.v1'),
+            z.literal('history.pagination'),
+            z.literal('settings.v1'),
+            z.literal('heart-rate-alerts.v1'),
+            z.literal('data-quality.v1'),
+            z.literal('deepseek-companion.v1'),
+            z.literal('agent.tasks.v1'),
+            z.literal('memory.v1'),
+            z.literal('agent.cloud.tasks.v1'),
+          ]),
         ]),
         snapshot: appSnapshotSchema,
       })
