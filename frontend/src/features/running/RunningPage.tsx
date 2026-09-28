@@ -210,6 +210,14 @@ export function RunningPage() {
         )}
 
         <div className={styles.finishedActions}>
+          {historySaved && nativeSnapshot?.session.id && (
+            <Link
+              className="secondary-button"
+              to={`/history/${encodeURIComponent(nativeSnapshot.session.id)}`}
+            >
+              查看本次总结
+            </Link>
+          )}
           {historySaved ? (
             <Link className="primary-button" to="/history">
               查看记录

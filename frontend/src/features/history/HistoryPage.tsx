@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useBridgeStore } from '../../bridge/bridgeStore';
 import type { HistoryRunRecord } from '../../bridge/contract';
 import styles from './HistoryPage.module.css';
@@ -114,6 +115,12 @@ function HistoryContent({
             <dd>{formatOptionalInteger(latestRun.averageHeartRate)}</dd>
           </div>
         </dl>
+        <Link
+          className={`secondary-button ${styles.loadMore}`}
+          to={`/history/${encodeURIComponent(latestRun.id)}`}
+        >
+          查看本次总结
+        </Link>
       </article>
 
       <section className={`past-runs ${styles.recordCount}`} aria-labelledby="past-runs-title">
@@ -133,7 +140,13 @@ function HistoryContent({
                   <strong>{formatDuration(run.durationSeconds)}</strong>
                   <span>{formatPace(run.averagePaceSecPerKm)} /km</span>
                 </div>
-                <strong>{formatListDistance(run.distanceMeters)}</strong>
+                <Link
+                  className={styles.detailLink}
+                  to={`/history/${encodeURIComponent(run.id)}`}
+                  aria-label={`查看 ${formatRunTime(run.startedAt)} 的跑步总结`}
+                >
+                  {formatListDistance(run.distanceMeters)} →
+                </Link>
               </li>
             ))}
           </ul>

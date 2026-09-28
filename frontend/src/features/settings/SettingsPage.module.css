@@ -36,13 +36,13 @@
   border-radius: var(--radius-md);
   background: var(--canvas-raised);
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.85rem;
 }
 
 .fieldGrid input:not([type='checkbox']),
 .fieldGrid select {
   width: 100%;
-  min-height: 2.6rem;
+  min-height: 2.75rem;
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -65,7 +65,7 @@
 
 .fieldGrid small {
   color: var(--text-faint);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
