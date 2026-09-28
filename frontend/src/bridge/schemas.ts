@@ -1,9 +1,15 @@
 import { z } from 'zod';
+import { agentCommandSchemas } from './agentTasks';
+import { memoryCommandSchemas } from './memories';
+import { cloudCommandSchemas } from './cloudAgent';
+import { voiceCommandSchemas } from './voiceInput';
 
 import type {
   AppSnapshot,
   BridgeEnvelopeV1,
   HistoryQueryResult,
+  HistoryDetailResult,
+  HistorySeriesResult,
   HistoryRunRecord,
   NativeToWebEnvelope,
   SettingsQueryResult,
@@ -201,8 +207,112 @@ export const settingsQueryResultSchema: z.ZodType<SettingsQueryResult> = z
   })
   .strict();
 
+export const historyDetailResultSchema: z.ZodType<HistoryDetailResult> = z
+  .object({
+    commandId: canonicalUuidV4Schema,
+    record: historyRunRecordSchema,
+    splits: z
+      .array(
+        z
+          .object({
+            index: z.number().int().positive(),
+            endDistanceMeters: z.number().nonnegative(),
+            durationSeconds: z.number().int().nonnegative(),
+            averagePaceSecPerKm: z.number().nonnegative(),
+            averageHeartRate: nullableNonNegativeNumber,
+          })
+          .strict(),
+      )
+      .refine(
+        (splits) => new Set(splits.map((split) => split.index)).size === splits.length,
+        '分段序号重复',
+      ),
+  })
+  .strict();
+
 const emptyBodySchema = z.object({}).strict();
+const seriesSessionIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .refine((id) => id.trim() === id && id.trim().length > 0);
+const metricSampleSchema = z
+  .object({
+    startElapsedSeconds: z.number().int().nonnegative(),
+    endElapsedSeconds: z.number().int().positive(),
+    segmentId: z.number().int().nonnegative(),
+    averagePaceSecPerKm: z.number().positive().nullable(),
+    averageHeartRate: z.number().positive().nullable(),
+    paceValidSeconds: z.number().int().min(0).max(5),
+    heartRateValidSeconds: z.number().int().min(0).max(5),
+  })
+  .strict()
+  .refine((p) => {
+    const duration = p.endElapsedSeconds - p.startElapsedSeconds;
+    return (
+      duration > 0 &&
+      duration <= 5 &&
+      p.paceValidSeconds <= duration &&
+      p.heartRateValidSeconds <= duration &&
+      (p.averagePaceSecPerKm === null || p.paceValidSeconds === duration) &&
+      (p.averageHeartRate === null ? p.heartRateValidSeconds === 0 : p.heartRateValidSeconds > 0)
+    );
+  }, '采样窗口或覆盖秒数无效');
+
+export const historySeriesResultSchema: z.ZodType<HistorySeriesResult> = z
+  .object({
+    commandId: canonicalUuidV4Schema,
+    sessionId: seriesSessionIdSchema,
+    offset: z.number().int().nonnegative(),
+    totalItems: z.number().int().nonnegative(),
+    samples: z.array(metricSampleSchema).max(300),
+  })
+  .strict()
+  .refine(
+    (page) =>
+      page.offset + page.samples.length <= page.totalItems &&
+      page.samples.every(
+        (p, i) =>
+          i === 0 ||
+          (p.startElapsedSeconds >= page.samples[i - 1].endElapsedSeconds &&
+            p.segmentId >= page.samples[i - 1].segmentId),
+      ),
+    '序列分页或顺序无效',
+  );
+
 const commandPayloadSchema = z.discriminatedUnion('name', [
+  ...voiceCommandSchemas,
+  ...agentCommandSchemas,
+  ...cloudCommandSchemas,
+  ...memoryCommandSchemas,
+  z
+    .object({
+      helloId: canonicalUuidV4Schema,
+      name: z.literal('history.series'),
+      body: z
+        .object({
+          sessionId: seriesSessionIdSchema,
+          offset: z.number().int().nonnegative(),
+          limit: z.number().int().min(1).max(300),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      helloId: canonicalUuidV4Schema,
+      name: z.literal('history.detail'),
+      body: z
+        .object({
+          sessionId: z
+            .string()
+            .min(1)
+            .max(128)
+            .refine((id) => id.trim() === id && id.trim().length > 0),
+        })
+        .strict(),
+    })
+    .strict(),
   z
     .object({
       helloId: canonicalUuidV4Schema,
@@ -306,6 +416,9 @@ const readyEnvelopeSchema = z
           z.literal('heart-rate-alerts.v1'),
           z.literal('data-quality.v1'),
           z.literal('deepseek-companion.v1'),
+          z.literal('agent.tasks.v1'),
+          z.literal('memory.v1'),
+          z.literal('agent.cloud.tasks.v1'),
         ]),
         snapshot: appSnapshotSchema,
       })

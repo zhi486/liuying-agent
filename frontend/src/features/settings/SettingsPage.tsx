@@ -74,7 +74,7 @@ export function SettingsPage() {
   const activeTheme = useMemo<ThemeChoice>(() => {
     if (settings?.themePreference === 'morning') return 'morning';
     if (settings?.themePreference === 'night') return 'night';
-    return bridgeSnapshot?.theme ?? 'night';
+    return bridgeSnapshot?.theme ?? 'morning';
   }, [bridgeSnapshot?.theme, settings?.themePreference]);
 
   const updateTheme = async (nextTheme: ThemeChoice) => {

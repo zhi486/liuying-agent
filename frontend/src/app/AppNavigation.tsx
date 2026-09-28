@@ -1,20 +1,18 @@
-import { NavLink } from 'react-router-dom';
-
-const items = [
-  { to: '/run', label: '跑步' },
-  { to: '/history', label: '记录' },
-  { to: '/settings', label: '设置' },
-];
+import { ChatCircleDots, PersonSimpleRun } from '@phosphor-icons/react';
+import { Link, useLocation } from 'react-router-dom';
 
 export function AppNavigation() {
+  const isAgentPage = useLocation().pathname === '/agent';
+  const target = isAgentPage ? '/run' : '/agent';
+  const label = isAgentPage ? '跑步' : '对话';
+  const Icon = isAgentPage ? PersonSimpleRun : ChatCircleDots;
+
   return (
-    <nav className="app-navigation" aria-label="主要导航">
-      {items.map((item) => (
-        <NavLink key={item.to} to={item.to} className="nav-item">
-          <span className="nav-marker" aria-hidden="true" />
-          <span>{item.label}</span>
-        </NavLink>
-      ))}
+    <nav className="app-navigation" aria-label="页面切换">
+      <Link to={target} className="view-switch" aria-label={`切换到${label}`}>
+        <Icon size={17} weight="regular" aria-hidden="true" />
+        <span>{label}</span>
+      </Link>
     </nav>
   );
 }

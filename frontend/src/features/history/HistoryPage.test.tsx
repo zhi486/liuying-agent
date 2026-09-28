@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as renderBase, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useBridgeStore } from '../../bridge/bridgeStore';
@@ -6,6 +8,7 @@ import type { HistoryQueryResult, HistoryRunRecord } from '../../bridge/contract
 import { HistoryPage } from './HistoryPage';
 
 const sendNativeCommandMock = vi.hoisted(() => vi.fn());
+const render = (element: ReactElement) => renderBase(<MemoryRouter>{element}</MemoryRouter>);
 
 vi.mock('../../bridge/bridgeStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../bridge/bridgeStore')>();
@@ -39,7 +42,7 @@ describe('跑步记录', () => {
     expect(screen.getByText('正在读取本地记录')).toBeVisible();
     expect(await screen.findByText('5.02')).toBeVisible();
     expect(screen.getByText('30:18')).toBeVisible();
-    expect(screen.getByText('4.08 km')).toBeVisible();
+    expect(screen.getByText('4.08 km →')).toBeVisible();
     expect(screen.getByText('共 2 次')).toBeVisible();
     expect(screen.queryByText('本周计划')).not.toBeInTheDocument();
     expect(screen.queryByText('趋势洞察')).not.toBeInTheDocument();
@@ -99,7 +102,7 @@ describe('跑步记录', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '加载更多' }));
 
-    expect(await screen.findByText('4.08 km')).toBeVisible();
+    expect(await screen.findByText('4.08 km →')).toBeVisible();
     expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument();
     await waitFor(() =>
       expect(sendNativeCommandMock).toHaveBeenLastCalledWith('history.query', {

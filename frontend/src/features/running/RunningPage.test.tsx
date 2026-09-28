@@ -440,6 +440,10 @@ describe('跑步页真实数据', () => {
     expect(screen.getByText('169 spm')).toBeVisible();
     expect(screen.getByText('已同步，包含路线')).toBeVisible();
     expect(screen.getByRole('link', { name: '查看记录' })).toHaveAttribute('href', '/history');
+    expect(screen.getByRole('link', { name: '查看本次总结' })).toHaveAttribute(
+      'href',
+      '/history/run-5',
+    );
     expect(screen.queryByText('99.99')).not.toBeInTheDocument();
   });
 
@@ -470,6 +474,7 @@ describe('跑步页真实数据', () => {
     );
 
     expect(screen.queryByRole('link', { name: '查看记录' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '查看本次总结' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: actionText })).toBeDisabled();
   });
 

@@ -1,4 +1,25 @@
 export type CommandName =
+  | 'voice.begin'
+  | 'voice.status'
+  | 'voice.finish'
+  | 'voice.cancel'
+  | 'cloud.list'
+  | 'cloud.configure'
+  | 'cloud.prepare'
+  | 'cloud.confirm'
+  | 'cloud.discard'
+  | 'cloud.recover'
+  | 'cloud.cancel'
+  | 'cloud.withdraw'
+  | 'memory.create'
+  | 'memory.list'
+  | 'memory.update'
+  | 'memory.delete'
+  | 'memory.preview'
+  | 'agent.submit'
+  | 'agent.list'
+  | 'agent.detail'
+  | 'agent.cancel'
   | 'device.connect'
   | 'device.disconnect'
   | 'run.start'
@@ -6,6 +27,8 @@ export type CommandName =
   | 'run.resume'
   | 'run.stop'
   | 'history.query'
+  | 'history.detail'
+  | 'history.series'
   | 'settings.query'
   | 'settings.configureDeepseek'
   | 'settings.update'
@@ -156,6 +179,36 @@ export interface HistoryQueryResult {
   items: HistoryRunRecord[];
 }
 
+export interface HistoryDetailResult {
+  commandId: string;
+  record: HistoryRunRecord;
+  splits: {
+    index: number;
+    endDistanceMeters: number;
+    durationSeconds: number;
+    averagePaceSecPerKm: number;
+    averageHeartRate: number | null;
+  }[];
+}
+
+export interface RunMetricSample {
+  startElapsedSeconds: number;
+  endElapsedSeconds: number;
+  segmentId: number;
+  averagePaceSecPerKm: number | null;
+  averageHeartRate: number | null;
+  paceValidSeconds: number;
+  heartRateValidSeconds: number;
+}
+
+export interface HistorySeriesResult {
+  commandId: string;
+  sessionId: string;
+  offset: number;
+  totalItems: number;
+  samples: RunMetricSample[];
+}
+
 export interface HelloPayload {
   buildId: string;
   supportedContractVersions: [1];
@@ -171,11 +224,43 @@ export interface ReadyPayload {
     'heart-rate-alerts.v1',
     'data-quality.v1',
     'deepseek-companion.v1',
+    'agent.tasks.v1',
+    'memory.v1',
+    'agent.cloud.tasks.v1',
   ];
   snapshot: AppSnapshot;
 }
 
 export interface CommandBodyMap {
+  'voice.begin': { sessionId: string; approved: true };
+  'voice.status': { sessionId: string };
+  'voice.finish': { sessionId: string };
+  'voice.cancel': { sessionId: string };
+  'cloud.list': Record<string, never>;
+  'cloud.configure': Record<string, never>;
+  'cloud.prepare': {
+    prompt: string;
+    memoryRefs: { id: string; version: number }[];
+    knowledge?: {
+      version: 'curated_knowledge_v1';
+      library: 'health' | 'firefly';
+      allowSpoilers: boolean;
+    };
+  };
+  'cloud.confirm': { token: string; approved: true };
+  'cloud.discard': { token: string };
+  'cloud.recover': { requestId: string };
+  'cloud.cancel': { requestId: string };
+  'cloud.withdraw': { requestId: string };
+  'memory.create': { memoryId: string; content: string };
+  'memory.list': { offset: number; limit: number };
+  'memory.update': { memoryId: string; version: number; content: string };
+  'memory.delete': { memoryId: string; version: number; confirmed: true };
+  'memory.preview': { memoryRefs: { id: string; version: number }[] };
+  'agent.submit': { clientRequestId: string; prompt: string };
+  'agent.list': { offset: number; limit: number };
+  'agent.detail': { taskId: string };
+  'agent.cancel': { taskId: string };
   'device.connect': Record<string, never>;
   'device.disconnect': Record<string, never>;
   'run.start': Record<string, never>;
@@ -183,6 +268,8 @@ export interface CommandBodyMap {
   'run.resume': Record<string, never>;
   'run.stop': Record<string, never>;
   'history.query': { page: number; pageSize: number };
+  'history.detail': { sessionId: string };
+  'history.series': { sessionId: string; offset: number; limit: number };
   'settings.query': Record<string, never>;
   'settings.configureDeepseek': Record<string, never>;
   'settings.update': SettingsUpdateBody;
