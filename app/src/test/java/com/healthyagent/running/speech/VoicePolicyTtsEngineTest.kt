@@ -92,6 +92,28 @@ class VoicePolicyTtsEngineTest {
     }
 
     @Test
+    fun `公里鼓励生成超过两秒仍与数据一次合成播放`() = runTest {
+        val fixture = Fixture(testScheduler.timeSource)
+        fixture.companion = { delay(5_000); "真实公里数据。开拓者，这段路有我陪着你。" }
+        val result = fixture.engine.speak(request("km_split", SpeechPriority.SPLIT, companion = true)).getOrThrow()
+        assertEquals(listOf("真实公里数据。开拓者，这段路有我陪着你。"), fixture.client.texts)
+        assertTrue(result.played)
+        assertEquals(1, fixture.players.size)
+        assertTrue(fixture.opened.isEmpty())
+    }
+
+    @Test
+    fun `公里鼓励超过六秒只合成数据而普通提示仍只等两秒`() = runTest {
+        for (rule in listOf("km_split", "session_paused")) {
+            val fixture = Fixture(testScheduler.timeSource)
+            fixture.companion = { delay(if (rule == "km_split") 6_001 else 2_001); "迟到鼓励。" }
+            assertTrue(fixture.engine.speak(request(rule, companion = true)).getOrThrow().played)
+            assertEquals(listOf(if (rule == "km_split") "真实公里数据" else "跑步已暂停。"), fixture.client.texts)
+            assertEquals(1, fixture.players.size)
+        }
+    }
+
+    @Test
     fun `空白陪伴后句不向固定核心增加句号`() = runTest {
         val fixture = Fixture(testScheduler.timeSource)
         fixture.companion = { " \n\t " }
@@ -101,15 +123,15 @@ class VoicePolicyTtsEngineTest {
     }
 
     @Test
-    fun `六种句末标点不重复添加且核心不trim`() = runTest {
+    fun `完整公里文本不再重复追加核心或句末标点`() = runTest {
         for (ending in "。！？.!?") {
             val fixture = Fixture(testScheduler.timeSource)
-            fixture.companion = { "陪着你。" }
             val original = request("km_split", companion = true)
             val core = "  真实公里数据$ending"
+            fixture.companion = { core + "陪着你。" }
             val result = fixture.engine.speak(original.copy(trigger = original.trigger.copy(speakText = core))).getOrThrow()
-            assertEquals(listOf(core + "陪着你。"), fixture.client.texts)
-            assertEquals(SpeechDelivery(core + "陪着你。", true), result)
+            assertEquals(listOf(core.trimStart() + "陪着你。"), fixture.client.texts)
+            assertEquals(SpeechDelivery(core.trimStart() + "陪着你。", true), result)
         }
     }
 

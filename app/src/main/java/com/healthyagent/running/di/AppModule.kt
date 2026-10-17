@@ -2,6 +2,15 @@ package com.healthyagent.running.di
 
 import android.os.Build
 import android.os.SystemClock
+import com.healthyagent.running.agent.AgentTaskService
+import com.healthyagent.running.agent.cloud.CloudAgentService
+import com.healthyagent.running.agent.cloud.CloudChatConsent
+import com.healthyagent.running.agent.cloud.CloudRunSummary
+import com.healthyagent.running.agent.cloud.CloudAgentConfiguration
+import com.healthyagent.running.agent.cloud.CloudDeviceCredentials
+import com.healthyagent.running.agent.cloud.CloudTaskHttpClient
+import com.healthyagent.running.agent.memory.MemoryService
+import com.healthyagent.running.agent.local.AgentDatabase
 import com.healthyagent.running.ai.DeepseekCompanionTextSource
 import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.coordinator.PausedHeartRateMonitor
@@ -56,6 +65,25 @@ import org.koin.dsl.module
  * Koin DI 模块定义
  */
 val appModule = module {
+    single { AgentDatabase.create(androidContext()) }
+    single { AgentTaskService(get<AgentDatabase>().taskDao()) }
+    single { MemoryService(get<AgentDatabase>().memoryDao()) }
+    single { CloudDeviceCredentials.create(androidContext()) }
+    single {
+        com.healthyagent.running.agent.voice.VoiceInputService(
+            com.healthyagent.running.agent.cloud.CloudVoiceStreamClient(get<CloudAgentConfiguration>()::read,
+                get<CloudDeviceCredentials>(), com.healthyagent.running.agent.voice.AndroidVoiceRecorder()),
+        )
+    }
+    single { CloudAgentConfiguration(File(androidContext().noBackupFilesDir, "cloud-agent/identity.json"), get()) }
+    single { CloudChatConsent.create(File(androidContext().noBackupFilesDir, "cloud-agent/chat-consent.json")) }
+    single {
+        val configuration = get<CloudAgentConfiguration>()
+        val credentials = get<CloudDeviceCredentials>()
+        val runDao = get<RunSessionDao>()
+        CloudAgentService(get(), configuration::read, { CloudTaskHttpClient(it.origin, credentials) },
+            loadRunSummary = { id -> runDao.getSession(id)?.let(CloudRunSummary::from) }, chatConsent = get())
+    }
     single { DeepseekCredentialsStore(File(androidContext().noBackupFilesDir, "deepseek/key")) }
 
     single<DiagnosticLogger> {

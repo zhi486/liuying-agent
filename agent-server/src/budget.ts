@@ -1,6 +1,7 @@
 import { AgentError } from './contracts.ts';
 import type { BudgetPort } from './contracts.ts';
 import type { BudgetDatabase } from './d1.ts';
+import { MODEL_TOKEN_LIMITS } from './model-limits.ts';
 import {
   EXECUTION_ACTIVE_SQL,
   EXECUTION_CLOCK_SQL,
@@ -64,14 +65,12 @@ export function createD1Budget(options: {
         if (
           signal.aborted ||
           !integer(timestamp) ||
-          timestamp < rate.checkedAtMillis ||
-          timestamp >= rate.expiresAtMillis ||
           !integer(maxInputTokens) ||
           maxInputTokens < 1 ||
-          maxInputTokens > 20000 ||
+          maxInputTokens > MODEL_TOKEN_LIMITS.maxInputTokens ||
           !integer(maxOutputTokens) ||
           maxOutputTokens < 1 ||
-          maxOutputTokens > 600 ||
+          maxOutputTokens > MODEL_TOKEN_LIMITS.maxOutputTokens ||
           !identifier(request.taskId) ||
           (execution !== null && request.taskId !== execution.taskId) ||
           ![1, 2, 3].some((step) => request.requestId === `${request.taskId}:${step}`)
@@ -86,7 +85,7 @@ export function createD1Budget(options: {
           rate.inputMicrosPerMillion,
           rate.outputMicrosPerMillion,
         );
-        // 一条 SQL 完成查余量和插入，不能拆成并发下会超发的“先读再写”。
+        // 一条SQL登记唯一请求；金额只记账，不按月预算、旧熔断标记或费率时效拒绝。
         const periodSql = execution ? "substr(datetime(clock.time / 1000, 'unixepoch'),1,7)" : '?';
         const result = await db
           .prepare(
@@ -98,18 +97,15 @@ export function createD1Budget(options: {
              execution_hash, dispatch_state, rate_expires_at_millis)
           SELECT ?, a.owner_id, ?, ?, ${periodSql}, ?, ?, ?, ?, ?, 'reserved', ${execution ? 'clock.time' : '?'}, ?, ?, ?
           FROM agent_budget_accounts a ${execution ? ', clock' : ''}
-          WHERE a.owner_id = ? AND a.halted = 0
+          WHERE a.owner_id = ?
             ${
               execution
-                ? `AND clock.time >= ? AND clock.time < ? AND EXISTS (
+                ? `AND EXISTS (
               SELECT 1 FROM agent_cloud_tasks t WHERE t.id = ? AND t.owner_id = a.owner_id
                 AND t.execution_hash = ? AND ${EXECUTION_ACTIVE_SQL})`
                 : ''
             }
             AND NOT EXISTS (SELECT 1 FROM agent_budget_reservations r WHERE r.owner_id = a.owner_id AND r.request_id = ?)
-            AND ? + COALESCE((SELECT SUM(CASE r.state
-              WHEN 'settled' THEN r.charged_micros WHEN 'released' THEN 0 ELSE r.reserved_micros END)
-              FROM agent_budget_reservations r WHERE r.owner_id = a.owner_id AND r.period = ${periodSql}), 0) <= a.monthly_limit_micros
         `,
           )
           .bind(
@@ -130,15 +126,11 @@ export function createD1Budget(options: {
             ownerId,
             ...(execution
               ? [
-                  rate.checkedAtMillis,
-                  rate.expiresAtMillis,
                   execution.taskId,
                   execution.executionHash,
                 ]
               : []),
             request.requestId,
-            reserved,
-            ...(execution ? [] : [period]),
           )
           .run();
         // 取消期间 SQL 可能已经落库：返回预留，交给核心的迟到释放机制处理。
@@ -196,7 +188,7 @@ export function createBudgetSettlement({
       )
         throw unavailable();
       const charged = charge(inputTokens, outputTokens, inputRate, outputRate);
-      // D1 batch 为事务：真实费用和熔断必须一起提交，失败时保留原来的额度。
+      // 费用按供应商用量估算并记录异常，不再关闭账户功能。
       const results = await db.batch([
         db
           .prepare(
@@ -207,16 +199,9 @@ export function createBudgetSettlement({
           `,
           )
           .bind(charged, inputTokens, outputTokens, charged, charged, id, ownerId),
-        db
-          .prepare(
-            `UPDATE agent_budget_accounts SET halted = 1 WHERE owner_id = ?
-            AND EXISTS (SELECT 1 FROM agent_budget_reservations WHERE id = ? AND owner_id = ? AND violation = 1)
-          `,
-          )
-          .bind(ownerId, id, ownerId),
         select(id),
       ]);
-      const settled = results[2]?.results[0];
+      const settled = results[1]?.results[0];
       if (
         !settled ||
         settled.state !== 'settled' ||

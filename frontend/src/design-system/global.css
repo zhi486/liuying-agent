@@ -108,8 +108,38 @@ a:focus-visible {
 }
 
 .app-content-agent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: 0;
+}
+
+.app-shell-agent {
+  position: fixed;
+  top: var(--chat-viewport-top, 0px);
+  left: 0;
+  right: 0;
+  transform: translateX(var(--chat-drawer-x, 0px));
+  transition: transform 240ms cubic-bezier(0.22, 0.7, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  height: var(--chat-viewport-height, 100dvh);
+  min-height: 0;
+}
+
+:root[data-chat-dragging='true'] .app-shell-agent {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-agent {
+    transition: none;
+  }
+}
+
+.app-content-agent > .active-run-link {
+  flex: none;
 }
 
 .active-run-link {

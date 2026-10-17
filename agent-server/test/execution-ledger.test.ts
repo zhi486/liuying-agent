@@ -66,7 +66,7 @@ test('执行检查回包跨过手机设备凭据到期时刻，不能授权工�
   await assert.rejects(ledger.check(), /cancelled/);
 });
 
-test('派发许可回包期间费率到期也不能进入 fetch', async (t) => {
+test('派发许可回包期间费率到期仍允许派发，防重发不变', async (t) => {
   const f = await fixture(t);
   const shortRate = { ...rate, expiresAtMillis: start + 1000 };
   let delay = false;
@@ -94,9 +94,8 @@ test('派发许可回包期间费率到期也不能进入 fetch', async (t) => {
   assert.ok(r);
   delay = true;
   f.setTime(start + 999);
-  await assert.rejects(
-    ledger.beginDispatch(requestId, r.reservationId, new AbortController().signal),
-  );
+  await ledger.beginDispatch(requestId, r.reservationId, new AbortController().signal);
+  await assert.rejects(ledger.beginDispatch(requestId, r.reservationId, new AbortController().signal));
   await budget.settle(r.reservationId, { kind: 'not_dispatched' });
   assert.equal(
     f.database.sqlite.prepare('SELECT state FROM agent_budget_reservations').get()!.state,
@@ -104,7 +103,7 @@ test('派发许可回包期间费率到期也不能进入 fetch', async (t) => {
   );
 });
 
-test('预留 SQL 排队跨月，不能借上月剩余额度发放新月请求', async (t) => {
+test('登记SQL排队跨月按新月记账，超出参考预算仍允许', async (t) => {
   const f = await fixture(t);
   await f.tasks.cancel(f.header, f.execution.taskId);
   const month = Date.UTC(2026, 9, 1);
@@ -137,20 +136,19 @@ test('预留 SQL 排队跨月，不能借上月剩余额度发放新月请求', 
     now: f.now,
     execution: ledger.binding,
   });
-  assert.equal(
-    await budget.reserve(
+  const reserved = await budget.reserve(
       {
         taskId: execution.taskId,
         requestId: `${execution.taskId}:1`,
         limits: { maxInputTokens: 20000, maxOutputTokens: 600 },
       },
       new AbortController().signal,
-    ),
-    null,
   );
+  assert.ok(reserved);
+  assert.equal(f.database.sqlite.prepare('SELECT period FROM agent_budget_reservations WHERE id=?').get(reserved.reservationId)!.period, '2026-10');
   assert.equal(
     f.database.sqlite.prepare('SELECT COUNT(*) AS n FROM agent_budget_reservations').get()!.n,
-    1,
+    2,
   );
 });
 test('执行绑定预算只能派发一次，已派发不能声称未发送退款', async (t) => {
@@ -223,7 +221,7 @@ test('预检失败原子封闭 prepared，后来的派发不能再通过', async
   assert.equal(row.dispatch_state, 'closed_not_dispatched');
 });
 
-for (const cause of ['cancel', 'revoke', 'deadline', 'rate'] as const) {
+for (const cause of ['cancel', 'revoke', 'deadline'] as const) {
   test(`${cause} 在计数期间发生后禁止实际派发`, async (t) => {
     const f = await fixture(t);
     const ledger = await loaded.createExecutionLedger({
@@ -251,7 +249,6 @@ for (const cause of ['cancel', 'revoke', 'deadline', 'rate'] as const) {
     if (cause === 'cancel') await f.tasks.cancel(f.header, f.execution.taskId);
     if (cause === 'revoke') await f.admin.revoke('owner', f.device.deviceId);
     if (cause === 'deadline') f.setTime(start + 30000);
-    if (cause === 'rate') f.setTime(start + 5000);
     await assert.rejects(
       ledger.beginDispatch(requestId, reservation.reservationId, new AbortController().signal),
     );

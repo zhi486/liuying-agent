@@ -43,7 +43,7 @@ test('持久预算端口不会为没有预置账户的请求发放额度', async
   }
 });
 
-test('三个并发请求只获两笔额度，重复请求不能增加预留', async (t) => {
+test('三个并发请求超出参考预算仍登记，重复请求不能增加预留', async (t) => {
   const database = openBudgetDatabase();
   t.after(database.close);
   account(database);
@@ -51,12 +51,12 @@ test('三个并发请求只获两笔额度，重复请求不能增加预留', as
   const granted = await Promise.all(
     ['task_1', 'task_2', 'task_3'].map((id) => reserve(budget, id)),
   );
-  assert.equal(granted.filter(Boolean).length, 2);
+  assert.equal(granted.filter(Boolean).length, 3);
   assert.equal(row(database, granted[0]!.reservationId).reserved_micros, 6720);
   assert.equal(await reserve(budget), null);
   assert.equal(
     database.sqlite.prepare('SELECT COUNT(*) AS count FROM agent_budget_reservations').get()!.count,
-    2,
+    3,
   );
 });
 
@@ -84,7 +84,7 @@ test('按实际用量结算幂等，冲突用量不覆盖已经入账的费用',
   assert.ok(await reserve(budget, 'task_2'));
 });
 
-test('未知费用持续占额，只允许尚未发送的预留释放且请求键不可复用', async (t) => {
+test('未知费用保持待确认但不封禁新任务，请求键不可复用', async (t) => {
   const database = openBudgetDatabase();
   t.after(database.close);
   account(database, 'owner_1', 6720);
@@ -94,7 +94,7 @@ test('未知费用持续占额，只允许尚未发送的预留释放且请求�
   await budget.settle(reserved.reservationId, { kind: 'uncertain' });
   await budget.settle(reserved.reservationId, { kind: 'not_dispatched' });
   assert.equal(row(database, reserved.reservationId).state, 'uncertain');
-  assert.equal(await reserve(budget, 'task_2'), null);
+  assert.ok(await reserve(budget, 'task_2'));
   await budget.settle(reserved.reservationId, usage);
   assert.equal(row(database, reserved.reservationId).state, 'settled');
 
@@ -125,7 +125,7 @@ test('所有者隔离：相同请求键互不冲突，不能结算其他人的�
   assert.equal(row(database, two.reservationId).state, 'reserved');
 });
 
-test('费率过期和非法额度禁止预留，已发请求按旧费率快照结算', async (t) => {
+test('费率过期仍记账但非法请求上限拒绝，历史按原快照结算', async (t) => {
   const database = openBudgetDatabase();
   t.after(database.close);
   account(database);
@@ -133,11 +133,11 @@ test('费率过期和非法额度禁止预留，已发请求按旧费率快照�
     { ...rate, checkedAtMillis: timestamp - 86400000, expiresAtMillis: timestamp },
     { ...rate, checkedAtMillis: timestamp + 1 },
   ])
-    assert.equal(await reserve(port(database, 'owner_1', expired)), null);
+    assert.ok(await reserve(port(database, 'owner_1', expired), `expired_${expired.checkedAtMillis}`));
   const budget = port(database);
   for (const invalid of [
     { maxInputTokens: 20001, maxOutputTokens: 600 },
-    { maxInputTokens: 20000, maxOutputTokens: 601 },
+    { maxInputTokens: 20000, maxOutputTokens: 1601 },
     { maxInputTokens: 0, maxOutputTokens: 600 },
   ]) {
     assert.equal(
@@ -165,7 +165,23 @@ test('费率过期和非法额度禁止预留，已发请求按旧费率快照�
   assert.throws(() => account(database, 'over_limit', 1800001));
 });
 
-test('实际收费超出预留时记录全部费用并持久熔断，不截断账单', async (t) => {
+test('1600 token 输出上限登记完整预留，按供应商真实用量结算', async (t) => {
+  const database = openBudgetDatabase();
+  t.after(database.close);
+  account(database);
+  const budget = port(database);
+  const reserved = await budget.reserve({ taskId: 'task_1', requestId: 'task_1:1',
+    limits: { maxInputTokens: 20000, maxOutputTokens: 1600 },
+  }, new AbortController().signal);
+  assert.ok(reserved);
+  assert.equal(row(database, reserved.reservationId).reserved_micros, 7920);
+  await budget.settle(reserved.reservationId, { kind: 'usage',
+    usage: { inputTokens: 100, outputTokens: 1600 },
+  });
+  assert.equal(row(database, reserved.reservationId).charged_micros, 1950);
+});
+
+test('估算超出预留时记录全部费用及异常，不关闭后续任务', async (t) => {
   const database = openBudgetDatabase();
   t.after(database.close);
   account(database);
@@ -180,12 +196,14 @@ test('实际收费超出预留时记录全部费用并持久熔断，不截断�
   assert.equal(row(database, reserved.reservationId).violation, 1);
   assert.equal(
     database.sqlite.prepare('SELECT halted FROM agent_budget_accounts').get()!.halted,
-    1,
+    0,
   );
-  assert.equal(await reserve(port(database), 'task_2'), null);
+  assert.ok(await reserve(port(database), 'task_2'));
+  database.sqlite.exec('UPDATE agent_budget_accounts SET halted = 1');
+  assert.ok(await reserve(port(database), 'task_3'));
 });
 
-test('释放后收到真实扣费用量必须记账并熔断账户', async (t) => {
+test('释放后收到用量仍记账并标记异常，不封禁账户', async (t) => {
   const database = openBudgetDatabase();
   t.after(database.close);
   account(database);
@@ -196,17 +214,17 @@ test('释放后收到真实扣费用量必须记账并熔断账户', async (t) =
   await budget.settle(reserved.reservationId, usage);
   assert.equal(row(database, reserved.reservationId).charged_micros, 78);
   assert.equal(row(database, reserved.reservationId).violation, 1);
-  assert.equal(await reserve(budget, 'task_2'), null);
+  assert.ok(await reserve(budget, 'task_2'));
 });
 
-test('结算事务第二条语句失败时整笔回滚，额度仍保留', async (t) => {
+test('结算写入失败时原记录保留，不伪造已知费用', async (t) => {
   const database = openBudgetDatabase();
   t.after(database.close);
   account(database);
   const budget = port(database);
   const reserved = await reserve(budget);
   assert.ok(reserved);
-  database.sqlite.exec(`CREATE TRIGGER reject_halt BEFORE UPDATE ON agent_budget_accounts
+  database.sqlite.exec(`CREATE TRIGGER reject_settlement BEFORE UPDATE ON agent_budget_reservations
     BEGIN SELECT RAISE(ABORT, '测试事务回滚'); END;`);
   await assert.rejects(
     budget.settle(reserved.reservationId, {
@@ -259,7 +277,7 @@ test('文件库重开仍保存未知预留，UTC 跨月不修改旧账本', asyn
     await budget.settle(reserved.reservationId, { kind: 'uncertain' });
     database.close();
     database = openBudgetDatabase(path);
-    assert.equal(await reserve(port(database), 'task_2'), null);
+    assert.ok(await reserve(port(database), 'task_extra'));
     const nextMonth = Date.UTC(2026, 9, 1);
     const next = createD1Budget({
       db: database.db,

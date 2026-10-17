@@ -60,4 +60,15 @@ frontend/test-results/
 # === Agent core ===
 agent-server/node_modules/
 agent-server/coverage/
+agent-server/.tokenizer-type-patch/
 agent-server/.wrangler/
+agent-server/**/.wrangler/
+agent-server/**/.dev.vars
+agent-server/**/.dev.vars.*
+agent-server/**/.env.*
+agent-server/.generated/
+
+# 本机文档产物和生成的验收截图不上传。
+/output/
+/docs/handoffs/agent-tasks-qa-2026-09-14/
+/docs/handoffs/ui-preview-2026-09-14/

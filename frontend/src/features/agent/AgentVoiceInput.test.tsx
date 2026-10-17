@@ -50,6 +50,19 @@ it('点击麦克风先展示单次录音上传说明，未同意不调用原生'
   expect(onText).not.toHaveBeenCalled();
 });
 
+it('确认阶段常驻取消按钮始终可用，外部禁用也不会困住用户', () => {
+  const view = mount();
+  fireEvent.click(screen.getByRole('button', { name: '语音输入' }));
+  view.rerender(<AgentVoiceInput disabled onBusy={onBusy} onText={onText} />);
+  const cancel = screen.getByRole('button', { name: '取消当前语音输入' });
+  expect(cancel).toBeEnabled();
+  fireEvent.click(cancel);
+  expect(onBusy).toHaveBeenLastCalledWith(false);
+  expect(screen.queryByText(/实时发送至阿里云 Fun-ASR/)).not.toBeInTheDocument();
+  expect(send).not.toHaveBeenCalled();
+  expect(onText).not.toHaveBeenCalled();
+});
+
 it('完成只回填一次，释放原生会话且没有在线任务发送', async () => {
   mount();
   await begin();
@@ -58,6 +71,9 @@ it('完成只回填一次，释放原生会话且没有在线任务发送', asyn
   await act(async () => vi.advanceTimersByTimeAsync(500));
   expect(onText).toHaveBeenCalledExactlyOnceWith('今晚轻松跑');
   expect(screen.getByText('已填入草稿，请核对后自行发送')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '关闭语音提示' }));
+  expect(screen.queryByText('已填入草稿，请核对后自行发送')).not.toBeInTheDocument();
+  expect(onText).toHaveBeenCalledTimes(1);
   expect(send.mock.calls.filter(([name]) => name === 'voice.begin')).toHaveLength(1);
   expect(send.mock.calls.some(([name]) => name === 'voice.cancel')).toBe(true);
   expect(send.mock.calls.every(([name]) => name.startsWith('voice.'))).toBe(true);
@@ -101,6 +117,8 @@ it('权限或识别失败不改变草稿且不重试', async () => {
   state = 'failed';
   await begin();
   expect(screen.getByText('麦克风权限未授权')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '关闭语音提示' }));
+  expect(screen.queryByText('麦克风权限未授权')).not.toBeInTheDocument();
   expect(onText).not.toHaveBeenCalled();
   await act(async () => vi.advanceTimersByTimeAsync(5000));
   expect(send.mock.calls.filter(([name]) => name === 'voice.begin')).toHaveLength(1);

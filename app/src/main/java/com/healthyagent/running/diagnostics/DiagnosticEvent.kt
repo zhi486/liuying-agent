@@ -31,6 +31,9 @@ enum class DeepseekOutcome(val wireName: String) {
     RATE_LIMIT("rate_limit"), NETWORK("network"), TIMEOUT("timeout"), CANCELLED("cancelled"),
     INVALID_RESPONSE("invalid_response"), SERVER("server"),
 }
+
+/** 仅有限分类，不包含供应商响应、提示词或密钥。 */
+enum class CompanionRejection { FORMAT, INCOMPLETE, NON_TEXT, LENGTH, REPEATED_CORE, CHARACTERS, NUMBERS, ACTION, MULTIPLE_SENTENCES }
 enum class DiagnosticBleLifecycle { STOPPED, RUNNING, PAUSED }
 enum class DiagnosticBleLink { DISCONNECTED, CONNECTING, PREPARED_PRIVATE_B3, READY_STANDARD_HR, READY_PRIVATE_B3 }
 enum class BleReconnectStage { SCHEDULED, STARTED, SUCCEEDED, FAILED }
@@ -60,7 +63,7 @@ internal fun String.takeCodePoints(maxCount: Int): String {
 }
 
 sealed interface DiagnosticEvent {
-    data class DeepseekCompanionResult(val outcome: DeepseekOutcome) : DiagnosticEvent
+    data class DeepseekCompanionResult(val outcome: DeepseekOutcome, val rejection: CompanionRejection? = null) : DiagnosticEvent
     data class BleLinkLostNotice(val sessionGeneration: Long, val observationGeneration: Long, val faultId: Long, val episodeId: Long) : DiagnosticEvent
     data class BleLifecycleChanged(val from: DiagnosticBleLifecycle, val to: DiagnosticBleLifecycle, val epoch: Long, val lifecycleRevision: Long) : DiagnosticEvent
     data class BleLinkChanged(val from: DiagnosticBleLink, val to: DiagnosticBleLink, val attemptToken: Long, val gattToken: Long?, val reason: BleFailureReason? = null) : DiagnosticEvent

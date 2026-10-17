@@ -2,6 +2,7 @@ import { AgentError } from './contracts.ts';
 import { retainBackground, type WaitUntil } from './background.ts';
 import type { ModelDecision, ModelPort, Usage } from './contracts.ts';
 import { validateToolCall } from './tools.ts';
+import { MODEL_TOKEN_LIMITS } from './model-limits.ts';
 
 const wireNames = {
   'runs.list': 'runs_list',
@@ -72,7 +73,8 @@ function normalizeDecision(data: Record<string, unknown>): ModelDecision | null 
     !Array.isArray(message.tool_calls) ||
     message.tool_calls.length < 1 ||
     message.tool_calls.length > 6 ||
-    (message.content !== null && message.content !== undefined && message.content !== '')
+    (message.content !== null && message.content !== undefined &&
+      (typeof message.content !== 'string' || message.content.length > 4000))
   )
     return null;
   try {
@@ -89,10 +91,28 @@ function normalizeDecision(data: Record<string, unknown>): ModelDecision | null 
       });
     });
     if (new Set(calls.map((call) => call.id)).size !== calls.length) return null;
+    // 工具轮可附带说明文字；执行依据仍仅为校验后的调用，最终回答留待工具返回后生成。
     return { kind: 'tools', calls };
   } catch {
     return null;
   }
+}
+
+function warnRejectedDecision(data: Record<string, unknown>, usage: Usage | null): void {
+  const choice = Array.isArray(data.choices) ? object(data.choices[0]) : null;
+  const message = object(choice?.message);
+  const finishReason = choice?.finish_reason;
+  // 仅记录固定事件、白名单状态和数值；供应商正文及自由文本不能进入日志。
+  console.warn(JSON.stringify({
+    event: 'deepseek_decision_rejected',
+    finishReason: typeof finishReason === 'string' &&
+      ['stop', 'length', 'tool_calls', 'content_filter', 'insufficient_system_resource'].includes(finishReason)
+      ? finishReason : 'unknown',
+    inputTokens: usage?.inputTokens ?? null,
+    outputTokens: usage?.outputTokens ?? null,
+    contentLength: typeof message?.content === 'string' ? message.content.length : null,
+    toolCount: Array.isArray(message?.tool_calls) ? message.tool_calls.length : null,
+  }));
 }
 
 async function readResponse(response: Response, signal: AbortSignal): Promise<unknown> {
@@ -178,10 +198,10 @@ export function createDeepseekModel(options: {
           if (
             !integer(maxInputTokens) ||
             maxInputTokens < 1 ||
-            maxInputTokens > 20000 ||
+            maxInputTokens > MODEL_TOKEN_LIMITS.maxInputTokens ||
             !integer(maxOutputTokens) ||
             maxOutputTokens < 1 ||
-            maxOutputTokens > 600
+            maxOutputTokens > MODEL_TOKEN_LIMITS.maxOutputTokens
           )
             throw unavailable();
           const body = JSON.stringify({
@@ -193,6 +213,8 @@ export function createDeepseekModel(options: {
               { role: 'system', content: request.instructions },
               ...request.messages.map((message) => {
                 if (message.role === 'user') return { role: 'user', content: message.text };
+                if (message.role === 'assistant' && 'text' in message)
+                  return { role: 'assistant', content: message.text };
                 if (message.role === 'tool')
                   return {
                     role: 'tool',
@@ -234,15 +256,18 @@ export function createDeepseekModel(options: {
             },
             body,
             signal: controller.signal,
-            redirect: 'error',
+            // Workers 不支持 error；manual 不转发凭据，readResponse 拒绝全部 3xx。
+            redirect: 'manual',
           });
           const data = object(await readResponse(response, controller.signal));
           const usage = normalizeUsage(data?.usage);
           // 已验证的费用与任务结果权限分开：取消等待不取消已开始的收据持久化。
           // 正常路径必须等收据成功，失败不能把 usage 交给核心绕过这一步。
           if (usage) await onUsage?.(request.requestId, usage);
+          const decision = data ? normalizeDecision(data) : null;
+          if (data && !decision) warnRejectedDecision(data, usage);
           return {
-            decision: data ? normalizeDecision(data) : null,
+            decision,
             usage,
           };
         };

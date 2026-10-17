@@ -3,13 +3,14 @@ import { test } from 'node:test';
 import type { ModelPort } from '../src/contracts.ts';
 import { TOOL_DEFINITIONS } from '../src/tools.ts';
 import { createDeepseekModel } from '../src/deepseek.ts';
+import { runAgent } from '../src/loop.ts';
 
 const request: Parameters<ModelPort['generate']>[0] = {
   requestId: 'task_1:1',
   instructions: '只读运动摘要',
   messages: [{ role: 'user', text: '复盘本次跑步' }],
   tools: TOOL_DEFINITIONS,
-  limits: { maxInputTokens: 20000, maxOutputTokens: 600 },
+  limits: { maxInputTokens: 20000, maxOutputTokens: 1600 },
 };
 const wireReply = {
   id: 'completion_1',
@@ -52,11 +53,11 @@ test('真实适配器将供应商完成归一化，固定模型与输出限制�
   });
   assert.equal(sent.length, 1);
   assert.equal(sent[0]?.url, 'https://api.deepseek.com/chat/completions');
-  assert.equal(sent[0]?.init.redirect, 'error');
+  assert.equal(sent[0]?.init.redirect, 'manual');
   const body = JSON.parse(sent[0]!.init.body as string);
   assert.equal(body.model, 'deepseek-flash');
   assert.deepEqual(body.thinking, { type: 'disabled' });
-  assert.equal(body.max_tokens, 600);
+  assert.equal(body.max_tokens, 1600);
   assert.equal(body.stream, false);
   assert.deepEqual(body.messages, [
     { role: 'system', content: '只读运动摘要' },
@@ -320,7 +321,51 @@ test('工具请求、返回和再次请求保持调用 ID 与只读工具参数'
   ]);
 });
 
-test('拒绝非法工具、混合结果和截断输出，但保留已知账单用量', async () => {
+test('工具调用附带说明文字时仍能读取授权摘要并生成最终回答', async () => {
+  const bodies: { messages: unknown[] }[] = [];
+  const toolReply = toolsReply([call()]);
+  const model = createDeepseekModel({
+    apiKey: 'test-only-key',
+    countInputTokens: async () => 100,
+    fetch: async (_, init) => {
+      bodies.push(JSON.parse(init!.body as string));
+      return Response.json(bodies.length === 1 ? {
+        ...toolReply,
+        choices: [{ ...toolReply.choices[0], message: {
+          ...toolReply.choices[0]!.message, content: '我先查看本次跑步摘要。',
+        } }],
+      } : wireReply);
+    },
+  });
+  const run = { runId: 'run_1', distanceMeters: 4000, durationSeconds: 1800,
+    averagePaceSecPerKm: 450, averageHeartRate: null };
+  const result = await runAgent({
+    taskId: 'task_1', prompt: '复盘本次跑步',
+    consent: { cloudProcessing: true, runSummaries: true }, summaries: [run],
+  }, {
+    model,
+    budget: { async reserve(value) { return { reservationId: value.requestId }; }, async settle() {} },
+  });
+  assert.equal(result.status, 'completed');
+  if (result.status === 'completed') assert.equal(result.answer, wireReply.choices[0]!.message.content);
+  assert.deepEqual(result.actions.map(action => action.kind), ['model_requested', 'tool_completed', 'model_requested']);
+  assert.deepEqual(bodies[1]!.messages.slice(-2), [
+    { role: 'assistant', content: null, tool_calls: [call()] },
+    { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify({ run }) },
+  ]);
+});
+
+test('工具调用附带内容仍要求有界字符串且不放宽工具参数校验', async () => {
+  const fixture = toolsReply([call()]);
+  for (const content of [123, {}, [], true, '长'.repeat(4001)]) {
+    const result = await respond({ ...fixture, choices: [{ ...fixture.choices[0], message: {
+      ...fixture.choices[0]!.message, content,
+    } }] }).generate(request, signal());
+    assert.equal(result.decision, null);
+  }
+});
+
+test('拒绝非法工具、混合完成状态和截断输出，但保留已知账单用量', async () => {
   const malformed = [
     toolsReply([call('delete_all')]),
     toolsReply([call('runs_summary', '{')]),
@@ -354,6 +399,30 @@ test('拒绝非法工具、混合结果和截断输出，但保留已知账单�
     assert.equal(result.decision, null);
     assert.deepEqual(result.usage, { inputTokens: 100, outputTokens: 40 });
   }
+});
+
+test('拒绝诊断仅包含白名单结束状态和数值，不泄露供应商内容或请求信息', async (t) => {
+  const warnings: string[] = [];
+  t.mock.method(console, 'warn', (value: string) => { warnings.push(value); });
+  for (const finishReason of ['length', 'PRIVATE-FINISH-REASON']) {
+    const result = await respond({
+      ...wireReply,
+      id: 'PRIVATE-COMPLETION-ID',
+      choices: [{ index: 0, finish_reason: finishReason, message: {
+        role: 'assistant', content: 'PRIVATE-CONTENT', reasoning_content: 'PRIVATE-REASONING',
+        tool_calls: [{ id: 'PRIVATE-TOOL-ID', type: 'function', function: {
+          name: 'runs_summary', arguments: '{"runId":"PRIVATE-RUN"}',
+        } }],
+      } }],
+    }).generate({ ...request, requestId: 'PRIVATE-REQUEST-ID' }, signal());
+    assert.equal(result.decision, null);
+  }
+  assert.deepEqual(warnings.map(value => JSON.parse(value)), ['length', 'unknown'].map(finishReason => ({
+    event: 'deepseek_decision_rejected', finishReason, inputTokens: 100, outputTokens: 40,
+    contentLength: 15, toolCount: 1,
+  })));
+  assert.equal(warnings.join('').includes('PRIVATE'), false);
+  assert.equal(warnings.join('').includes('test-only-key'), false);
 });
 
 test('供应商用量缺失或矛盾不默认成零；超预算实际用量交回核心处理', async () => {
@@ -404,7 +473,7 @@ test('输入计数不可用、超限、非法上限和过大请求均在网络�
   });
   for (const limits of [
     { maxInputTokens: 20001, maxOutputTokens: 600 },
-    { maxInputTokens: 20000, maxOutputTokens: 601 },
+    { maxInputTokens: 20000, maxOutputTokens: 1601 },
     { maxInputTokens: 0, maxOutputTokens: 1 },
   ]) {
     await assert.rejects(model.generate({ ...request, limits }, signal()), /model_unavailable/);
@@ -429,19 +498,19 @@ test('输入计数不可用、超限、非法上限和过大请求均在网络�
 
 test('HTTP 错误不重试、不泄露响应或密钥；重定向不可转发凭据', async () => {
   let calls = 0;
-  for (const status of [302, 401, 429, 500]) {
+  for (const status of [301, 302, 303, 307, 308, 401, 429, 500]) {
     const model = createDeepseekModel({
       apiKey: 'test-only-key',
       countInputTokens: async () => 100,
       fetch: async (_, init) => {
         calls++;
-        assert.equal(init!.redirect, 'error');
-        return new Response('不应暴露的响应', { status });
+        assert.equal(init!.redirect, 'manual');
+        return new Response('不应暴露的响应', { status, headers: { Location: 'https://blocked.invalid/private' } });
       },
     });
     await assert.rejects(model.generate(request, signal()), /^Error: model_unavailable$/);
   }
-  assert.equal(calls, 4);
+  assert.equal(calls, 8);
   for (const apiKey of ['', ' ', 'bad\r\nkey']) {
     assert.throws(
       () => createDeepseekModel({ apiKey, countInputTokens: async () => 100 }),

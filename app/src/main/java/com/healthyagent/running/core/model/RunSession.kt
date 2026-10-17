@@ -28,4 +28,5 @@ data class RunSession(
     val splits: List<Split> = emptyList(),
     val routePoints: List<RoutePoint> = emptyList(),
     val runState: RunState = RunState.IDLE,
+    val metricSamples: List<RunMetricSample> = emptyList(),
 )

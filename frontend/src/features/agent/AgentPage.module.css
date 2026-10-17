@@ -189,9 +189,8 @@
   overflow-wrap: anywhere;
 }
 
-.composer textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+.composer textarea:focus {
+  outline: none;
 }
 
 .composerFooter {
@@ -261,26 +260,14 @@
 }
 
 .onlineInfo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
   margin-top: 0.8rem;
-  padding: 0 0.25rem;
+  padding: 0.5rem 0.25rem;
   color: var(--text-muted);
   font-size: 0.8rem;
   line-height: 1.7;
-}
-
-.onlineInfo summary {
-  padding: 0.65rem 0;
-  cursor: pointer;
-}
-
-.onlineInfo summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: var(--radius-sm);
-}
-
-.onlineInfo p {
-  margin: 0 0 0.65rem;
 }
 
 .page button:disabled {
@@ -484,7 +471,13 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: 9rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.conversation > * {
+  flex-shrink: 0;
 }
 
 .intro {
@@ -628,7 +621,18 @@
   text-decoration: none;
 }
 
-.accountLinks a:last-child {
+.accountLinks button {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.75rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+}
+
+.accountLinks > :last-child {
   border-bottom: 0;
 }
 
@@ -653,8 +657,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--line);
+  padding: 1rem 0;
   overflow-wrap: anywhere;
 }
 
@@ -671,7 +674,7 @@
   align-self: flex-end;
   max-width: 85%;
   padding: 0.75rem 0.9rem;
-  border-radius: 1rem 1rem 0.2rem 1rem;
+  border-radius: 1.2rem;
   background: var(--accent-soft);
   white-space: pre-wrap;
 }
@@ -707,11 +710,16 @@
 }
 
 .page {
-  min-height: calc(100dvh - env(safe-area-inset-bottom));
-  padding: env(safe-area-inset-top) 1rem 0.75rem;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: env(safe-area-inset-top) 1rem calc(env(safe-area-inset-bottom) + 0.75rem);
 }
 
 .chatHeader {
+  position: relative;
+  gap: 0.25rem;
+  flex: none;
   min-height: 3.6rem;
   border: 0;
 }
@@ -735,28 +743,56 @@
 
 .headerSpacer {
   width: 5.1rem;
+  flex: none;
 }
 
 .intro {
-  min-height: 17rem;
+  min-height: min(26rem, 58dvh);
+  gap: 0.75rem;
+  align-items: center;
 }
 
 .intro h1 {
-  font-weight: 620;
+  font-size: 1.2rem;
+  font-weight: 550;
+}
+
+.introMark {
+  color: var(--accent);
+}
+
+.chatTitle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 30%;
+  text-align: center;
+}
+
+.chatHeader .newChatButton {
+  flex: none;
+  width: 2.75rem;
+  border-radius: 50%;
+  margin-right: auto;
+  background: transparent;
 }
 
 .composer {
-  padding: 0.8rem 0.8rem 0.45rem;
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 0.65rem 0.7rem 0.35rem;
   border: 1px solid var(--line);
-  border-radius: 1.45rem;
+  border-radius: 1.3rem;
   background: var(--canvas-raised);
-  box-shadow: 0 0.6rem 1.8rem -1.5rem var(--shadow);
+  box-shadow: none;
 }
 
 .composer textarea {
   display: block;
-  min-height: 3.3rem;
-  max-height: 11rem;
+  min-height: 2.8rem;
+  max-height: min(11rem, 25dvh);
+  resize: none;
   padding: 0.15rem 0.2rem;
   font-size: 0.96rem;
   line-height: 1.55;
@@ -880,31 +916,138 @@
   inset: 0;
   display: flex;
   width: 100%;
+  isolation: isolate;
+  overflow: hidden;
+  pointer-events: none;
+  touch-action: pan-y;
+}
+
+.sidebarOverlay[data-open='true'] {
+  pointer-events: auto;
+}
+
+.page {
+  touch-action: pan-y;
 }
 
 .sidebarBackdrop {
   position: absolute;
+  z-index: 0;
   inset: 0;
   width: 100%;
   border: 0;
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(0, 0, 0, 0.22);
+  opacity: var(--chat-drawer-progress, 0);
+  transition: opacity 240ms ease;
 }
 
 .sidebar {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  width: min(86vw, 21rem);
-  height: 100dvh;
+  width: var(--chat-drawer-width, min(86vw, 21rem));
+  margin-left: max(0px, calc((100vw - 34rem) / 2));
+  transform: translateX(
+    calc(var(--chat-drawer-x, 0px) - var(--chat-drawer-width, min(86vw, 21rem)))
+  );
+  transition: transform 240ms cubic-bezier(0.22, 0.7, 0.2, 1);
+  height: 100%;
+  min-height: 0;
+  flex-shrink: 0;
   padding: env(safe-area-inset-top) 0.95rem env(safe-area-inset-bottom);
-  background: var(--canvas);
+  background: var(--canvas, #fff);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  overflow: hidden;
   box-shadow: 0.5rem 0 2rem -1rem var(--shadow);
+}
+
+:global(:root[data-chat-dragging='true']) .sidebar,
+:global(:root[data-chat-dragging='true']) .sidebarBackdrop {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebarBackdrop {
+    transition: none;
+  }
 }
 
 .sidebar .accountHeader {
   flex: none;
   justify-content: space-between;
-  min-height: 3.5rem;
+  min-height: 4.2rem;
+  gap: 0.35rem;
+  border: 0;
+}
+
+.conversationSearch {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 2rem;
+  background: var(--canvas-raised);
+  color: var(--text-muted);
+}
+
+.conversationSearch input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.conversationSearch:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.conversationSearch input:focus {
+  outline: none;
+}
+
+.sidebarFooter {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.65rem;
+  border: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.sidebarFooter > span:nth-child(2) {
+  flex: 1;
+}
+
+.profileMark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.managementTitle {
+  padding-left: 0.65rem;
+  font-weight: 600;
 }
 
 .sidebar .accountHeader h1 {
@@ -912,14 +1055,15 @@
 }
 
 .sidebarScroll {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .sidebarSectionTitle {
-  margin: 1.4rem 0 0.45rem;
-  padding: 0 0.35rem;
+  margin: 1rem 0 0.45rem;
+  padding: 0 0.65rem;
   color: var(--text-muted);
   font-size: 0.72rem;
   font-weight: 650;
@@ -940,14 +1084,16 @@
 }
 
 .sidebar .accountLinks {
+  flex: none;
   margin: 0;
   border: 0;
   background: transparent;
 }
 
-.sidebar .accountLinks a {
+.sidebar .accountLinks a,
+.sidebar .accountLinks button {
   min-height: 3rem;
-  padding: 0.5rem 0.35rem;
+  padding: 0.5rem 0.65rem;
 }
 
 .sidebar .accountSection {
@@ -960,6 +1106,15 @@
   list-style: none;
 }
 
+.conversationPeriod {
+  margin: 1rem 0 0.35rem;
+  padding: 0 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.sidebarAction,
 .sidebarChats button {
   display: block;
   width: 100%;
@@ -970,18 +1125,82 @@
   border-radius: 0.65rem;
   background: transparent;
   color: var(--text);
+  font: inherit;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sidebarChats button:hover {
+.sidebarAction {
+  margin: 0.35rem 0;
   background: var(--surface);
+  color: var(--accent);
+  white-space: normal;
+}
+
+.sidebarAction > svg {
+  vertical-align: middle;
+  margin-right: 0.25rem;
+}
+
+.sidebarChats button:enabled:hover {
+  background: var(--surface);
+}
+
+.sidebarChats button[aria-current='page'] {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.sidebar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.sidebarAction:focus-visible,
+.sidebarChats button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.conversationRename {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.8rem 0;
+  padding: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
+.conversationRename label {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.conversationRename input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--canvas);
+  color: var(--text);
+  font: inherit;
+}
+
+.conversationRename input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .sidebarEmpty {
   margin: 0.3rem 0 0.8rem;
-  padding: 0 0.35rem;
+  padding: 0 0.65rem;
   color: var(--text-muted);
   font-size: 0.78rem;
 }
@@ -992,11 +1211,9 @@
 
 .voicePanel,
 .voiceToast {
-  position: absolute;
-  z-index: 6;
-  right: -3.1rem;
-  bottom: calc(100% + 0.7rem);
-  width: min(19rem, calc(100vw - 2.5rem));
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.9rem;
   border: 1px solid var(--line);
   border-radius: 1rem;
@@ -1013,10 +1230,44 @@
 }
 
 .voiceToast {
-  bottom: calc(100% + 0.7rem);
   padding: 0.55rem 0.8rem;
 }
 
 .voiceToast {
   margin: 0;
+}
+.voiceStatusSlot {
+  /* 与聊天页共用实际可视高度，避免 WebView 动态视口异常时提示区塌缩。 */
+  max-height: 13rem;
+  max-height: clamp(5rem, calc(var(--chat-viewport-height, 100vh) / 4), 13rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-shrink: 0;
+}
+.voiceStatusSlot p {
+  overflow-wrap: anywhere;
+}
+.voicePanel button,
+.voiceDismiss {
+  min-height: 44px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.voiceToast {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.voiceToast p {
+  margin: 0;
+  flex: 1;
+}
+.voiceDismiss {
+  flex-shrink: 0;
 }

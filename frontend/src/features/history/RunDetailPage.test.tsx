@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { AppRoutes } from '../../app/routes';
@@ -47,8 +47,29 @@ const show = () =>
   );
 
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute('open', '');
+  };
   send.mockReset();
   useBridgeStore.setState({ status: 'ready', snapshot: null });
+});
+
+it('分段详情展示累计时间、最快标记，关闭后恢复焦点且不调用在线服务', async () => {
+  send.mockResolvedValue({ status: 'accepted', data: detail });
+  show();
+  const trigger = await screen.findByRole('button', { name: '查看分段详情' });
+  trigger.focus();
+  fireEvent.click(trigger);
+  const dialog = screen.getByRole('dialog', { name: '分段详情' });
+  expect(within(dialog).getByRole('table')).toHaveTextContent('12:00');
+  expect(within(dialog).getByText('最快')).toBeVisible();
+  expect(within(dialog).getByText('05′50″')).toBeVisible();
+  fireEvent.click(within(dialog).getByRole('button', { name: '关闭分段详情' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+  expect(
+    send.mock.calls.every(([name]) => ['history.detail', 'history.series'].includes(name)),
+  ).toBe(true);
 });
 
 it('总结页读取本次五秒曲线并提供两种详情入口', async () => {
@@ -92,9 +113,17 @@ it('按记录标识展示真实概要和分段，缺失心率不归零', async (
   expect(await screen.findByText('2.00', { selector: 'strong' })).toBeVisible();
   expect(screen.getByRole('table', { name: '每公里分段' })).toHaveTextContent('5:50');
   expect(screen.getAllByText('未采集').length).toBeGreaterThan(0);
-  expect(screen.getByRole('heading', { name: '每公里平均配速' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: '运动数据' })).toBeVisible();
+  expect(screen.getByRole('button', { name: '查看分段详情' })).toBeVisible();
   expect(send).toHaveBeenCalledWith('history.detail', { sessionId: 'run-1' });
   expect(screen.queryByText(/千卡|会员|广告|最大摄氧量/)).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '让流萤复盘本次跑步' })).toHaveAttribute(
+    'href',
+    '/agent',
+  );
+  expect(
+    send.mock.calls.some(([name]) => name === 'cloud.prepare' || name === 'cloud.confirm'),
+  ).toBe(false);
 });
 
 it('旧版不支持详情时提示升级且可以重试', async () => {

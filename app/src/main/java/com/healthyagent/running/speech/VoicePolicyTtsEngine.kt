@@ -122,7 +122,7 @@ class VoicePolicyTtsEngine(
             val prepared = withTimeoutOrNull(remainingPreparationMillis(request, kilometer)) {
                 val companion = if (request.companionEnabled) {
                     try {
-                        withTimeoutOrNull(minOf(2_000L, remainingPreparationMillis(request, kilometer))) {
+                        withTimeoutOrNull(minOf(if (kilometer) 6_000L else 2_000L, remainingPreparationMillis(request, kilometer))) {
                             awaitPreparation { companionTextSource.create(request) }
                         }
                     } catch (_: CancellationException) {
@@ -135,7 +135,7 @@ class VoicePolicyTtsEngine(
                 if (remainingPreparationMillis(request, kilometer) == 0L) return@withTimeoutOrNull null
                 val suffix = companion?.trim().orEmpty()
                 val separator = if (suffix.isNotEmpty() && core.lastOrNull() !in setOf('。', '！', '？', '.', '!', '?')) "。" else ""
-                val text = core + separator + suffix
+                val text = if (kilometer) suffix.ifEmpty { core } else core + separator + suffix
                 val file = awaitPreparation(onCancel = client::cancel) { client.synthesize(text) }
                 if (remainingPreparationMillis(request, kilometer) == 0L) return@withTimeoutOrNull null
                 prepareAudio(operation, Prepared(file, text, VoiceAudioSource.ONLINE))

@@ -1,6 +1,10 @@
 package com.healthyagent.running.speech
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ActivityScenario
+import androidx.lifecycle.Lifecycle
+import android.view.WindowManager
+import com.healthyagent.running.MainActivity
 import androidx.test.platform.app.InstrumentationRegistry
 import com.healthyagent.running.core.engine.rules.KmSplitRule
 import com.healthyagent.running.core.model.RuleContext
@@ -9,6 +13,8 @@ import com.healthyagent.running.core.model.Severity
 import com.healthyagent.running.core.model.RunConfig
 import com.healthyagent.running.core.model.SpeechPriority
 import com.healthyagent.running.core.model.Split
+import com.healthyagent.running.core.model.RunSession
+import com.healthyagent.running.ai.PromptBuilder
 import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.data.local.SettingsRepository
 import com.healthyagent.running.data.repository.RunRepository
@@ -19,6 +25,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.delay
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -29,6 +36,32 @@ import org.koin.core.context.GlobalContext
 /** 仅经用户明确授权并传入开关时合成一句；普通测试运行不访问云端。 */
 @RunWith(AndroidJUnit4::class)
 class FishVoiceLiveTest {
+    /** 可见页面承载试听，避免无界面 instrumentation 被厂商后台冻结；只对该窗口保持亮屏。 */
+    private fun foregroundPreview(block: () -> Unit) {
+        ActivityScenario.launch(MainActivity::class.java).use { activity ->
+            var wasKeepingScreenOn = false
+            activity.onActivity {
+                wasKeepingScreenOn = it.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
+                it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            assertEquals("试听页面必须处于前台", Lifecycle.State.RESUMED, activity.state)
+            try { block() } finally {
+                activity.onActivity {
+                    if (!wasKeepingScreenOn) it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun foregroundPreviewRemainsResponsiveWithoutNetwork() = foregroundPreview {
+        // 超过此前约五秒的冻结点；不录音、不播放、不调用任何模型。
+        val started = android.os.SystemClock.elapsedRealtime()
+        runBlocking { withTimeout(25_000L) { delay(20_000L) } }
+        assertTrue("前台无网络验证超过时限，仍可能发生冻结", android.os.SystemClock.elapsedRealtime() - started < 25_000L)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { }
+    }
+
     /** 只播一条“固定核心＋实时陪伴”；不启动跑步、不写入记录。 */
     @Test
     fun configuredDeepseekAndFishSpeakOneWholePhrase() {
@@ -81,12 +114,23 @@ class FishVoiceLiveTest {
             "公里实听必须显式开启，可能消耗 Fish API 额度",
             InstrumentationRegistry.getArguments().getString("allowFishKmPreview") == "true",
         )
-        runBlocking {
+        val companion = InstrumentationRegistry.getArguments()
+            .getString("allowDeepseekFishKmPreview") == "true"
+        foregroundPreview { runBlocking {
             val koin = GlobalContext.get()
             val settings = koin.get<SettingsRepository>().current()
+            val repository = koin.get<RunRepository>()
+            val sessionsBefore = repository.getAllSessions().size
+            assertTrue("当前存在未结束的跑步，拒绝试听", repository.getActiveSession() == null)
             assertTrue("手机语音提醒未开启", settings.ttsEnabled)
             assertTrue("手机未配置 Fish Key", settings.fishApiKey.isNotBlank())
             assertTrue("手机未配置流萤音色", settings.fishReferenceId.isNotBlank())
+            val deepseekConfig = if (companion) {
+                assertTrue("AI 陪伴未开启", settings.llmEnabled)
+                requireNotNull(koin.get<DeepseekCredentialsStore>().capture(settings.coachTone)) {
+                    "手机未配置 DeepSeek Key"
+                }
+            } else null
             val split = Split(
                 index = 1,
                 distanceMeters = 1_000.0,
@@ -114,17 +158,32 @@ class FishVoiceLiveTest {
             })
             bus.configure(SpeechPolicy(settings.ttsEnabled, settings.ttsMinIntervalSec))
             try {
-                bus.enqueue(SpeechRequest(trigger))
+                bus.enqueue(SpeechRequest(
+                    trigger,
+                    companionEnabled = companion,
+                    deepseekConfig = deepseekConfig,
+                    analysis = if (companion) PromptBuilder.build(
+                        RunSession("km-preview", 0L, totalDistanceMeters = 1_000.0,
+                            totalDurationSec = 360L, avgPaceSecPerKm = 360.0),
+                        split, RunConfig(),
+                    ) else null,
+                ))
                 assertEquals(SpeechOutcomeReason.TTS_SUCCESS, withTimeout(90_000L) { completion.await() })
                 val message = withTimeout(90_000L) {
-                    bus.latestMessage.first { it?.text == trigger.speakText }
+                    bus.latestMessage.first { it != null }
                 }
                 assertEquals(SpeechPriority.SPLIT, message?.priority)
+                val text = requireNotNull(message).text
+                assertTrue("播报缺少公里核心", text.startsWith(trigger.speakText))
+                if (companion) assertTrue("DeepSeek 未返回有效公里鼓励", text.length > trigger.speakText.length)
+                else assertEquals(trigger.speakText, text)
+                assertEquals("试听不应创建跑步记录", sessionsBefore, repository.getAllSessions().size)
+                assertTrue("试听不应创建活动跑步", repository.getActiveSession() == null)
             } finally {
-                bus.stop()
+                bus.shutdown()
                 logger.flush()
             }
-        }
+        } }
     }
 
     @Test

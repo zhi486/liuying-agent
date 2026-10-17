@@ -14,6 +14,7 @@ export function useCloudAgent(
   prompt: string,
   memoryRefs: SelectedMemoryRef[],
   knowledge?: KnowledgeSelection,
+  runId?: string,
 ) {
   const [listing, setListing] = useState<CloudListing | null>(null);
   const [prepared, setPrepared] = useState<CloudPreparation | null>(null);
@@ -66,7 +67,7 @@ export function useCloudAgent(
     return () => {
       sequence.current += 1;
     };
-  }, [status, prompt, selectionKey, knowledgeKey]);
+  }, [status, prompt, selectionKey, knowledgeKey, runId]);
 
   useEffect(
     () => () => {
@@ -83,11 +84,25 @@ export function useCloudAgent(
     setWorking(true);
     setError('');
     const request = ++sequence.current;
+    let sending = false;
     try {
+      // 旧版历史不拼成会话；首次发送时创建独立会话，当前输入保留。
+      let conversationId = listing.conversationId;
+      if (conversationId === null) {
+        const created = await sendNativeCommand('cloud.newConversation', {});
+        if (created.status !== 'accepted') throw new Error();
+        const next = cloudListingSchema.parse(created.data);
+        if (request !== sequence.current) return;
+        setListing(next);
+        conversationId = next.conversationId;
+        if (!conversationId) throw new Error();
+      }
       const result = await sendNativeCommand('cloud.prepare', {
         prompt,
+        ...(conversationId ? { conversationId } : {}),
         memoryRefs,
         ...(knowledge ? { knowledge } : {}),
+        ...(runId ? { runId } : {}),
       });
       if (result.status !== 'accepted') throw new Error();
       const value = cloudPreparationSchema.parse(result.data);
@@ -98,6 +113,8 @@ export function useCloudAgent(
       if (
         value.prompt !== prompt ||
         value.origin !== listing.origin ||
+        value.conversation?.id !== (conversationId ?? undefined) ||
+        value.runSummary?.runId !== runId ||
         JSON.stringify(value.knowledge) !== knowledgeKey ||
         JSON.stringify(value.memories.map(({ id, version }) => ({ id, version }))) !== selectionKey
       ) {
@@ -105,10 +122,38 @@ export function useCloudAgent(
         throw new Error();
       }
       token.current = value.token;
+      if (
+        listing.chatAuthorized === true &&
+        conversationId &&
+        !memoryRefs.length &&
+        !knowledge &&
+        !runId
+      ) {
+        // 原生仍须校验持续授权和预览快照；不能由 Web 绕过额外数据授权。
+        reads.current++;
+        sending = true;
+        const sent = await sendNativeCommand('cloud.send', { token: value.token });
+        if (request !== sequence.current) return false;
+        if (sent.status !== 'accepted') throw new Error();
+        reads.current++;
+        setListing(cloudListingSchema.parse(sent.data));
+        token.current = null;
+        return true;
+      }
       setPrepared(value);
+      return false;
     } catch {
       if (request === sequence.current)
-        setError('问题、记忆或知识库选择核对失败，请重新选择后重试；没有发送。');
+        setError(
+          sending
+            ? '发送未确认，请刷新状态。持续授权可能已关闭或配置已变化；已发出的任务仅恢复查询，不自动重发。'
+            : '问题、记忆、跑步记录或知识库选择核对失败，请重新选择后重试；没有发送。',
+        );
+      if (request === sequence.current && token.current) {
+        void sendNativeCommand('cloud.discard', { token: token.current }).catch(() => undefined);
+        token.current = null;
+      }
+      return false;
     } finally {
       if (request === sequence.current) {
         locked.current = false;
@@ -123,6 +168,31 @@ export function useCloudAgent(
       void sendNativeCommand('cloud.discard', { token: token.current }).catch(() => undefined);
     token.current = null;
     setPrepared(null);
+  }
+
+  async function changeConversation(conversationId?: string | null, title?: string) {
+    if (status !== 'ready' || locked.current || prepared) return false;
+    locked.current = true;
+    setWorking(true);
+    reads.current++;
+    try {
+      const result =
+        title !== undefined && conversationId
+          ? await sendNativeCommand('cloud.renameConversation', { conversationId, title })
+          : conversationId === undefined
+            ? await sendNativeCommand('cloud.newConversation', {})
+            : await sendNativeCommand('cloud.selectConversation', { conversationId });
+      if (result.status !== 'accepted') throw new Error();
+      setListing(cloudListingSchema.parse(result.data));
+      setError('');
+      return true;
+    } catch {
+      setError('会话操作未完成，请刷新后重试；没有发送问题。');
+      return false;
+    } finally {
+      locked.current = false;
+      setWorking(false);
+    }
   }
 
   async function act(
@@ -152,7 +222,7 @@ export function useCloudAgent(
     } catch {
       if (request === sequence.current) {
         setError(
-          '操作未确认完成，请刷新在线记录。已授权的请求只恢复查询，不自动重发；记忆若有变更需重新授权。',
+          '操作未确认完成，请刷新在线记录。已授权的请求只恢复查询，不自动重发；记忆或跑步记录若有变更需重新授权。',
         );
         void refresh();
       }
@@ -168,5 +238,5 @@ export function useCloudAgent(
       }
     }
   }
-  return { listing, prepared, working, error, prepare, discard, act, refresh };
+  return { listing, prepared, working, error, prepare, discard, act, refresh, changeConversation };
 }

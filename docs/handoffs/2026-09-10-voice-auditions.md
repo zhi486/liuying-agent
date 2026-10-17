@@ -102,3 +102,39 @@ ef96386已封装14个固定MP3与严格清单：13个新Fish请求各1次全部�
 Task7代码检查点bf101e4：新增VoicePolicyInstrumentedTest（默认5无声、显式allowBundledVoicePreview=true才试听APK内hr_rapid_rise），全量JVM599/599、前端83/83、两个APK构建及原签名验证通过；独立规格/质量测试门通过，尚未真机执行。主APK31136C1EDF97C6F5CF3AE9983376A4D84887151E79032D865433CFF22B9776E4，测试包128F20087FE7AF1106C846486F47B626DBF0F6A3FAD69E686332859EC5C7EFD1；后续修复重建会使这些hash过期，安装须重新核对。
 
 最终只读APK审计发现classes3.dex包含已授权配置中的参考声线ID；安全定位为SettingsDataStore.kt:138的默认常量，261f422基线已有，不是新资源生成带入，也不是Fish API密钥。该项纳入最终全范围审查/统一处置，未输出配置实际值，安装暂停。手机随后USB断开，--settings-check只读检查未能执行，没有读取或改写手机配置；重新连接后应确认参考配置已经持久化，去掉默认字面量不应破坏既有配置。当前未备份、未安装、未播放；原样本与13条已成功生成资产不要重做。
+
+## 最新检查点：USB恢复，最终统一修复进行中
+
+用户已确认“已重新连接并授权”。只读核对手机App私有设置：Fish key和reference均与当前授权配置匹配（仅输出两个布尔值），不需要恢复旧硬编码默认值。手机仍旧主包40ac56...944f；运动记录1条、未结束0、路线点2430，完整性ok，未改配置、未重播。
+
+独立一致性备份已保存至`build/device-tests/20260910/voice-release-20260910T120659751Z/run-records.db`，520192字节，SHA256为`adb9688178ad211467ef4bae984e4eabb337c26aa64fa17aeb65b3e792e5195e`；同目录`before-install.json`记录安全摘要。源与备份副本计数相同、quick_check均ok。安装前仍须重新核对，不能用旧备份覆盖用户后续新运动。
+
+最终审查范围261f422..5f4ecce：两组Important为默认参考声线ID打包和真实Android媒体prepare边界；两项Minor为播放超时异常与Bus诊断不一致、CoachMessage过期注释。统一修复由/root/final_voice_fix执行，BASE5f4ecce，只一波修复、一次定向复审。真实Android端口加假platform闸门已复现取消后迟到start=1的行为红灯。最终方案将真实异步媒体prepare纳入8/15秒并保持准备无焦点；已prepared的短启动与取消原子排序，网络/准备等待不持启动门。修复未提交或验收，Task7整体仍未完成；不得安装此前两个过期APK或宣称户外已通过。
+
+## 最新检查点：a1a84d3已提交，最终复审剩一项，未安装
+
+最终统一修复提交`a1a84d3`，15个生产与直接测试文件：移除共用默认reference；真实Android媒体改为主Looper创建/异步prepare/可取消启动；准备阶段无焦点；播放60秒超时诊断和消息注释修正。原文及14音频完全未改，无新Fish/AI请求、无push。准备/实际播放分阶段，线上8/15秒包含媒体prepared；本地解码保留60秒故障看门，实际开播另计60秒，期间可取消且不会因准备抢焦点。
+
+定向123/123、最终全量66套件615/615、前端83/83、双APK构建和原签名通过。controller实际解包扫描主/测试APK均findings0，主14语音hash一致，未发现授权配置实际值或常见凭据/私钥格式。主APK SHA256 `474F98991F192AD0B70E6D7C19465B8A1D78AB132DB99BD7F1722D21740BF494`，测试`D73F2FEA780A563379A58301988F04212D64DBC0967C864B7442D18DB8F7F17D`；这不是已安装证明。
+
+最终一次定向复审确认上述修复有效、没有发现fix新增破坏，但剩一个原Important：SpeechBus接纳事件后的排队/派发延迟没有从8/15秒预算扣除。示例普通事件t=0接纳、t=3派发、t=10在线准备完成仍会播，而原要求应在t=8转本地；公里事件超过15秒仍可能开始新在线准备。仅从进入prepareOnline起计时，不满足“从接纳起”。不能将真实媒体prepare取消已修复误写为完全时限已通过。
+
+按SDD最终一波修复及一次定向复审的上限，本轮不再自行派第二波；已向用户请求明确允许再做一轮仅修接纳时间传播与边界测试。待回复期间保留master代码、已审计APK、原数据与备份，不安装、不播放、不产生模拟运动记录，不重复生成音频。若用户允许，以a1a84d3为下一波基线，仅修预算传播及相关时钟测试，回归、独立审查、重新核验最终APK后覆盖安装；Task1—6不得重做。若用户暂停，从本段和本计划台账恢复。
+
+用户随后明确回复“允许，先修好再安装”。这项额外授权已覆盖本轮执行上限；/root/final_voice_fix从a1a84d3执行最小接纳预算修复，要求先提出一致时钟/预算传播接口，用真实Bus→Policy延迟派发取得RED，再回归、复审和安装。简报acceptance-budget-brief.md，报告acceptance-budget-report.md，均在本计划台账目录。不要继续等待同一授权，不重新开始已完成任务或音频制作。
+
+## 最新安装与实听检查点：bb461ea已在手机，内置通过，在线连接失败待查
+
+额外授权修复`bb461ea`已完成并复审通过，无残留发现：Bus把原始TimeMark传至Policy，pending不重置，直接speak入口补标记；生产使用包含休眠时间的elapsedRealtimeNanos，原UI时间不变。修正测试Delay转发后，移除两处标记传播取得有效变异RED4项失败，恢复后定向110/110；最后全量67套件626/626、前端83/83和双APK构建/原签名通过。已通过的媒体/线程和14assets原字节未改。
+
+最终主APK SHA256 `0CDA2898127EA4460E317D8F84990B0A8A32FF4447F6875AA08B05E6FD1B9889`，测试`F28270D9973025D1FD4C40B01C1B0B0112E8BF130A590028616BD0B72E34D60B`；实际解包审计均findings0，主14语音hash一致。原签名不变。安装前最新一致性备份目录`build/device-tests/20260910/voice-release-20260910T131448454Z/`，DB仍520192字节、SHA256 `adb9688178ad211467ef4bae984e4eabb337c26aa64fa17aeb65b3e792e5195e`，与上一份备份完全一致。
+
+主包与测试包均以adb install -r -t覆盖安装Success，无卸载/clear。手机实际主包哈希与最终产物一致；安装后及测试后fresh核对均为1条记录、active0、2430路线点、完整性ok，key/reference匹配true，没有输出配置值。
+
+真机三类默认检查0.325秒：依赖图1项、APK资源1项、假网络路由5项，共7项status0；真实试听1项因未开启allow而status-4跳过，不把OK(8 tests)记成8项实测通过。无声路由覆盖固定失败回退、离线公里、goal_achieved、URGENT零网络和迟到不补播。结果`policy-routes-bb461ea.txt`在最新备份目录。
+
+21:21用户准备后仅播放一次APK内置core，3.183秒1/1通过，结果`bundled-preview-bb461ea.txt`；用户确认“听到了，流萤声线正确，音乐压低并恢复”。日志进程`ae4bccc9-2762-42aa-830e-76c101fd98e4`的bundled attempted/completed和焦点granted/released各1，未调用Fish或Android TTS，不是旧缓存小样。
+
+21:23用户明确授权仅一次真实Fish公里整句且Beats准备好，运行生产链路测试1次；1.370秒失败（status-2），expected TTS_SUCCESS、actual NOT_PLAYED。日志进程`e345a1dd-68c2-4f1a-947e-5574d9808fd4`显示fish attempted后约1.3秒SocketException，随即skipped_offline及Bus not_played；没有进入音频焦点或播放，没有系统声线回退。此为在线连接失败，不能当在线试听通过，也不能仅凭SocketException认定VPN根因。结果`online-km-bb461ea.txt`，未自动重试或额外调用AI/Fish。
+
+本轮白名单诊断`build/device-tests/20260910/voice-release-bb461ea-after-online/`共3135条、0坏行；其中旧Android39次来自历史，不应混为新版行为。失败后主页面已恢复、记录/配置/包哈希再次保持。已问用户当前Wi-Fi/流量及VPN网页可用性，待回复；不擅改网络，真实合成再试需重新明确一次授权。Task7当前内置声线和音乐人工通过、在线实听未通过；长时锁屏/B5户外仍独立待验。不重做Task1—6、音频生成或安装。

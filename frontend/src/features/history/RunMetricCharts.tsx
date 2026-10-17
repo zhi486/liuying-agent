@@ -16,7 +16,13 @@ import styles from './RunMetricCharts.module.css';
 type RecordSummary = { id: string; durationSeconds: number; averagePaceSecPerKm: number | null };
 const titles = { pace: '跑步配速区间', heartRate: '跑步心率区间' };
 
-export function RunMetricCharts({ record }: { record: RecordSummary }) {
+export function RunMetricCharts({
+  record,
+  previewSamples,
+}: {
+  record: RecordSummary;
+  previewSamples?: RunMetricSample[];
+}) {
   const [samples, setSamples] = useState<RunMetricSample[] | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -25,6 +31,10 @@ export function RunMetricCharts({ record }: { record: RecordSummary }) {
     let active = true;
     setSamples(null);
     setError('');
+    if (previewSamples) {
+      setSamples(previewSamples);
+      return;
+    }
     void (async () => {
       try {
         const all: RunMetricSample[] = [];
@@ -71,7 +81,7 @@ export function RunMetricCharts({ record }: { record: RecordSummary }) {
     return () => {
       active = false;
     };
-  }, [record.id, record.durationSeconds, attempt]);
+  }, [record.id, record.durationSeconds, attempt, previewSamples]);
 
   if (error)
     return (
@@ -104,6 +114,7 @@ export function RunMetricCharts({ record }: { record: RecordSummary }) {
           kind={expanded}
           samples={samples}
           record={record}
+          simulated={previewSamples !== undefined}
         />
       )}
     </>
@@ -115,21 +126,24 @@ function MetricDialog({
   kind,
   samples,
   record,
+  simulated,
 }: {
   onClose: () => void;
   kind: MetricKind;
   samples: RunMetricSample[];
   record: RecordSummary;
+  simulated: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     ref.current?.showModal();
+    if (ref.current) ref.current.scrollTop = 0;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = overflow;
-      previous?.focus();
+      previous?.focus({ preventScroll: true });
     };
   }, []);
   return (
@@ -146,7 +160,8 @@ function MetricDialog({
         ×
       </button>
       <h2 className={styles.title}>{titles[kind]}</h2>
-      <p className={styles.subtitle}>点击图表可查看具体数值</p>
+      {simulated && <p className={styles.subtitle}>模拟数据 · 仅供界面演示，不是训练建议</p>}
+      <p className={styles.subtitle}>按住曲线左右滑动查看数值；在图表外上下滚动</p>
       <MetricPanel samples={samples} kind={kind} record={record} expanded />
     </dialog>
   );
@@ -165,18 +180,33 @@ function MetricPanel({
 }) {
   const data = useMemo(() => chartData(samples, kind), [samples, kind]);
   const [selected, setSelected] = useState<number | null>(null);
+  const activePointer = useRef<number | null>(null);
   const minimum = data.minimum ?? (kind === 'heartRate' ? 80 : 300);
   const maximum = data.maximum ?? (kind === 'heartRate' ? 200 : 600);
   const padding = Math.max(kind === 'heartRate' ? 10 : 30, (maximum - minimum) * 0.1);
   const low = Math.max(0, Math.floor((minimum - padding) / 10) * 10);
   const high = Math.ceil((maximum + padding) / 10) * 10;
+  const plotHeight = expanded ? 186 : 118;
   const x = (seconds: number) => 48 + (340 * seconds) / Math.max(1, record.durationSeconds);
   const y = (value: number) =>
-    14 + 186 * (kind === 'pace' ? (value - low) / (high - low) : (high - value) / (high - low));
+    14 +
+    plotHeight * (kind === 'pace' ? (value - low) / (high - low) : (high - value) / (high - low));
   const midpoint = (index: number) =>
     (samples[index].startElapsedSeconds + samples[index].endElapsedSeconds) / 2;
   const maxZoneSeconds = Math.max(1, ...data.zones.map((zone) => zone.seconds));
   const selectedPoint = selected === null ? null : samples[selected];
+  const selectAt = (chart: SVGSVGElement, clientX: number) => {
+    if (!expanded) return;
+    const rect = chart.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const second =
+      ((((clientX - rect.left) / rect.width) * 400 - 48) / 340) * record.durationSeconds;
+    let nearest = 0;
+    samples.forEach((_, i) => {
+      if (Math.abs(midpoint(i) - second) < Math.abs(midpoint(nearest) - second)) nearest = i;
+    });
+    setSelected(nearest);
+  };
   return (
     <>
       <div className={styles.stats}>
@@ -197,21 +227,33 @@ function MetricPanel({
         )}
       </div>
       <svg
-        className={styles.chart}
-        viewBox="0 0 400 236"
+        className={`${styles.chart} ${expanded ? styles.interactiveChart : ''}`}
+        viewBox={`0 0 400 ${plotHeight + 50}`}
         role="img"
         aria-label={`${titles[kind]}五秒平均曲线`}
-        onClick={(event) => {
-          if (!expanded) return;
-          const rect = event.currentTarget.getBoundingClientRect();
-          const second =
-            ((((event.clientX - rect.left) / rect.width) * 400 - 48) / 340) *
-            record.durationSeconds;
-          let nearest = 0;
-          samples.forEach((_, i) => {
-            if (Math.abs(midpoint(i) - second) < Math.abs(midpoint(nearest) - second)) nearest = i;
-          });
-          setSelected(nearest);
+        onClick={(event) => selectAt(event.currentTarget, event.clientX)}
+        onPointerDown={(event) => {
+          if (!expanded || !event.isPrimary || event.button !== 0) return;
+          activePointer.current = event.pointerId;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          selectAt(event.currentTarget, event.clientX);
+        }}
+        onPointerMove={(event) => {
+          if (activePointer.current === event.pointerId)
+            selectAt(event.currentTarget, event.clientX);
+        }}
+        onPointerUp={(event) => {
+          if (activePointer.current !== event.pointerId) return;
+          selectAt(event.currentTarget, event.clientX);
+          activePointer.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={(event) => {
+          if (activePointer.current === event.pointerId) activePointer.current = null;
+        }}
+        onLostPointerCapture={(event) => {
+          if (activePointer.current === event.pointerId) activePointer.current = null;
         }}
       >
         {[0, 1, 2, 3].map((index) => {
@@ -222,11 +264,11 @@ function MetricPanel({
               <line
                 x1="48"
                 x2="388"
-                y1={14 + index * 62}
-                y2={14 + index * 62}
+                y1={14 + (index * plotHeight) / 3}
+                y2={14 + (index * plotHeight) / 3}
                 className={styles.grid}
               />
-              <text x="40" y={19 + index * 62} textAnchor="end">
+              <text x="40" y={19 + (index * plotHeight) / 3} textAnchor="end">
                 {formatMetric(value, kind)}
               </text>
             </g>
@@ -236,7 +278,7 @@ function MetricPanel({
           <text
             key={i}
             x={x((record.durationSeconds * i) / 3)}
-            y="226"
+            y={plotHeight + 40}
             textAnchor={i === 0 ? 'start' : i === 3 ? 'end' : 'middle'}
           >
             {formatTime((record.durationSeconds * i) / 3)}
@@ -278,7 +320,7 @@ function MetricPanel({
             x1={x(midpoint(selected))}
             x2={x(midpoint(selected))}
             y1="10"
-            y2="204"
+            y2={plotHeight + 18}
             className={styles.cursor}
           />
         )}
@@ -335,9 +377,14 @@ function MetricPanel({
       )}
       {!expanded && (
         <div className={styles.zoneStrip} aria-hidden="true">
-          {data.zones.map((zone) => (
-            <span key={zone.name} style={{ background: zone.color, flex: zone.seconds }} />
-          ))}
+          {[...data.zones]
+            .reverse()
+            .filter((zone) => zone.seconds > 0)
+            .map((zone) => (
+              <span key={zone.name} style={{ background: zone.color, flex: zone.seconds }}>
+                {zone.percent >= 8 ? `${zone.percent}%` : ''}
+              </span>
+            ))}
         </div>
       )}
       <p className={styles.coverage}>

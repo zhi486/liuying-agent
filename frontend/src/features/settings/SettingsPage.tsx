@@ -11,6 +11,8 @@ import { sendNativeCommand, useBridgeStore } from '../../bridge/bridgeStore';
 import type { AppSnapshot, SettingsUpdateBody } from '../../bridge/contract';
 import styles from './SettingsPage.module.css';
 import { useNativeSettings } from './useNativeSettings';
+import { Link } from 'react-router-dom';
+import agentStyles from './AgentSettings.module.css';
 
 type SettingsSnapshot = AppSnapshot['settings'];
 type ThemeChoice = 'morning' | 'night';
@@ -131,6 +133,12 @@ export function SettingsPage() {
           {isSaving ? '保存中' : isLoading ? '同步中' : '本机已同步'}
         </span>
       </header>
+
+      <nav className={agentStyles.links} aria-label="Agent 设置">
+        <Link to="/settings/usage">账单与用量</Link>
+        <Link to="/settings/chat">聊天授权</Link>
+        <Link to="/settings/notices">用户须知</Link>
+      </nav>
 
       {isRunActive ? (
         <p className={styles.notice} role="status">

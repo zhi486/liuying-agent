@@ -20,6 +20,9 @@ describe('应用路由', () => {
     ['/run', '跑步'],
     ['/history', '跑步记录'],
     ['/settings', '设置'],
+    ['/settings/usage', '账单与用量'],
+    ['/settings/chat', '聊天授权'],
+    ['/settings/notices', '用户须知'],
   ])('渲染 %s', async (path, heading) => {
     render(<TestRouter initialEntry={path} />);
 

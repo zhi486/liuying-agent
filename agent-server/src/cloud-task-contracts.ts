@@ -42,7 +42,10 @@ export function identifier(value: unknown): string {
   return value;
 }
 import type { Action, AgentResult, AgentTask, StopReason } from './contracts.ts';
-import { exactObject, parseTask } from './tools.ts';
+import { exactObject, hasMemoryContext, parseTask } from './tools.ts';
+import { hasKnowledge, parseKnowledgeCitations } from './knowledge-contracts.ts';
+import { parseCostEstimate } from './cost-estimate.ts';
+import { hasConversation } from './conversation.ts';
 
 // 使用数据库执行时钟，不以等待 D1 前的应用时间快照放宽到期边界。
 export const DATABASE_TIME_SQL =
@@ -73,7 +76,7 @@ export function parseSubmission(value: unknown): { clientRequestId: string; task
   try {
     const object = exactObject(
       value,
-      ['clientRequestId', 'localTaskId', 'prompt', 'consent', 'summaries'],
+      ['clientRequestId', 'localTaskId', 'prompt', 'consent', 'summaries', ...(hasMemoryContext(value) ? ['memoryContext'] : []), ...(hasKnowledge(value) ? ['knowledge'] : []), ...(hasConversation(value) ? ['conversation'] : [])],
       'invalid_task',
     );
     const task = parseTask({
@@ -81,6 +84,9 @@ export function parseSubmission(value: unknown): { clientRequestId: string; task
       prompt: object.prompt,
       consent: object.consent,
       summaries: object.summaries,
+      ...(hasMemoryContext(object) ? { memoryContext: object.memoryContext } : {}),
+      ...(hasKnowledge(object) ? { knowledge: object.knowledge } : {}),
+      ...(hasConversation(object) ? { conversation: object.conversation } : {}),
     });
     return { clientRequestId: uuid(object.clientRequestId), task };
   } catch {
@@ -115,9 +121,11 @@ export function parseResult(value: unknown): AgentResult {
       value.status === 'completed';
     const object = exactObject(
       value,
-      ['status', completed ? 'answer' : 'reason', 'actions'],
+      ['status', completed ? 'answer' : 'reason', 'actions', ...(completed && Object.hasOwn(value as object, 'sources') ? ['sources'] : []),
+        ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'cost') ? ['cost'] : [])],
       'invalid_task',
     );
+    const cost = Object.hasOwn(object, 'cost') ? { cost: parseCostEstimate(object.cost) } : {};
     if (!Array.isArray(object.actions) || object.actions.length > 9)
       throw new CloudError('invalid_request');
     let step = 0;
@@ -152,7 +160,8 @@ export function parseResult(value: unknown): AgentResult {
     if (completed) {
       if (typeof object.answer !== 'string' || !object.answer.trim() || object.answer.length > 4000)
         throw new CloudError('invalid_request');
-      return { status: 'completed', answer: object.answer.trim(), actions };
+      return { status: 'completed', answer: object.answer.trim(), actions, ...cost,
+        ...(Object.hasOwn(object, 'sources') ? { sources: parseKnowledgeCitations(object.sources) } : {}) };
     }
     const reason = object.reason;
     if (typeof reason !== 'string') throw new CloudError('invalid_request');
@@ -167,7 +176,7 @@ export function parseResult(value: unknown): AgentResult {
               ? 'failed'
               : null;
     if (status === null || object.status !== status) throw new CloudError('invalid_request');
-    return { status, reason: reason as StopReason, actions };
+    return { status, reason: reason as StopReason, actions, ...cost };
   } catch {
     throw new CloudError('invalid_request');
   }

@@ -18,13 +18,16 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import com.healthyagent.running.BuildConfig
+import com.healthyagent.running.agent.AgentTaskService
+import com.healthyagent.running.agent.cloud.CloudAgentService
+import com.healthyagent.running.agent.memory.MemoryService
 import com.healthyagent.running.coordinator.AppCoordinator
 import com.healthyagent.running.coordinator.RunCommandDispatcher
 import java.io.ByteArrayInputStream
 
 private const val APP_ASSET_HOST = "appassets.androidplatform.net"
 private const val WEB_ROOT_PATH = "/assets/web/"
-private const val WEB_ENTRY_URL = "https://$APP_ASSET_HOST${WEB_ROOT_PATH}index.html#/run"
+private const val WEB_ENTRY_URL = "https://$APP_ASSET_HOST${WEB_ROOT_PATH}index.html#/agent"
 
 /**
  * 正式 React 宿主：只加载 APK 内资源，并通过受限 WebMessage Bridge 消费原生快照。
@@ -33,12 +36,16 @@ private const val WEB_ENTRY_URL = "https://$APP_ASSET_HOST${WEB_ROOT_PATH}index.
 fun WebPreviewHost(
     coordinator: AppCoordinator,
     commandDispatcher: RunCommandDispatcher,
+    agentTaskService: AgentTaskService,
+    memoryService: MemoryService,
+    cloudAgentService: CloudAgentService,
+    voiceInputService: com.healthyagent.running.agent.voice.VoiceInputService,
     modifier: Modifier = Modifier,
 ) {
     var activeWebView by remember { mutableStateOf<WebView?>(null) }
     val scope = rememberCoroutineScope()
-    val nativeBridge = remember(coordinator, commandDispatcher, scope) {
-        NativeWebBridge(coordinator, commandDispatcher, scope)
+    val nativeBridge = remember(coordinator, commandDispatcher, agentTaskService, memoryService, cloudAgentService, voiceInputService, scope) {
+        NativeWebBridge(coordinator, commandDispatcher, agentTaskService, memoryService, scope, cloudAgentService, voiceInputService)
     }
 
     DisposableEffect(Unit) {

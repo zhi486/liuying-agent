@@ -270,6 +270,12 @@ class AppCoordinator(
         return CommandOutcome.AcceptedWithData(data)
     }
 
+    suspend fun queryHistoryDetail(sessionId: String): CommandOutcome =
+        readHistoryDetail(sessionId, repository::getSessionWithSplits)
+
+    suspend fun queryHistorySeries(sessionId: String, offset: Int, limit: Int): CommandOutcome =
+        readHistorySeries(sessionId, offset, limit, repository::getSessionWithSplits)
+
     suspend fun querySettings(): CommandOutcome = runCatching {
         refreshPersistedSettings()
     }.fold(
@@ -950,6 +956,12 @@ class AppCoordinator(
                     }
                 } else null,
                 deepseekConfig = config,
+                kilometerGuidance = if (trigger.ruleId == "km_split") {
+                    com.healthyagent.running.speech.KilometerGuidancePolicy.select(
+                        ruleContext.recentFrames, activeRunConfig,
+                        triggers.any { it.ttsPriority == com.healthyagent.running.core.model.SpeechPriority.URGENT },
+                    )
+                } else com.healthyagent.running.speech.KilometerGuidance.NONE,
             )
             recentTriggerTexts.add(trigger.speakText)
             if (recentTriggerTexts.size > 10) recentTriggerTexts.removeAt(0)

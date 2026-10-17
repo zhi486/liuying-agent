@@ -4,9 +4,14 @@ export type CommandName =
   | 'voice.finish'
   | 'voice.cancel'
   | 'cloud.list'
+  | 'cloud.newConversation'
+  | 'cloud.selectConversation'
+  | 'cloud.renameConversation'
   | 'cloud.configure'
   | 'cloud.prepare'
   | 'cloud.confirm'
+  | 'cloud.send'
+  | 'cloud.chatConsent'
   | 'cloud.discard'
   | 'cloud.recover'
   | 'cloud.cancel'
@@ -237,9 +242,13 @@ export interface CommandBodyMap {
   'voice.finish': { sessionId: string };
   'voice.cancel': { sessionId: string };
   'cloud.list': Record<string, never>;
+  'cloud.newConversation': Record<string, never>;
+  'cloud.selectConversation': { conversationId: string | null };
+  'cloud.renameConversation': { conversationId: string; title: string };
   'cloud.configure': Record<string, never>;
   'cloud.prepare': {
     prompt: string;
+    conversationId?: string;
     memoryRefs: { id: string; version: number }[];
     knowledge?: {
       version: 'curated_knowledge_v1';
@@ -248,6 +257,8 @@ export interface CommandBodyMap {
     };
   };
   'cloud.confirm': { token: string; approved: true };
+  'cloud.send': { token: string };
+  'cloud.chatConsent': { identityToken: string; enabled: boolean };
   'cloud.discard': { token: string };
   'cloud.recover': { requestId: string };
   'cloud.cancel': { requestId: string };

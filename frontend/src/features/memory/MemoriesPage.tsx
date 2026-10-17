@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useBridgeStore } from '../../bridge/bridgeStore';
 import { memoryContentSchema, type MemoryRecord } from '../../bridge/memories';
 import { useMemories } from './useMemories';
@@ -61,9 +60,6 @@ export function MemoriesPage() {
 
   return (
     <section className={styles.page} aria-labelledby="memory-title">
-      <Link to="/agent" className={styles.back}>
-        返回首页
-      </Link>
       <header>
         <p className="eyebrow">由你决定记住什么</p>
         <h1 id="memory-title">我的记忆</h1>

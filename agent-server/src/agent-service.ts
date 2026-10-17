@@ -13,6 +13,9 @@ import { createD1Budget, type RateCard } from './budget.ts';
 import { createUsageReceipts } from './usage-receipts.ts';
 import { createDeepseekModel } from './deepseek.ts';
 import { runAgent } from './loop.ts';
+import { createKnowledgeIndex } from './knowledge.ts';
+import { CURATED_KNOWLEDGE } from './knowledge-corpus.ts';
+import { taskCostEstimate } from './cost-estimate.ts';
 import { retainBackground, type WaitUntil } from './background.ts';
 
 export function createAgentService(options: {
@@ -102,6 +105,8 @@ export function createAgentService(options: {
         {
           signal: controller.signal,
           timeoutMs,
+          ...(input.knowledge ? { knowledge: { index: createKnowledgeIndex(CURATED_KNOWLEDGE),
+            library: input.knowledge.library, allowSpoilers: input.knowledge.allowSpoilers } } : {}),
           ...(waitUntil ? { waitUntil } : {}),
           async checkExecution(signal) {
             try {
@@ -115,7 +120,8 @@ export function createAgentService(options: {
         },
       );
       if (checkFailed) throw new CloudError('unavailable');
-      await tasks.finish(execution, result);
+      const cost = await taskCostEstimate(db, ledger.ownerId, task.id, rate, timestamp(now));
+      await tasks.finish(execution, { ...result, cost });
     };
     try {
       const pending = operation();
@@ -156,6 +162,9 @@ export function createAgentService(options: {
           prompt: parsed.task.prompt,
           consent: parsed.task.consent,
           summaries: parsed.task.summaries,
+          ...(parsed.task.memoryContext ? { memoryContext: parsed.task.memoryContext } : {}),
+          ...(parsed.task.knowledge ? { knowledge: parsed.task.knowledge } : {}),
+          ...(parsed.task.conversation ? { conversation: parsed.task.conversation } : {}),
         });
         let used = false;
         return {

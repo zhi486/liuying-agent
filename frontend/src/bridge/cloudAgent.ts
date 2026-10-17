@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+export const selectedRunIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
+export const runSummarySchema = z
+  .object({
+    runId: selectedRunIdSchema,
+    distanceMeters: z.number().min(0).max(1_000_000),
+    durationSeconds: z.number().positive().max(604_800),
+    averagePaceSecPerKm: z.number().positive().max(86_400).nullable(),
+    averageHeartRate: z.number().positive().max(400).nullable(),
+  })
+  .strict();
+export type SelectedRunSummary = z.infer<typeof runSummarySchema>;
+
 export const knowledgeSelectionSchema = z
   .object({
     version: z.literal('curated_knowledge_v1'),
@@ -69,12 +81,31 @@ const command = <T extends string, S extends z.ZodType>(name: T, body: S) =>
   z.object({ helloId: id, name: z.literal(name), body }).strict();
 export const cloudCommandSchemas = [
   command('cloud.list', z.object({}).strict()),
+  command('cloud.newConversation', z.object({}).strict()),
+  command('cloud.selectConversation', z.object({ conversationId: id.nullable() }).strict()),
+  command(
+    'cloud.renameConversation',
+    z.object({ conversationId: id, title: z.string().trim().min(1).max(80) }).strict(),
+  ),
   command('cloud.configure', z.object({}).strict()),
   command(
     'cloud.prepare',
-    z.object({ prompt, memoryRefs: refs, knowledge: knowledgeSelectionSchema.optional() }).strict(),
+    z
+      .object({
+        prompt,
+        conversationId: id.optional(),
+        memoryRefs: refs,
+        knowledge: knowledgeSelectionSchema.optional(),
+        runId: selectedRunIdSchema.optional(),
+      })
+      .strict(),
   ),
   command('cloud.confirm', z.object({ token: id, approved: z.literal(true) }).strict()),
+  command('cloud.send', z.object({ token: id }).strict()),
+  command(
+    'cloud.chatConsent',
+    z.object({ identityToken: z.string().regex(/^[0-9a-f]{64}$/), enabled: z.boolean() }).strict(),
+  ),
   command('cloud.discard', z.object({ token: id }).strict()),
   command('cloud.recover', z.object({ requestId: id }).strict()),
   command('cloud.cancel', z.object({ requestId: id }).strict()),
@@ -90,8 +121,24 @@ export const cloudPreparationSchema = z
     token: id,
     origin,
     prompt,
+    conversation: z
+      .object({
+        version: z.literal('conversation_v1'),
+        id,
+        approved: z.literal(true),
+        messages: z
+          .array(
+            z
+              .object({ role: z.enum(['user', 'assistant']), text: z.string().min(1).max(4000) })
+              .strict(),
+          )
+          .max(8),
+      })
+      .strict()
+      .optional(),
     knowledge: knowledgeSelectionSchema.optional(),
     memories: z.array(ref.extend({ content: z.string().min(1).max(500) }).strict()).max(5),
+    runSummary: runSummarySchema.optional(),
   })
   .strict();
 const control = z.enum(['cancel', 'withdraw']).nullable();
@@ -111,7 +158,25 @@ export const cloudListingSchema = z
     commandId: id,
     configured: z.boolean(),
     configuring: z.boolean(),
+    chatAuthorized: z.boolean().optional(),
+    chatConsentContext: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable()
+      .optional(),
     origin: origin.nullable(),
+    conversationId: id.nullable().optional(),
+    conversations: z
+      .array(
+        z
+          .object({
+            id,
+            title: z.string().min(1).max(80),
+            updatedAtMillis: z.number().int().nonnegative(),
+          })
+          .strict(),
+      )
+      .optional(),
     items: z
       .array(
         z
@@ -148,6 +213,7 @@ export const cloudListingSchema = z
             knowledge: knowledgeSelectionSchema.optional(),
             sources: sourcesSchema.optional(),
             cost: costEstimateSchema.optional(),
+            runSummary: runSummarySchema.optional(),
           })
           .strict(),
       )

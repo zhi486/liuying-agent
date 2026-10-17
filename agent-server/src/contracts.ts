@@ -1,3 +1,6 @@
+import type { KnowledgeRequest, KnowledgeCitation } from './knowledge-contracts.ts';
+import type { CostEstimate } from './cost-estimate.ts';
+
 export type RunSummary = Readonly<{
   runId: string;
   distanceMeters: number;
@@ -7,11 +10,27 @@ export type RunSummary = Readonly<{
 }>;
 
 // 此输入只能由已认证的应用服务构造；布尔授权不是身份认证。
+export type MemoryContext = Readonly<{
+  version: 'selected_memories_v1';
+  approved: true;
+  items: readonly Readonly<{ id: string; version: number; content: string }>[];
+}>;
+
+export type ConversationContext = Readonly<{
+  version: 'conversation_v1';
+  id: string;
+  approved: true;
+  messages: readonly Readonly<{ role: 'user' | 'assistant'; text: string }>[];
+}>;
+
 export type AgentTask = Readonly<{
   taskId: string;
   prompt: string;
   consent: Readonly<{ cloudProcessing: true; runSummaries: boolean }>;
   summaries: readonly RunSummary[];
+  memoryContext?: MemoryContext;
+  knowledge?: KnowledgeRequest;
+  conversation?: ConversationContext;
 }>;
 
 export type ToolCall = Readonly<
@@ -27,6 +46,7 @@ export type ModelDecision =
 
 export type ModelMessage =
   | { role: 'user'; text: string }
+  | { role: 'assistant'; text: string }
   | { role: 'assistant'; calls: readonly ToolCall[] }
   | { role: 'tool'; callId: string; name: ToolCall['name']; data: unknown };
 
@@ -53,7 +73,7 @@ export type Settlement =
   | { kind: 'not_dispatched' };
 
 export interface BudgetPort {
-  // 原子预留且拒绝重复 requestId；额度/费率未知时拒绝。没有生产内存替代实现。
+  // 原子登记且拒绝重复requestId；费用只估算，不因超预算拒绝。没有生产内存替代实现。
   reserve(
     request: {
       taskId: string;
@@ -89,13 +109,13 @@ export type Action = Readonly<{
   tool?: ToolCall['name'];
 }>;
 
-export type AgentResult =
-  | { status: 'completed'; answer: string; actions: readonly Action[] }
+export type AgentResult = (
+  | { status: 'completed'; answer: string; actions: readonly Action[]; sources?: readonly KnowledgeCitation[] }
   | {
       status: 'blocked' | 'failed' | 'cancelled' | 'timed_out';
       reason: StopReason;
       actions: readonly Action[];
-    };
+    }) & { cost?: CostEstimate };
 
 export class AgentError extends Error {
   readonly code: StopReason;

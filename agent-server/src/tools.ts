@@ -1,5 +1,8 @@
 import { AgentError } from './contracts.ts';
-import type { AgentTask, RunSummary, StopReason, ToolCall } from './contracts.ts';
+import type { AgentTask, MemoryContext, RunSummary, StopReason, ToolCall } from './contracts.ts';
+import { isSupportedText } from './plain-text.ts';
+import { hasKnowledge, parseKnowledge } from './knowledge-contracts.ts';
+import { hasConversation, parseConversation } from './conversation.ts';
 
 export function exactObject(
   value: unknown,
@@ -54,12 +57,39 @@ function parseSummary(value: unknown): RunSummary {
   });
 }
 
+export function hasMemoryContext(value: unknown): boolean {
+  return value !== null && typeof value === 'object' && Object.hasOwn(value, 'memoryContext');
+}
+
+function parseMemoryContext(value: unknown): MemoryContext {
+  const context = exactObject(value, ['version', 'approved', 'items'], 'invalid_task');
+  if (context.version !== 'selected_memories_v1') throw new AgentError('invalid_task');
+  if (context.approved !== true) throw new AgentError('consent_required');
+  if (!Array.isArray(context.items) || context.items.length < 1 || context.items.length > 5)
+    throw new AgentError('invalid_task');
+  const items = context.items.map((value: unknown) => {
+    const memory = exactObject(value, ['id', 'version', 'content'], 'invalid_task');
+    if (
+      typeof memory.id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(memory.id) ||
+      typeof memory.version !== 'number' || !Number.isInteger(memory.version) ||
+      memory.version < 1 || memory.version > 2_147_483_647 ||
+      !isSupportedText(memory.content) || !memory.content.trim() ||
+      memory.content.length > 500 || memory.content !== memory.content.trim()
+    ) throw new AgentError('invalid_task');
+    return Object.freeze({ id: memory.id, version: memory.version, content: memory.content });
+  });
+  if (new Set(items.map((item) => item.id)).size !== items.length) throw new AgentError('invalid_task');
+  return Object.freeze({ version: 'selected_memories_v1', approved: true, items: Object.freeze(items) });
+}
+
 export function parseTask(value: unknown): AgentTask {
-  const object = exactObject(value, ['taskId', 'prompt', 'consent', 'summaries'], 'invalid_task');
+  const withMemory = hasMemoryContext(value);
+  const object = exactObject(value, ['taskId', 'prompt', 'consent', 'summaries', ...(withMemory ? ['memoryContext'] : []), ...(hasKnowledge(value) ? ['knowledge'] : []), ...(hasConversation(value) ? ['conversation'] : [])], 'invalid_task');
   const consent = exactObject(object.consent, ['cloudProcessing', 'runSummaries'], 'invalid_task');
   if (consent.cloudProcessing !== true) throw new AgentError('consent_required');
   if (typeof consent.runSummaries !== 'boolean') throw new AgentError('invalid_task');
-  if (typeof object.prompt !== 'string' || !object.prompt.trim() || object.prompt.length > 2000)
+  if (!isSupportedText(object.prompt) || !object.prompt.trim() || object.prompt.length > 2000)
     throw new AgentError('invalid_task');
   if (!Array.isArray(object.summaries) || object.summaries.length > 20)
     throw new AgentError('invalid_task');
@@ -73,6 +103,10 @@ export function parseTask(value: unknown): AgentTask {
     prompt: object.prompt.trim(),
     consent: Object.freeze({ cloudProcessing: true as const, runSummaries: consent.runSummaries }),
     summaries: Object.freeze(summaries),
+    // 旧任务不补空字段，保持既有请求指纹与重试兼容。
+    ...(withMemory ? { memoryContext: parseMemoryContext(object.memoryContext) } : {}),
+    ...(hasKnowledge(object) ? { knowledge: parseKnowledge(object.knowledge) } : {}),
+    ...(hasConversation(object) ? { conversation: parseConversation(object.conversation) } : {}),
   });
 }
 

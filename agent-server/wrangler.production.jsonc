@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "liuying-agent",
+  "account_id": "95a131611fbe1097f7196cfb014ebce3",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-18",
+  "compatibility_flags": ["nodejs_compat"],
+  // 密钥仍为必需；费率缺失或过期只影响估算提示，不阻止执行。
+  "workers_dev": true,
+  "preview_urls": false,
+  "routes": [],
+  "triggers": { "crons": [] },
+  // 正式版使用百炼语音；旧百度入口保留兼容但不要求另行配置百度密钥。
+  "secrets": { "required": ["DEEPSEEK_API_KEY", "FUN_ASR_API_KEY"] },
+  // 2026-09-25 经用户确认的北京空间及已查询为 OK 的同模型热词表，不含秘密。
+  "vars": { "FUN_ASR_WORKSPACE_ID": "ws-0adi0ev54h37qp4j", "FUN_ASR_REGION": "cn-beijing", "FUN_ASR_VOCABULARY_ID": "vocab-liuying-37714055ac39423093ce7aa8b7f17091" },
+  "durable_objects": {
+    "bindings": [{ "name": "AGENT_RUNTIME", "class_name": "LiuyingAgentRuntime" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiuyingAgentRuntime"] }],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "liuying-agent-production",
+    "database_id": "7840026c-6571-48e9-a041-72d3c40d11ed",
+    "migrations_dir": "migrations",
+    "remote": false
+  }],
+  "rules": [{ "type": "Data", "globs": ["**/*.bin"], "fallthrough": false }],
+  "build": { "command": "node --experimental-strip-types tools/token-count/prepare-worker-assets.ts" },
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": false },
+    "traces": { "enabled": true }
+  }
+}

@@ -37,6 +37,7 @@ export function openBudgetDatabase(path = ':memory:', now?: () => number) {
       throw error;
     }
   }
+  sqlite.exec(readFileSync(new URL('../migrations/0004_agent_maintenance.sql', import.meta.url), 'utf8'));
   class Statement implements BudgetStatement {
     readonly sql: string;
     readonly values: (string | number | null)[];

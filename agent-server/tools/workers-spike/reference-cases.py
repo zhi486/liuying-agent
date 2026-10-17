@@ -59,5 +59,8 @@ for case in cases:
         "inputTokens": len(ids),
         "tokenIdsSha256": hashlib.sha256(struct.pack(f"<{len(ids)}I", *ids)).hexdigest(),
     })
+    # 默认探针输出保持冻结；正式模板测试显式要求原始请求。
+    if "--include-requests" in sys.argv:
+        results[-1]["request"] = request
 
 print(json.dumps(results, ensure_ascii=False))

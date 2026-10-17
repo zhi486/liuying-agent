@@ -6,7 +6,7 @@ import { createUsageReceipts } from '../src/usage-receipts.ts';
 import * as ledger from '../src/execution-ledger.ts';
 import type { BudgetDatabase, BudgetStatement } from '../src/d1.ts';
 
-test('Free 满页只恢复五条收据且最多 41 条真实 SQL，下一次调用继续游标不重复收费', async (t) => {
+test('Free 满页只恢复五条收据且最多 36 条真实 SQL，下一次调用继续游标不重复收费', async (t) => {
   const f = await fixture(t);
   f.database.sqlite.exec(
     "CREATE TRIGGER fail_free_settle BEFORE UPDATE OF charged_micros ON agent_budget_reservations BEGIN SELECT RAISE(ABORT, '测试故障'); END",
@@ -81,7 +81,7 @@ test('Free 满页只恢复五条收据且最多 41 条真实 SQL，下一次调�
   });
   assert.equal(first.processed, 5);
   assert.equal(first.receiptsApplied, 5);
-  assert.equal(sqlCount, 41);
+  assert.equal(sqlCount, 36);
   assert.ok(first.nextCursor);
   assert.equal(
     f.database.sqlite
@@ -98,7 +98,7 @@ test('Free 满页只恢复五条收据且最多 41 条真实 SQL，下一次调�
   assert.equal(second.processed, 1);
   assert.equal(second.receiptsApplied, 1);
   assert.equal(second.nextCursor, null);
-  assert.equal(sqlCount, 9);
+  assert.equal(sqlCount, 8);
   assert.equal((await ledger.recoverFreeExecutions({ db, now: f.now })).processed, 0);
   assert.equal(
     f.database.sqlite

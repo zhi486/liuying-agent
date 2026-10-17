@@ -52,6 +52,7 @@ it('未接原生时不展示假记忆且不发读写命令', () => {
   expect(screen.getByRole('button', { name: '保存记忆' })).toBeDisabled();
   expect(send).not.toHaveBeenCalled();
   expect(screen.getByText(/尚未用于 Agent 回答/)).toBeVisible();
+  expect(screen.queryByRole('link', { name: '返回首页' })).not.toBeInTheDocument();
 });
 
 it('显式新增后核对回执再清空草稿，不发任何在线命令', async () => {

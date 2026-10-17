@@ -4,7 +4,7 @@
 
 **目标：** 跑步语音在线整段流萤合成，离线只播固定核心、跳过公里语音，URGENT立即本地，彻底移除正式链路的系统声线回退。
 
-**架构：** 保留SpeechBus的调度和会话隔离，新增携带规则身份的语音请求及可区分实际播放/静默跳过的返回值。准备阶段负责可选陪伴文字、限时Fish生成或内置资源选择，播放器只接收已准备的文件。生产依赖图接入新路由，既有Fish/Android单引擎类不作无关重构。
+**架构：** 保留SpeechBus的调度和会话隔离，新增携带规则身份的语音请求及可区分实际播放/静默跳过的返回值。准备阶段负责可选陪伴文字、限时Fish生成或内置资源选择，并等待真实媒体prepared，再由独立播放阶段申请焦点并开播。生产依赖图接入新路由，既有Fish/Android单引擎类不作无关重构。
 
 **技术栈：** Kotlin、Coroutines、JUnit4、OkHttp、Android MediaPlayer与现有AudioPlayerPort/AudioFocusController、Node.js/FFmpeg小样工具。
 
@@ -14,11 +14,12 @@
 
 ## 全局约束
 
-- 普通音频准备上限8000ms，公里15000ms，可选AI文字2000ms包含在总上限内；播放阶段独立60000ms保护。
+- 普通音频准备上限8000ms，公里15000ms，可选AI文字2000ms和真实媒体prepare包含在总上限内；实际开播后的播放阶段独立60000ms保护。
+- 上述8/15秒用于当前在线整段准备；超时只转本地一次或跳过公里。本地解码保留已有60000ms故障看门以避免无限挂起，期间无焦点且可取消；不增加第二次在线等待预算。
 - URGENT不调用AI或Fish，直接本地；语音总开关关闭仍保持静音。
 - 固定原文和真实数字不得交给AI改写；AI只提供可选陪伴文字，不增加健康判断或行动建议。
 - 在线路径不能把历史缓存命中当作本次联网成功；离线不回放历史公里语音。
-- 网络等待不占用音频焦点；只在实际播放时压低音乐，所有终态释放资源。
+- 网络及媒体准备等待不占用音频焦点；只在实际播放时压低音乐，所有终态释放资源。
 - 取消/过期不回退、不补播；播放开始后失败不自动重头播本地；系统TTS调用次数必须为0。
 - 按ruleId识别km_split；goal_achieved虽然同为SPLIT优先级，仍有本地提示。
 - 只新增1条完整公里小样和13句固定音频，复用已有hr_rapid_rise；制作成功的文件不重新收费生成。
@@ -112,6 +113,8 @@ assertEquals("第十二公里，用时六分零五秒，配速每公里六分零
 - [x] 提交当前任务文件并做规格/代码审查，记录红绿证据。8fd9208/b449097/b288791；全量536/536，审查后增补110/1010边界定向38/38，复审通过。
 
 ## Task 3：已准备文件的独立播放器与内置资源存取
+
+最终审查修正：下方为Task3最初接口记录，不能再把取得File视为媒体已准备。最终统一修复将现有文件播放器/Android端口拆分为可取消prepare与实际play/startPrepared；普通8秒、公里15秒包含真正prepared，准备无焦点，保留真实清理完成门。具体接口与验证证据以最终修复报告和源码为准。
 
 **新建：** `speech/PreparedVoicePlayer.kt`、`speech/BundledVoiceStore.kt`、`speech/AndroidBundledVoiceStore.kt`及对应单测/实机资源测试。
 **消费：** Task 2的BundledVoiceCatalog；现有AudioPlayerPort/AudioFocusController/SpeechAudioProfile。
@@ -214,11 +217,14 @@ val preparationLimit = if (kilometer) 15000L else 8000L
 & './gradlew.bat' --gradle-user-home 'D:/fangr/PycharmProjects/healthy agent/.gradle-local' :app:testDebugUnitTest --rerun :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
 ```
 
-- [ ] 以261f422之后的真实增量做最终代码审查，特别检查取消/超时后双播、主包系统回退仍有入口、AI与公里双派发、缓存冒充在线、资产遗漏。修复后只重跑覆盖修改的测试，再作一次定向复审。
-- [ ] 用户手机在线且无活动跑步时核对主包签名与现有记录摘要，覆盖安装，不卸载/clear。模拟路由测试用固定输入，不创建正式运动记录。
-- [ ] 用本地/假失败的测试端口验证固定提示、离线公里静默、紧急提示抢占、晚结果丢弃；若要真实切断网络或VPN，先向用户说明并取得配合，测试后恢复原状态。
-- [ ] 用户戴好Beats后，实听普通整段及内置提示并确认QQ音乐压低/恢复。记录声线自然度与工具播放完成是不同证据；不自动连续重播。
-- [ ] 核对安装后记录数量和路线点不变，生产日志无Android语音。记录长时锁屏/户外仍需后续实测，不把短测当户外保证。
+- [x] 全范围审查、a1a84d3统一修复及复审后，用户额外授权以bb461ea修复接纳预算；最终定向复审全部通过，无遗留Critical/Important/Minor。最后全量JVM626/626、前端83/83、双APK/原签名/解包凭据审计均通过。
+- [x] 无活动跑步时最新一致性备份、核对签名后覆盖安装主/测试包，不卸载/clear；手机实际主包SHA256与最终产物0cda2898...1b9889一致，1条记录/2430轨迹点及私有Fish配置保留。
+- [x] 真机运行生产依赖图、14条APK资源和5项假网络无声路由：7通过，显式试听1项未开启而正确跳过，0.325秒；固定提示回退、离线公里、goal_achieved、URGENT零网络及迟到不补播已实跑。不改变手机网络/VPN，也不产生正式运动记录。
+- [x] 用户准备后内置core仅试听一次，3.183秒1/1；用户确认流萤声线正确、QQ音乐压低并恢复。
+- [ ] 在线整段实听：用户另授权一次真实Fish公里请求，21:23因SocketException走公里静默（1.370秒1项失败），未开播，不能记通过。已询问手机网络/VPN状态，不自动重试或重复收费；需要新授权才再试一次。
+- [x] 安装及无声测试后fresh核对：1条记录、active0、2430路线点、完整性ok，key/reference匹配，主包哈希一致，主页面恢复。
+- [x] 本轮实际内置/失败在线两个独立日志进程均无Android语音；内置completed与焦点释放完整，失败公里skipped_offline且未占焦点。历史旧Android日志不混入本轮结论。
+- [ ] 长时锁屏/户外仍需后续实测，不把短测当户外保证。
 - [ ] 更新交接、当前计划复选框和项目记忆，向用户区分完成项与待人工/户外验收项；不推送远端。
 
 ## 计划自查与执行记录
@@ -226,5 +232,5 @@ val preparationLimit = if (kilometer) 15000L else 8000L
 - 设计第1—3节由Task 2/4/5覆盖，第4节由Task 3/4/5覆盖，第5节由Task 1/6覆盖，第6节由Task 7覆盖。
 - Task 2的SpeechRequest/Delivery同时供Task 4实现与Task 5调用；Task 3的store/player供Task 4消费；Task 6补齐Task 3运行时资源。依赖按顺序实施，不能并行修改同一个文件。
 - `TtsEngine.kt`只在Task 2增加兼容接口；`SpeechBus.kt`只归Task 5；`AppCoordinator.kt`/`AppModule.kt`只归Task 5。旧Fish客户端只归Task 4，测试工具只归Task 1。
-- 当前完成：检查点261f422、Task1—6及Task7测试代码/构建的独立审查，代码HEAD bf101e4；最终全范围审查与设备/人工验收未完成。最终APK扫描发现基线已存在的SettingsDataStore默认参考声线ID被打包（不是API密钥），待统一处置；手机随后USB断开，未安装或试听，上次只读仍旧包40ac56...944f、1/0/2430、完整性ok。恢复以本计划`.superpowers/sdd/2026-09-10-online-whole-offline-core-voice/progress.md`台账为准。
+- 当前完成：Task1—6、用户额外授权后的bb461ea预算修复、626/626全量及最终复审/审计。主/测试包已覆盖安装，真机无声7项通过/试听保护1项跳过，手机0cda2898...1b9889、记录1/0/2430、完整性ok、Fish配置保持。尚未播放新版真实语音，已询问用户是否戴好Beats与QQ音乐准备听内置core；Task7整体仍待人工语音验收，长时锁屏/户外另记。恢复以本计划`.superpowers/sdd/2026-09-10-online-whole-offline-core-voice/progress.md`台账为准。
 - Task1听感已经通过，不再等待准备：km-whole仅合成一次、16:03实播一次9.097秒1/1，用户确认“可以可以，很满意，很自然”。8.171667秒音频SHA256为8f6a2357576ee4c284e058c7befe559a01e62bb78d275ef3f9fe80c94dc4a40f；临时包18D095...596E06已装，不重播/重装/重复收费。手机正式包40AC56...944F、上次设备检查记录1/未结束0/路线点2430，安装前须fresh核对。

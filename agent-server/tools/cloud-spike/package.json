@@ -1,0 +1,18 @@
+{
+  "name": "liuying-disposable-cloud-spike",
+  "private": true,
+  "type": "module",
+  "description": "一次性免费云验证，不是生产部署入口",
+  "scripts": {
+    "test": "node --experimental-strip-types --test *.test.mjs",
+    "dry-run": "wrangler deploy --dry-run --outdir .output/bundle",
+    "test:do": "vitest run --config vitest.do.config.mjs"
+  },
+  "overrides": { "vite": "$vite" },
+  "devDependencies": {
+    "wrangler": "4.131.2",
+    "@cloudflare/vitest-plugin": "1.1.9",
+    "vitest": "4.1.11",
+    "vite": "7.3.6"
+  }
+}

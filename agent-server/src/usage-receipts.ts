@@ -75,11 +75,11 @@ export function createUsageReceipts({
             .bind(inputTokens, outputTokens, ...values(reservationId)),
           db
             .prepare(
-              `UPDATE agent_budget_accounts SET halted = 1 WHERE owner_id = ? AND EXISTS (
+              `UPDATE agent_budget_reservations SET violation = 1 WHERE id = ? AND EXISTS (
             SELECT 1 FROM agent_usage_receipts u JOIN agent_budget_reservations r ON r.id = u.reservation_id
             WHERE ${belongs} AND (u.input_tokens <> ? OR u.output_tokens <> ?))`,
             )
-            .bind(ownerId, ...values(reservationId), inputTokens, outputTokens),
+            .bind(reservationId, ...values(reservationId), inputTokens, outputTokens),
           db
             .prepare(
               `SELECT u.* FROM agent_usage_receipts u JOIN agent_budget_reservations r ON r.id = u.reservation_id WHERE ${belongs}`,

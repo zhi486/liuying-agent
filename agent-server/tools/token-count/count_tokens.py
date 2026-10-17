@@ -57,7 +57,7 @@ def _messages(request):
     _object(request, ("model", "thinking", "stream", "max_tokens", "messages", "tools"))
     _require(request["model"] == LOCK["model"])
     _require(request["thinking"] == {"type": "disabled"} and request["stream"] is False)
-    _require(type(request["max_tokens"]) is int and 1 <= request["max_tokens"] <= 600)
+    _require(type(request["max_tokens"]) is int and 1 <= request["max_tokens"] <= 1600)
     _require(type(request["tools"]) is list and len(request["tools"]) <= 2)
     names = set()
     for tool in request["tools"]:

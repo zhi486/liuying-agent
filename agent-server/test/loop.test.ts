@@ -96,7 +96,7 @@ test('真正执行模型选择、只读工具、观察结果、最终答复的�
   assert.equal(h.requests[1]?.requestId, 'task_1:2');
   assert.deepEqual(h.requests[0]?.limits, {
     maxInputTokens: 20000,
-    maxOutputTokens: 600,
+    maxOutputTokens: 1600,
   });
 });
 
@@ -228,7 +228,7 @@ test('结算失败停止，不启动下一次模型请求', async () => {
 
 for (const excessiveUsage of [
   { inputTokens: 20001, outputTokens: 40 },
-  { inputTokens: 100, outputTokens: 601 },
+  { inputTokens: 100, outputTokens: 1601 },
 ]) {
   test('供应商突破 token 预留边界时保留真实用量并熔断后续调用', async () => {
     const h = harness();
@@ -249,6 +249,17 @@ for (const excessiveUsage of [
     });
   });
 }
+
+test('完整最终回答允许超过旧 600 token 上限直至 1600，并按实际用量结算', async () => {
+  for (const outputTokens of [601, 1600]) {
+    const h = harness();
+    const actualUsage = { inputTokens: 100, outputTokens };
+    h.model.generate = async () => ({ decision: final, usage: actualUsage });
+    const result = await runAgent(task, h);
+    assert.equal(result.status, 'completed');
+    assert.deepEqual(h.settlements[0]?.value, { kind: 'usage', usage: actualUsage });
+  }
+});
 
 test('取消后模型晚到拒绝被消费，不触发重试或改写结算', async () => {
   const h = harness();

@@ -1,8 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts", "type-tests/workers.ts"]
+  "include": ["src/**/*.ts", "type-tests/workers.ts", "worker-configuration.d.ts"],
+  "exclude": []
 }

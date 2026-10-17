@@ -15,9 +15,29 @@ const SettingsPage = lazy(() =>
     default: module.SettingsPage,
   })),
 );
+const AgentUsagePage = lazy(() =>
+  import('../features/settings/AgentUsagePage').then((module) => ({
+    default: module.AgentUsagePage,
+  })),
+);
+const AgentNoticesPage = lazy(() =>
+  import('../features/settings/AgentNoticesPage').then((module) => ({
+    default: module.AgentNoticesPage,
+  })),
+);
+const AgentChatConsentPage = lazy(() =>
+  import('../features/settings/AgentChatConsentPage').then((module) => ({
+    default: module.AgentChatConsentPage,
+  })),
+);
 
 const RunDetailPage = lazy(() =>
   import('../features/history/RunDetailPage').then((module) => ({ default: module.RunDetailPage })),
+);
+const SimulatedRunPage = lazy(() =>
+  import('../features/history/SimulatedRunPage').then((module) => ({
+    default: module.SimulatedRunPage,
+  })),
 );
 
 const MemoriesPage = lazy(() =>
@@ -44,8 +64,12 @@ export function AppRoutes() {
           <Route path="/memories" element={<MemoriesPage />} />
           <Route path="/run" element={<RunningPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/history/demo" element={<SimulatedRunPage />} />
           <Route path="/history/:sessionId" element={<RunDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/usage" element={<AgentUsagePage />} />
+          <Route path="/settings/chat" element={<AgentChatConsentPage />} />
+          <Route path="/settings/notices" element={<AgentNoticesPage />} />
           <Route path="*" element={<Navigate to="/agent" replace />} />
         </Route>
       </Routes>

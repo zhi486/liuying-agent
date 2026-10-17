@@ -161,7 +161,7 @@ private data class WireEnvelope(
 )
 
 private fun DiagnosticEvent.toEnvelope(timestamp: String, processStartId: String): WireEnvelope = when (this) {
-    is DiagnosticEvent.DeepseekCompanionResult -> wire("ai", "deepseek_companion_result", payload("outcome" to outcome.wireName), timestamp, processStartId)
+    is DiagnosticEvent.DeepseekCompanionResult -> wire("ai", "deepseek_companion_result", if (rejection == null) payload("outcome" to outcome.wireName) else payload("outcome" to outcome.wireName, "rejection" to rejection.name.lowercase()), timestamp, processStartId)
     is DiagnosticEvent.BleLinkLostNotice -> wire("ble", "ble_link_lost", payload("sessionGeneration" to sessionGeneration, "observationGeneration" to observationGeneration, "faultId" to faultId, "episodeId" to episodeId), timestamp, processStartId)
     is DiagnosticEvent.BleLifecycleChanged -> wire("ble", "ble_lifecycle_changed", payload("from" to from.wire(), "to" to to.wire(), "epoch" to epoch, "lifecycleRevision" to lifecycleRevision), timestamp, processStartId)
     is DiagnosticEvent.BleLinkChanged -> wire("ble", "ble_link_changed", payload("from" to from.wire(), "to" to to.wire(), "attemptToken" to attemptToken, "gattToken" to gattToken, "reason" to reason?.wire()), timestamp, processStartId)

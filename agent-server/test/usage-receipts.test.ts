@@ -61,7 +61,7 @@ test('取消后相同有效收据只结算一次，迟到未知通知不覆盖 7
   );
 });
 
-test('不同用量收据保留首份并持久熔断账户', async (t) => {
+test('不同用量收据保留首份并标记账本异常，不关闭账户', async (t) => {
   const f = await setup(t);
   const receipts = loaded.createUsageReceipts({
     db: f.database.db,
@@ -76,8 +76,9 @@ test('不同用量收据保留首份并持久熔断账户', async (t) => {
   );
   assert.equal(
     f.database.sqlite.prepare('SELECT halted FROM agent_budget_accounts').get()!.halted,
-    1,
+    0,
   );
+  assert.equal(f.database.sqlite.prepare('SELECT violation FROM agent_budget_reservations').get()!.violation, 1);
 });
 
 test('结算事务失败仍留收据，重试只记账；错误执行与非法用量不产生证据', async (t) => {

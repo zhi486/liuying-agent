@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Microphone } from '@phosphor-icons/react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Microphone, X } from '@phosphor-icons/react';
 import { sendNativeCommand } from '../../bridge/bridgeStore';
 import { voiceStatusSchema } from '../../bridge/voiceInput';
 import styles from './AgentPage.module.css';
@@ -9,10 +9,12 @@ export function AgentVoiceInput({
   disabled,
   onText,
   onBusy,
+  children,
 }: {
   disabled: boolean;
   onText(text: string): boolean;
   onBusy(busy: boolean): void;
+  children?: (trigger: ReactNode) => ReactNode;
 }) {
   const [state, setState] = useState('idle');
   const [message, setMessage] = useState('');
@@ -105,60 +107,83 @@ export function AgentVoiceInput({
     }
   }
 
-  return (
-    <section className={styles.voiceInput} aria-label="语音输入">
-      {state === 'idle' ? (
-        <button
-          type="button"
-          className={styles.voiceTrigger}
-          aria-label="语音输入"
-          title="语音输入"
-          disabled={disabled}
-          onClick={() => {
-            setState('consent');
-            setMessage('');
-            onBusy(true);
-          }}
-        >
-          <Microphone size={22} aria-hidden="true" />
-        </button>
-      ) : state === 'consent' ? (
-        <div className={styles.voicePanel}>
-          <p>
-            本次录音期间，音频将经已配置的云端实时发送至阿里云 Fun-ASR，可能产生费用。 最长30秒；本
-            App 不保存录音。中间文字可能修订，完成后只填入草稿，不自动发送给流萤。
-          </p>
-          <button type="button" disabled={disabled} onClick={() => void begin()}>
-            同意本次录音并识别
+  const panel =
+    state === 'idle' ? (
+      message ? (
+        <div className={styles.voiceToast}>
+          <p role="status">{message}</p>
+          <button
+            type="button"
+            className={styles.voiceDismiss}
+            aria-label="关闭语音提示"
+            onClick={() => setMessage('')}
+          >
+            关闭
           </button>
-          <button type="button" onClick={() => cancel()}>
-            暂不录音
-          </button>
-          {message && <p role="status">{message}</p>}
         </div>
-      ) : (
-        <div className={styles.voicePanel}>
-          {state === 'recording' && (
-            <button type="button" onClick={() => void finish()}>
-              结束并识别
-            </button>
-          )}
-          <button type="button" onClick={() => cancel()}>
-            取消语音输入
-          </button>
-          {message && <p role="status">{message}</p>}
-          {preview && (
-            <p aria-label="实时识别预览" style={{ overflowWrap: 'anywhere' }}>
-              {preview}
-            </p>
-          )}
-        </div>
-      )}
-      {state === 'idle' && message && (
-        <p role="status" className={styles.voiceToast}>
-          {message}
+      ) : null
+    ) : state === 'consent' ? (
+      <div className={styles.voicePanel}>
+        <p>
+          本次录音期间，音频将经已配置的云端实时发送至阿里云 Fun-ASR，可能产生费用。最长30秒；本 App
+          不保存录音。中间文字可能修订，完成后只填入草稿，不自动发送给流萤。
         </p>
-      )}
+        <button type="button" disabled={disabled} onClick={() => void begin()}>
+          同意本次录音并识别
+        </button>
+        <button type="button" onClick={() => cancel()}>
+          暂不录音
+        </button>
+        {message && <p role="status">{message}</p>}
+      </div>
+    ) : (
+      <div className={styles.voicePanel}>
+        {state === 'recording' && (
+          <button type="button" onClick={() => void finish()}>
+            结束并识别
+          </button>
+        )}
+        <button type="button" onClick={() => cancel()}>
+          取消语音输入
+        </button>
+        {message && <p role="status">{message}</p>}
+        {preview && <p aria-label="实时识别预览">{preview}</p>}
+      </div>
+    );
+  const trigger = (
+    <section className={styles.voiceInput} aria-label="语音输入">
+      <button
+        type="button"
+        className={styles.voiceTrigger}
+        aria-label={state === 'idle' ? '语音输入' : '取消当前语音输入'}
+        title={state === 'idle' ? '语音输入' : '取消当前语音输入'}
+        disabled={state === 'idle' && disabled}
+        onClick={() => {
+          if (state !== 'idle') {
+            cancel();
+            return;
+          }
+          setState('consent');
+          setMessage('');
+          onBusy(true);
+        }}
+      >
+        {state === 'idle' ? (
+          <Microphone size={22} aria-hidden="true" />
+        ) : (
+          <X size={22} aria-hidden="true" />
+        )}
+      </button>
     </section>
+  );
+  return (
+    <>
+      {panel && (
+        <div className={styles.voiceStatusSlot} data-testid="voice-status-slot">
+          {panel}
+        </div>
+      )}
+      {children ? children(trigger) : trigger}
+    </>
   );
 }

@@ -25,6 +25,11 @@ import androidx.lifecycle.lifecycleScope
 import com.healthyagent.running.ui.navigation.AppNavHost
 import com.healthyagent.running.ui.theme.HealthyAgentTheme
 import com.healthyagent.running.ui.web.WebPreviewHost
+import com.healthyagent.running.agent.AgentTaskService
+import com.healthyagent.running.agent.cloud.CloudAgentService
+import com.healthyagent.running.agent.cloud.CloudAgentConfiguration
+import com.healthyagent.running.ui.settings.CloudAgentConfigDialog
+import com.healthyagent.running.agent.memory.MemoryService
 import com.healthyagent.running.ui.settings.DeepseekKeyDialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -44,6 +49,17 @@ class MainActivity : ComponentActivity() {
 
     private val coordinator: AppCoordinator by inject()
     private val commandDispatcher: RunCommandDispatcher by inject()
+    private val agentTaskService: AgentTaskService by inject()
+    private val memoryService: MemoryService by inject()
+    private val cloudAgentService: CloudAgentService by inject()
+    private val cloudAgentConfiguration: CloudAgentConfiguration by inject()
+    private val voiceInputService: com.healthyagent.running.agent.voice.VoiceInputService by inject()
+    private var voicePermissionSession: String? = null
+    private val voicePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        voicePermissionSession?.let { voiceInputService.permissionResult(it, granted) }
+        voicePermissionSession = null
+    }
+    private var cloudDialog: CloudAgentConfigDialog? = null
     private val healthConnectSync: HealthConnectSync by inject()
     private var healthPermissionRequestLaunched = false
     private var runningPermissionRequestAttempted = false
@@ -72,12 +88,40 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                voiceInputService.permissionRequested.collect { id ->
+                    if (id != null) {
+                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                            voiceInputService.permissionResult(id, true)
+                        else if (voicePermissionSession == null) {
+                            voicePermissionSession = id
+                            voicePermission.launch(Manifest.permission.RECORD_AUDIO)
+                        } else if (voicePermissionSession != id) voiceInputService.permissionResult(id, false)
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                cloudAgentService.configuring.collect { requested ->
+                    if (requested && cloudDialog == null) {
+                        deepseekDialog?.dismiss()
+                        cloudDialog = CloudAgentConfigDialog(this@MainActivity, lifecycleScope, cloudAgentConfiguration) {
+                            cloudAgentService.closeConfiguration()
+                            cloudDialog = null
+                        }.also { it.show() }
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 coordinator.deepseekConfigurationRequest.collect { token ->
                     if (token == null) {
                         deepseekDialog?.dismiss()
                         deepseekDialog = null
                         deepseekDialogToken = null
                     } else if (deepseekDialogToken != token) {
+                        cloudDialog?.dismiss()
                         deepseekDialog?.dismiss()
                         deepseekDialogToken = token
                         val prompt = DeepseekKeyDialog(
@@ -194,6 +238,10 @@ class MainActivity : ComponentActivity() {
                     WebPreviewHost(
                         coordinator = coordinator,
                         commandDispatcher = commandDispatcher,
+                        agentTaskService = agentTaskService,
+                        memoryService = memoryService,
+                        cloudAgentService = cloudAgentService,
+                        voiceInputService = voiceInputService,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
@@ -210,6 +258,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        voiceInputService.cancel()
+        cloudDialog?.dismiss()
+        lifecycleScope.launch { cloudAgentService.clearPreparation() }
         deepseekDialog?.dismiss()
         deepseekDialog = null
         deepseekDialogToken = null
@@ -217,6 +268,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        cloudDialog?.dismiss()
         deepseekDialog?.dismiss()
         deepseekDialog = null
         deepseekDialogToken = null

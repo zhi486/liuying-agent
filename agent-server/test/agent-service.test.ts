@@ -43,6 +43,28 @@ const reply = (tool = false) => ({
   },
 });
 
+test('正式服务把会话历史送给模型并纳入同请求去重指纹', async (t) => {
+  const f = await fixture(t);
+  await f.tasks.cancel(f.header, f.execution.taskId);
+  const sent: string[] = [];
+  const service = loaded.createAgentService({ db: f.database.db, now: f.now, rate,
+    apiKey: 'test-only-key', countInputTokens: async () => 100,
+    fetch: async (_: unknown, init?: RequestInit) => { sent.push(String(init!.body)); return Response.json(reply()); },
+  });
+  const request = { ...input(), conversation: { version: 'conversation_v1',
+    id: '77777777-7777-4777-8777-777777777777', approved: true,
+    messages: [{ role: 'user', text: '我喜欢夜跑' }, { role: 'assistant', text: '我们晚上跑' }] } };
+  const prepared = await service.prepare(f.header, request);
+  assert.ok(prepared.run);
+  const changed = structuredClone(request);
+  changed.conversation.messages[0]!.text = '修改之前的消息';
+  await assert.rejects(service.prepare(f.header, changed), /conflict/);
+  await prepared.run!();
+  const messages = JSON.parse(sent[0]!).messages;
+  assert.ok(messages.some((m: { role: string; content: string }) => m.role === 'user' && m.content === '我喜欢夜跑'));
+  assert.ok(messages.some((m: { role: string; content: string }) => m.role === 'assistant' && m.content === '我们晚上跑'));
+});
+
 test('服务冻结输入、仅首次接单可执行，两轮真实协议与账单全部关联云 ID', async (t) => {
   const f = await fixture(t);
   await f.tasks.cancel(f.header, f.execution.taskId);
@@ -92,12 +114,32 @@ test('服务冻结输入、仅首次接单可执行，两轮真实协议与账�
   assert.equal(saved.status, 'completed');
   assert.ok(saved.result?.status === 'completed');
   assert.equal(saved.result.answer, '根据 run_1，你完成了四公里。');
+  assert.deepEqual(saved.result.cost, { currency: 'USD', estimatedMicros: 156,
+    inputTokens: 200, outputTokens: 80, usageComplete: true, rateStatus: 'current' });
   assert.deepEqual(
     saved.result.actions.map((a) => a.kind),
     ['model_requested', 'tool_completed', 'model_requested'],
   );
   await service.acknowledge(f.header, prepared.task.id);
   assert.equal((await service.get(f.header, prepared.task.id)).result, null);
+});
+
+test('旧费率与旧预算熔断不阻止服务，重复键仍只派发一次并回传成本', async (t) => {
+  const f = await fixture(t);
+  await f.tasks.cancel(f.header, f.execution.taskId);
+  f.database.sqlite.exec('UPDATE agent_budget_accounts SET monthly_limit_micros=1, halted=1');
+  let sent = 0;
+  const service = loaded.createAgentService({ db: f.database.db, now: f.now,
+    rate: { ...rate, checkedAtMillis: start - 86400000, expiresAtMillis: start },
+    apiKey: 'fixture', countInputTokens: async () => 100,
+    fetch: async () => { sent++; return Response.json(reply()); } });
+  const request = input(); const prepared = await service.prepare(f.header, request);
+  await prepared.run!();
+  assert.equal((await service.prepare(f.header, request)).run, null);
+  const saved = await service.get(f.header, prepared.task.id);
+  assert.equal(saved.status, 'completed'); assert.equal(sent, 1);
+  assert.equal(saved.result?.cost?.estimatedMicros, 78);
+  assert.equal(saved.result?.cost?.rateStatus, 'stale');
 });
 
 test('排队消耗原截止，计数跨过 30 秒不能发送 HTTP', async (t) => {
@@ -451,7 +493,7 @@ test('派发后网络失败保留未知费用；没有有效收据不能虚构�
     .prepare('SELECT state,reserved_micros,charged_micros FROM agent_budget_reservations')
     .get()!;
   assert.equal(row.state, 'uncertain');
-  assert.equal(row.reserved_micros, 6720);
+  assert.equal(row.reserved_micros, 7920);
   assert.equal(row.charged_micros, null);
   assert.equal(
     f.database.sqlite.prepare('SELECT COUNT(*) AS n FROM agent_usage_receipts').get()!.n,

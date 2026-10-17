@@ -1,0 +1,8 @@
+{
+  "version": "deepseek_flash_peak_20260923",
+  "model": "deepseek-flash",
+  "inputMicrosPerMillion": 300000,
+  "outputMicrosPerMillion": 1200000,
+  "checkedAtMillis": 1790174810000,
+  "expiresAtMillis": 1790261210000
+}

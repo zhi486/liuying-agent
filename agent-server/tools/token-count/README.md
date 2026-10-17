@@ -1,6 +1,8 @@
 # 独立 token 计数验证工具
 
-这是离线参考工具，**没有接入生产 `countInputTokens`，也没有证明与在线 API 账单完全一致**。不读取 API key，不发送模型请求。采用固定版本 DeepSeek V4.1 官方 `encoding.py` 与模型词表，先渲染完整消息/工具模板，再调用 `tokenizers` 编码，不能将请求 JSON 直接分词。
+这是独立的离线 Python 参考工具，**不承担生产请求计数，也没有证明与在线 API 账单完全一致**。不读取 API key，不发送模型请求。采用固定版本 DeepSeek V4.1 官方 `encoding.py` 与模型词表，先渲染完整消息/工具模板，再调用 `tokenizers` 编码，不能将请求 JSON 直接分词。
+
+2026-09-16 新增的生产 JS 工厂位于 `src/token-count/`，由本工具独立对照验证；尚未接入 DO/云端/手机。`verify-assets.ts` 是不下载的只读门禁，后端 `corepack pnpm check` 会先执行，再运行 Node/Workers 类型检查与差分测试。它采用 TypeScript 以复用强类型生产 profile；首次资源准备仍需显式运行下述命令。
 
 ## 已有验证
 
@@ -40,7 +42,7 @@ node --experimental-strip-types production-fixtures.mjs
 
 ## 支持范围与失败规则
 
-- 必须是当前后端形状的完整请求：`model=deepseek-flash`、`thinking.type=disabled`、`stream=false`、`max_tokens=1..600`、`messages`、`tools`，拒绝未知顶层字段。
+- 必须是当前后端形状的完整请求：`model=deepseek-flash`、`thinking.type=disabled`、`stream=false`、`max_tokens=1..1600`、`messages`、`tools`，拒绝未知顶层字段。
 - 只支持首条 system、用户文字、assistant 工具调用、对应工具结果；工具为 `runs_list` / `runs_summary`，不支持图片、命名空间、思考内容、JSON 输出格式或任意新协议字段。
 - 拒绝重复 JSON 键、NaN/Infinity、无效 UTF-8、孤立代理字符、超过 64 KiB 输入和不完整工具历史。图片特殊标记也拒绝；普通角色标记按官方参考处理。
 - `add_special_tokens=False`，防止重复添加已经存在于模板中的 BOS/EOS。超过 20,000 token 仍报告实际数量并返回 `withinInputLimit=false`，不截断输入伪造合格结果。

@@ -58,7 +58,10 @@ const mount = () =>
       <AgentPage />
     </MemoryRouter>,
   );
-const openAccount = () => fireEvent.click(screen.getByRole('button', { name: '打开侧边栏' }));
+const openAccount = () => {
+  fireEvent.click(screen.getByRole('button', { name: '打开侧边栏' }));
+  fireEvent.click(screen.getByRole('button', { name: '设置与管理' }));
+};
 const openReference = () => {
   fireEvent.click(screen.getByLabelText('更多输入选项'));
   fireEvent.click(screen.getByText('本次参考'));
@@ -129,7 +132,7 @@ it('两种入口明确分开，在线未配置时连点不发送也不降级保�
 });
 
 it.each(['unavailable', 'ready', 'error'] as const)(
-  '%s 时查看上传说明不提交，草稿保留且本机入口状态正确',
+  '%s 时用户须知移到设置且不提交，草稿与本机入口状态正确',
   async (status) => {
     useBridgeStore.setState({ status, snapshot: null });
     mount();
@@ -138,13 +141,9 @@ it.each(['unavailable', 'ready', 'error'] as const)(
     fireEvent.change(input, { target: { value: '先记下来' } });
     const before = send.mock.calls.length;
     openReference();
-    const disclosure = screen.getByText('在线执行会上传什么？');
-    fireEvent.click(disclosure);
-    expect(disclosure.closest('details')).toHaveAttribute('open');
-    expect(screen.getByText(/每次执行都需你确认/)).toBeVisible();
-    expect(screen.getByText(/输入中包含的个人信息也会随文字发送/)).toBeVisible();
-    fireEvent.click(disclosure);
-    expect(disclosure.closest('details')).not.toHaveAttribute('open');
+    const disclosure = screen.getByRole('link', { name: '查看用户须知' });
+    expect(disclosure).toHaveAttribute('href', '/settings/notices');
+    expect(screen.queryByText('在线执行会上传什么？')).not.toBeInTheDocument();
     expect(input).toHaveValue('先记下来');
     expect(send).toHaveBeenCalledTimes(before);
     expect(screen.getByRole('button', { name: '在线执行' })).toBeDisabled();
@@ -210,7 +209,7 @@ it('麦克风和发送为图标，低频保存藏在加号菜单', () => {
   expect(screen.getByRole('button', { name: '仅保存' })).toBeInTheDocument();
 });
 
-it('输入聚焦或软键盘改变视口时滚动完整输入区，失焦与卸载不再滚动', () => {
+it('输入聚焦及视口变化不再滚动整页，保留草稿与焦点', () => {
   useBridgeStore.setState({ status: 'unavailable', snapshot: null });
   const scroll = vi.fn();
   const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
@@ -221,17 +220,15 @@ it('输入聚焦或软键盘改变视口时滚动完整输入区，失焦与卸�
   try {
     const mounted = mount();
     const input = screen.getByLabelText('给流萤的消息');
+    fireEvent.change(input, { target: { value: '保留的草稿' } });
     act(() => input.focus());
-    expect(scroll).toHaveBeenCalledWith({ block: 'center' });
-    scroll.mockClear();
     fireEvent(window, new Event('resize'));
-    expect(scroll).toHaveBeenCalledTimes(1);
-    act(() => input.blur());
-    fireEvent(window, new Event('resize'));
-    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue('保留的草稿');
     mounted.unmount();
     fireEvent(window, new Event('resize'));
-    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).not.toHaveBeenCalled();
   } finally {
     if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original);
     else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');

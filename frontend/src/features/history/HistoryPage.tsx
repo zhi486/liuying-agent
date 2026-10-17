@@ -20,6 +20,9 @@ export function HistoryPage() {
           {latestRun ? formatMonth(latestRun.startedAt) : '本地记录'}
         </span>
       </header>
+      <Link className={`secondary-button ${styles.loadMore}`} to="/history/demo">
+        查看模拟跑步记录（不计入统计）
+      </Link>
 
       {bridgeStatus === 'unavailable' ? (
         <StatePanel

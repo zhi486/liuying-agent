@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { createDeepseekModel } from '../../src/deepseek.ts';
 import { TOOL_DEFINITIONS } from '../../src/tools.ts';
+import { MODEL_TOKEN_LIMITS } from '../../src/model-limits.ts';
 
 const messages = [{ role: 'user', text: '请复盘最近一次跑步🏃，只使用已授权摘要。' }];
 const cases = [];
@@ -26,7 +27,7 @@ for (let step = 1; step <= 3; step++) {
         instructions: '只读助手',
         messages: structuredClone(messages),
         tools: TOOL_DEFINITIONS,
-        limits: { maxInputTokens: 20000, maxOutputTokens: 600 },
+        limits: MODEL_TOKEN_LIMITS,
       },
       new AbortController().signal,
     ),

@@ -1,4 +1,6 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as renderView, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useBridgeStore } from '../../bridge/bridgeStore';
@@ -6,6 +8,7 @@ import type { AppSnapshot } from '../../bridge/contract';
 import { SettingsPage } from './SettingsPage';
 
 const sendNativeCommandMock = vi.hoisted(() => vi.fn());
+const render = (view: ReactElement) => renderView(<MemoryRouter>{view}</MemoryRouter>);
 
 vi.mock('../../bridge/bridgeStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../bridge/bridgeStore')>();

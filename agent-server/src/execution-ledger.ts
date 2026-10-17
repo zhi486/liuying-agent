@@ -80,8 +80,6 @@ export async function createExecutionLedger({
         UPDATE agent_budget_reservations SET dispatch_state = 'may_have_dispatched'
         WHERE id = ? AND owner_id = ? AND task_id = ? AND request_id = ? AND execution_hash = ?
           AND dispatch_state = 'prepared' AND state = 'reserved'
-          AND rate_expires_at_millis > (SELECT time FROM clock)
-          AND EXISTS (SELECT 1 FROM agent_budget_accounts a WHERE a.owner_id = agent_budget_reservations.owner_id AND a.halted = 0)
           AND EXISTS (SELECT 1 FROM agent_cloud_tasks t, clock
             WHERE t.id = agent_budget_reservations.task_id AND t.owner_id = agent_budget_reservations.owner_id
               AND t.execution_hash = agent_budget_reservations.execution_hash AND ${EXECUTION_ACTIVE_SQL})`,
@@ -97,7 +95,7 @@ export async function createExecutionLedger({
         db
           .prepare(
             `${EXECUTION_CLOCK_SQL} SELECT
-          MIN(t.deadline_at, d.expires_at, r.rate_expires_at_millis) AS expires_at, clock.time AS observed_at
+          MIN(t.deadline_at, d.expires_at) AS expires_at, clock.time AS observed_at
           FROM agent_budget_reservations r JOIN agent_cloud_tasks t ON t.id = r.task_id AND t.owner_id = r.owner_id
           JOIN agent_devices d ON d.id = t.device_id AND d.owner_id = t.owner_id, clock
           WHERE r.id = ? AND r.owner_id = ? AND r.execution_hash = ?`,
@@ -198,7 +196,7 @@ export async function recoverExecutions({
   }
 }
 
-// Free 宿主每次 invocation 只调用一页；最坏 1 + 8×5 = 41 条 SQL。
+// Free 宿主每次 invocation 只调用一页；最坏 1 + 7×5 = 36 条 SQL。
 // 不能在同一次调用里循环游标；其他业务查询和 CPU 仍由宿主另行预算。
 export function recoverFreeExecutions(
   options: Omit<Parameters<typeof recoverExecutions>[0], 'limit'>,

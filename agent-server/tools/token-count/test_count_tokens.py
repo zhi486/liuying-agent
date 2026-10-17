@@ -132,11 +132,13 @@ class TokenCountTests(unittest.TestCase):
         second = request()
         second["max_tokens"] = 1
         self.assertEqual(count_request(first)["inputTokens"], count_request(second)["inputTokens"])
+        second["max_tokens"] = 1600
+        self.assertEqual(count_request(first), count_request(second))
 
     def test_rejects_unimplemented_request_features(self):
         for key, value in (
             ("model", "deepseek-v4-pro"), ("thinking", {"type": "enabled"}),
-            ("stream", True), ("max_tokens", True), ("max_tokens", 601),
+            ("stream", True), ("max_tokens", True), ("max_tokens", 1601),
             ("temperature", 0.5), ("response_format", {"type": "json_object"}),
         ):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
