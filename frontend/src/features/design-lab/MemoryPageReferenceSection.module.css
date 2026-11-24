@@ -1,0 +1,328 @@
+.section {
+  min-width: 0;
+}
+.section > h2 {
+  font-size: 1.1rem;
+}
+.section > p,
+.variantHeader p {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.variants {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.variants > article {
+  min-width: 0;
+}
+.variantHeader {
+  min-height: 6rem;
+}
+.phone {
+  width: min(100%, 393px);
+  min-height: 680px;
+  margin: 0 auto;
+  padding: 1rem;
+  box-sizing: border-box;
+  border-radius: 24px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.phone[data-width='320'] {
+  max-width: 320px;
+}
+.phone button {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.phone button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.phone :is(button, input, textarea, summary):focus-visible,
+.choose:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.header,
+.title,
+.toolbar,
+.actions,
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.header > span,
+.title > span,
+.scope {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.header .back {
+  border-radius: 999px;
+  background: var(--glass-strong);
+}
+.title {
+  justify-content: flex-start;
+  margin-top: 1.5rem;
+}
+.title h3 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.title > svg {
+  color: var(--accent);
+}
+.title > span {
+  margin-left: auto;
+}
+.scope {
+  line-height: 1.6;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.3rem 0;
+  padding: 0 0.7rem;
+  background: var(--surface);
+  border-radius: 16px;
+  color: var(--text-muted);
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.toolbar {
+  margin-bottom: 0.8rem;
+  font-size: 0.85rem;
+}
+.toolbar button {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.records,
+.groups ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.record {
+  position: relative;
+  padding: 0.9rem 0;
+}
+.recordDetail > small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+.recordDetail > p {
+  margin: 0.55rem 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.actions {
+  justify-content: flex-end;
+}
+.record .actions button {
+  background: transparent;
+  color: var(--text-muted);
+}
+.groups details {
+  margin-top: 0.8rem;
+  background: var(--surface);
+  border-radius: 18px;
+  padding: 0 0.8rem;
+}
+.groups summary {
+  min-height: 48px;
+  align-content: center;
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 0.85rem;
+}
+.groups summary span {
+  float: right;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.phone[data-variant='review'] .record {
+  margin-top: 1.2rem;
+  padding: 1.2rem;
+  background: var(--glass-strong);
+  border-radius: 20px;
+}
+.phone[data-variant='review'] .recordDetail > p {
+  font-size: 1.2rem;
+  line-height: 1.8;
+}
+.pager {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+}
+
+.phone[data-variant='groups'] {
+  padding: 0.8rem;
+}
+
+.phone[data-variant='groups'] .title {
+  margin-top: 0.75rem;
+}
+
+.phone[data-variant='groups'] .search {
+  margin: 0.75rem 0;
+}
+
+.phone[data-variant='groups'] .groups details {
+  padding: 0;
+  margin-top: 0.35rem;
+  background: transparent;
+  border-radius: 0;
+}
+
+.phone[data-variant='groups'] .record {
+  padding: 0;
+}
+
+.phone .recordSummary {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  gap: 0.5rem;
+}
+
+.recordSummary > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.recordSummary > svg {
+  flex: none;
+}
+
+.phone .recordSummary[aria-expanded='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.recordSummary[aria-expanded='true'] > svg {
+  transform: rotate(180deg);
+}
+
+.phone[data-variant='groups'] .recordDetail:not([hidden]) {
+  padding: 0.5rem 0.6rem;
+}
+
+.phone[data-variant='groups'] .recordDetail > p {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 0.35rem 0;
+}
+.editor {
+  margin: 0.8rem 0;
+}
+.editor label {
+  display: grid;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+.editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 130px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.editor .actions {
+  margin-top: 0.5rem;
+}
+.confirm {
+  padding: 0.7rem;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.confirm p {
+  font-size: 0.85rem;
+}
+.confirm button {
+  margin-right: 0.35rem;
+}
+.empty {
+  display: grid;
+  justify-items: center;
+  padding: 2rem 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+.empty h4 {
+  margin-bottom: 0;
+}
+.empty p,
+.notice {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.choose {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.choose[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+@media (max-width: 1050px) {
+  .variants {
+    grid-template-columns: 1fr;
+  }
+  .variantHeader {
+    min-height: 0;
+  }
+}

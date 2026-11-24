@@ -19,6 +19,7 @@ data class SpeechRequest(
     val preparationAcceptedAt: TimeMark? = null,
     val noticeToken: SpeechNoticeToken? = null,
     val deepseekConfig: DeepseekRequestConfig? = null,
+    val kilometerGuidance: KilometerGuidance = KilometerGuidance.NONE,
 )
 
 /** 单条语音的撤销凭证；随协程传至媒体启动门，BLE 还可用原凭证定向撤销。 */

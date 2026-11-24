@@ -1,19 +1,55 @@
 import {
+  Brain,
+  CaretRight,
+  ChartBar,
+  Check,
+  CheckCircle,
+  CircleNotch,
+  Info,
+  Moon,
+  PlugsConnected,
+  ShieldCheck,
+  Sun,
+  type Icon,
+} from '@phosphor-icons/react';
+import {
   useEffect,
   useMemo,
   useState,
   type Dispatch,
   type FormEvent,
+  type KeyboardEvent,
   type SetStateAction,
 } from 'react';
+import { Link } from 'react-router-dom';
 
 import { sendNativeCommand, useBridgeStore } from '../../bridge/bridgeStore';
 import type { AppSnapshot, SettingsUpdateBody } from '../../bridge/contract';
 import styles from './SettingsPage.module.css';
+import { ChoiceInput } from '../../design-system/ChoiceInput';
 import { useNativeSettings } from './useNativeSettings';
+import { LoadingSkeleton } from '../../design-system/LoadingSkeleton';
+import { useKnowledgePreferences } from './useKnowledgePreferences';
 
 type SettingsSnapshot = AppSnapshot['settings'];
 type ThemeChoice = 'morning' | 'night';
+
+interface AgentSettingsLink {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  to: string;
+  state?: { from: string };
+  icon: Icon;
+}
+
+interface ThemeOptionDefinition {
+  id: ThemeChoice;
+  label: string;
+  description: string;
+  icon: Icon;
+}
 
 interface RunPreferencesDraft {
   targetPace: string;
@@ -27,7 +63,130 @@ interface RunPreferencesDraft {
   motionPreference: SettingsSnapshot['motionPreference'];
 }
 
+const agentSettingsLinks: AgentSettingsLink[] = [
+  {
+    id: 'usage',
+    title: '账单与用量',
+    description: '查看模型调用、费用和本机用量记录',
+    category: '用量',
+    to: '/settings/usage',
+    icon: ChartBar,
+  },
+  {
+    id: 'chat',
+    title: '聊天授权',
+    description: '管理哪些会话可以发送给在线 Agent',
+    category: '授权',
+    to: '/settings/chat',
+    icon: ShieldCheck,
+  },
+  {
+    id: 'plugins',
+    title: 'MCP 插件',
+    description: '连接工具与数据源，管理本机插件授权',
+    category: '连接',
+    to: '/settings/plugins',
+    icon: PlugsConnected,
+  },
+  {
+    id: 'memory',
+    title: '长期记忆',
+    description: '管理跑步习惯、表达偏好和已保存事实',
+    category: '记忆',
+    to: '/memories',
+    state: { from: '/settings' },
+    icon: Brain,
+  },
+  {
+    id: 'notices',
+    title: '用户须知',
+    description: '查看联网、记忆和语音相关说明',
+    category: '说明',
+    to: '/settings/notices',
+    icon: Info,
+  },
+];
+
+const themeOptions: ThemeOptionDefinition[] = [
+  {
+    id: 'morning',
+    label: '晨光',
+    description: '清爽浅色',
+    icon: Sun,
+  },
+  {
+    id: 'night',
+    label: '夜萤',
+    description: '沉静深色',
+    icon: Moon,
+  },
+];
+
+function MiniThemeCanvas({ theme }: { theme: ThemeChoice }) {
+  return (
+    <span
+      className={`${styles.themeMiniCanvas} ${
+        theme === 'morning' ? styles.themeMiniMorning : styles.themeMiniNight
+      }`}
+      aria-hidden="true"
+    >
+      <span className={styles.themeMiniTopbar}>
+        <span className={styles.themeMiniBrand}>流萤</span>
+        <span className={styles.themeMiniStatus}>本机</span>
+      </span>
+      <span className={styles.themeMiniContent}>
+        <span className={styles.themeMiniMetric}>
+          <small>本周训练</small>
+          <strong>
+            18.4 <i>km</i>
+          </strong>
+          <span className={styles.themeMiniProgress}>
+            <i />
+          </span>
+        </span>
+        <span className={styles.themeMiniMessage}>
+          <span className={styles.themeMiniAvatar} />
+          <span>
+            <strong>今天轻松跑</strong>
+            <small>配速 6'00" / km</small>
+          </span>
+        </span>
+      </span>
+      <span className={styles.themeMiniComposer}>和流萤聊聊今天的训练</span>
+    </span>
+  );
+}
+
+function moveThemeSelection(
+  event: KeyboardEvent<HTMLButtonElement>,
+  currentTheme: ThemeChoice,
+  onChange: (theme: ThemeChoice) => void,
+) {
+  const supportedKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+  if (!supportedKeys.includes(event.key)) return;
+
+  event.preventDefault();
+  const currentIndex = themeOptions.findIndex((option) => option.id === currentTheme);
+  let nextIndex = currentIndex;
+
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    nextIndex = (currentIndex + 1) % themeOptions.length;
+  }
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    nextIndex = (currentIndex - 1 + themeOptions.length) % themeOptions.length;
+  }
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = themeOptions.length - 1;
+
+  const nextTheme = themeOptions[nextIndex].id;
+  const group = event.currentTarget.closest('[role="radiogroup"]');
+  const target = group?.querySelector<HTMLButtonElement>(`[data-theme-choice="${nextTheme}"]`);
+  target?.focus();
+  if (nextTheme !== currentTheme) onChange(nextTheme);
+}
+
 export function SettingsPage() {
+  const knowledge = useKnowledgePreferences();
   const bridgeStatus = useBridgeStore((state) => state.status);
   const bridgeSnapshot = useBridgeStore((state) => state.snapshot);
   const { settings, isLoading, isSaving, error, query, update } = useNativeSettings(
@@ -122,15 +281,97 @@ export function SettingsPage() {
 
   return (
     <section className="standard-page settings-page">
-      <header className="page-title-row">
-        <div>
-          <p className="eyebrow">按你的习惯陪跑</p>
-          <h1>设置</h1>
-        </div>
-        <span className={styles.syncState}>
+      <div className={styles.pageMeta}>
+        <p className="eyebrow">按你的习惯陪跑</p>
+        <span
+          className={styles.syncState}
+          data-state={isSaving ? 'saving' : isLoading ? 'loading' : 'ready'}
+          role="status"
+        >
+          {isSaving || isLoading ? (
+            <CircleNotch size={14} className={styles.syncStateIcon} aria-hidden="true" />
+          ) : (
+            <CheckCircle size={14} className={styles.syncStateIcon} aria-hidden="true" />
+          )}
           {isSaving ? '保存中' : isLoading ? '同步中' : '本机已同步'}
         </span>
-      </header>
+      </div>
+
+      <section className={styles.knowledgePreferences} aria-labelledby="knowledge-settings-title">
+        <h2 id="knowledge-settings-title">知识库</h2>
+        <label>
+          <span>运动健康</span>
+          <ChoiceInput
+            variant="switch"
+            role="switch"
+            checked={knowledge.health}
+            onChange={(event) => knowledge.update({ health: event.target.checked })}
+          />
+        </label>
+        <label>
+          <span>流萤资料</span>
+          <ChoiceInput
+            variant="switch"
+            role="switch"
+            checked={knowledge.firefly}
+            onChange={(event) => knowledge.update({ firefly: event.target.checked })}
+          />
+        </label>
+        <label>
+          <span>允许身份与身世剧透</span>
+          <ChoiceInput
+            variant="switch"
+            role="switch"
+            disabled={!knowledge.firefly}
+            checked={knowledge.allowSpoilers}
+            onChange={(event) => knowledge.update({ allowSpoilers: event.target.checked })}
+          />
+        </label>
+      </section>
+      <section className={styles.agentLinksSection} aria-labelledby="agent-links-title">
+        <div className={styles.agentLinksHeading}>
+          <h2 id="agent-links-title">Agent 与数据</h2>
+          <span>本机</span>
+        </div>
+        <nav className={styles.agentLinksSurface} aria-label="Agent 与数据">
+          <ul className={styles.agentLinksList}>
+            {agentSettingsLinks.map((item) => {
+              const ItemIcon = item.icon;
+              const descriptionId = `agent-link-${item.id}-description`;
+              const categoryId = `agent-link-${item.id}-category`;
+
+              return (
+                <li key={item.id}>
+                  <Link
+                    to={item.to}
+                    state={item.state}
+                    className={styles.agentLink}
+                    aria-label={item.title}
+                    aria-describedby={`${descriptionId} ${categoryId}`}
+                  >
+                    <span className={styles.agentLinkIcon} aria-hidden="true">
+                      <ItemIcon size={19} weight="regular" />
+                    </span>
+                    <span className={styles.agentLinkCopy}>
+                      <strong className={styles.agentLinkTitle} title={item.title}>
+                        {item.title}
+                      </strong>
+                      <small id={descriptionId} className={styles.agentLinkDescription}>
+                        {item.description}
+                      </small>
+                    </span>
+                    <span id={categoryId} className={styles.agentLinkCategory}>
+                      <ItemIcon size={12} weight="regular" aria-hidden="true" />
+                      {item.category}
+                    </span>
+                    <CaretRight className={styles.agentLinkCaret} size={15} aria-hidden="true" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </section>
 
       {isRunActive ? (
         <p className={styles.notice} role="status">
@@ -145,29 +386,49 @@ export function SettingsPage() {
             <p>偏好保存在手机本地，并作用于整个 App</p>
           </div>
         </div>
-        <div className="theme-selector" aria-label="界面主题">
-          <button
-            type="button"
-            className={activeTheme === 'morning' ? 'selected' : ''}
-            aria-pressed={activeTheme === 'morning'}
-            disabled={isSaving}
-            onClick={() => void updateTheme('morning')}
+        <div className={styles.themeCanvasWindow}>
+          <div className={styles.themeCanvasWindowHeader} aria-hidden="true">
+            <span>界面画布</span>
+            <small>晨光 / 夜萤</small>
+          </div>
+          <div
+            className={styles.themeCanvasOptions}
+            role="radiogroup"
+            aria-label="界面主题"
+            aria-busy={isSaving}
           >
-            <span className="theme-swatch morning-swatch" aria-hidden="true" />
-            <strong>晨光</strong>
-            <small>清爽浅色</small>
-          </button>
-          <button
-            type="button"
-            className={activeTheme === 'night' ? 'selected' : ''}
-            aria-pressed={activeTheme === 'night'}
-            disabled={isSaving}
-            onClick={() => void updateTheme('night')}
-          >
-            <span className="theme-swatch night-swatch" aria-hidden="true" />
-            <strong>夜萤</strong>
-            <small>沉静深色</small>
-          </button>
+            {themeOptions.map((option) => {
+              const OptionIcon = option.icon;
+              const selected = activeTheme === option.id;
+
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={`${option.label}，${option.description}`}
+                  className={styles.themeCanvasOption}
+                  data-theme-choice={option.id}
+                  tabIndex={selected ? 0 : -1}
+                  disabled={isSaving}
+                  onClick={() => void updateTheme(option.id)}
+                  onKeyDown={(event) =>
+                    moveThemeSelection(event, option.id, (nextTheme) => void updateTheme(nextTheme))
+                  }
+                >
+                  <MiniThemeCanvas theme={option.id} />
+                  <span className={styles.themeCanvasCaption}>
+                    <span>
+                      <OptionIcon size={14} weight="regular" aria-hidden="true" />
+                      <strong>{option.label}</strong>
+                    </span>
+                    {selected ? <Check size={13} weight="bold" aria-hidden="true" /> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -189,8 +450,8 @@ export function SettingsPage() {
             <strong>AI 陪伴</strong>
             <small>在线时尝试追加短鼓励；失败只保留核心提示</small>
           </span>
-          <input
-            type="checkbox"
+          <ChoiceInput
+            variant="switch"
             checked={settings.llmEnabled}
             disabled={isSaving || !settings.deepseekApiKeyConfigured}
             onChange={(event) => void updateCompanion(event.target.checked)}
@@ -287,11 +548,17 @@ export function SettingsPage() {
                 <strong>语音提醒</strong>
                 <small>关闭后仍保留屏幕提示</small>
               </span>
-              <input
-                type="checkbox"
-                checked={draft.ttsEnabled}
-                onChange={(event) => patchDraft({ ttsEnabled: event.target.checked })}
-              />
+              <span className={styles.voiceToggleControl}>
+                <span aria-hidden="true" className={styles.voiceToggleState}>
+                  {draft.ttsEnabled ? '已开启' : '已关闭'}
+                </span>
+                <ChoiceInput
+                  variant="switch"
+                  aria-label="语音提醒"
+                  checked={draft.ttsEnabled}
+                  onChange={(event) => patchDraft({ ttsEnabled: event.target.checked })}
+                />
+              </span>
             </label>
             <label>
               <span>最短提醒间隔</span>
@@ -353,12 +620,7 @@ export function SettingsPage() {
 function SettingsUnavailable() {
   return (
     <section className="standard-page settings-page">
-      <header className="page-title-row">
-        <div>
-          <p className="eyebrow">浏览器预览</p>
-          <h1>设置</h1>
-        </div>
-      </header>
+      <p className="eyebrow">浏览器预览</p>
       <div className={styles.stateCard}>
         <strong>未连接手机本地设置</strong>
         <p>请在 Android App 中打开此页。这里不会展示或保存虚构偏好。</p>
@@ -370,16 +632,8 @@ function SettingsUnavailable() {
 function SettingsLoading() {
   return (
     <section className="standard-page settings-page">
-      <header className="page-title-row">
-        <div>
-          <p className="eyebrow">正在同步</p>
-          <h1>设置</h1>
-        </div>
-      </header>
-      <div className={styles.stateCard} role="status">
-        <strong>正在读取本地设置</strong>
-        <p>所有偏好只保存在这台手机上。</p>
-      </div>
+      <p className="eyebrow">正在同步</p>
+      <LoadingSkeleton label="正在读取本地设置" />
     </section>
   );
 }
@@ -387,12 +641,7 @@ function SettingsLoading() {
 function SettingsError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <section className="standard-page settings-page">
-      <header className="page-title-row">
-        <div>
-          <p className="eyebrow">读取失败</p>
-          <h1>设置</h1>
-        </div>
-      </header>
+      <p className="eyebrow">读取失败</p>
       <div className={styles.stateCard} role="alert">
         <strong>{message}</strong>
         <button className="secondary-button" type="button" onClick={onRetry}>

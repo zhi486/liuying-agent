@@ -6,7 +6,7 @@
   "payload": {
     "helloId": "00000000-0000-4000-8000-000000000001",
     "buildId": "liuying-web-2026.08.26",
-    "capabilities": ["snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1", "deepseek-companion.v1"],
+    "capabilities": ["snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1", "deepseek-companion.v1", "agent.tasks.v1", "memory.v1", "agent.cloud.tasks.v1"],
     "snapshot": {
       "revision": 7,
       "dataQuality": { "gps": "fresh", "heartRate": "fresh" },

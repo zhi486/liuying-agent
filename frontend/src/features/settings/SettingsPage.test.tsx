@@ -1,4 +1,6 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as renderView, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useBridgeStore } from '../../bridge/bridgeStore';
@@ -6,6 +8,7 @@ import type { AppSnapshot } from '../../bridge/contract';
 import { SettingsPage } from './SettingsPage';
 
 const sendNativeCommandMock = vi.hoisted(() => vi.fn());
+const render = (view: ReactElement) => renderView(<MemoryRouter>{view}</MemoryRouter>);
 
 vi.mock('../../bridge/bridgeStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../bridge/bridgeStore')>();
@@ -178,17 +181,62 @@ describe('真实本地设置', () => {
     await waitFor(() => expect(sendNativeCommandMock).toHaveBeenCalledWith('settings.query', {}));
   });
 
+  it('以分组玻璃行呈现五个真实入口，并保留记忆返回来源', async () => {
+    sendNativeCommandMock.mockResolvedValue(accepted(settings));
+    useBridgeStore.setState({ status: 'ready', snapshot });
+
+    await act(async () => {
+      renderView(
+        <MemoryRouter initialEntries={['/settings']}>
+          <SettingsPage />
+          <LocationProbe />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(screen.getByRole('heading', { name: 'Agent 与数据' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Agent 与数据' }).parentElement).toHaveTextContent(
+      '本机',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('本机已同步');
+    expect(screen.getByRole('status').querySelector('svg')).toBeInTheDocument();
+
+    const entries = [
+      ['账单与用量', '/settings/usage', '查看模型调用、费用和本机用量记录', '用量'],
+      ['聊天授权', '/settings/chat', '管理哪些会话可以发送给在线 Agent', '授权'],
+      ['MCP 插件', '/settings/plugins', '连接工具与数据源，管理本机插件授权', '连接'],
+      ['长期记忆', '/memories', '管理跑步习惯、表达偏好和已保存事实', '记忆'],
+      ['用户须知', '/settings/notices', '查看联网、记忆和语音相关说明', '说明'],
+    ] as const;
+
+    for (const [name, path, description, category] of entries) {
+      const link = screen.getByRole('link', { name });
+      expect(link).toHaveAttribute('href', path);
+
+      const describedBy = link.getAttribute('aria-describedby')?.split(' ') ?? [];
+      expect(describedBy.map((id) => document.getElementById(id)?.textContent?.trim())).toEqual([
+        description,
+        category,
+      ]);
+    }
+
+    fireEvent.click(screen.getByRole('link', { name: '长期记忆' }));
+    expect(screen.getByTestId('location-pathname')).toHaveTextContent('/memories');
+    expect(screen.getByTestId('location-state')).toHaveTextContent('{"from":"/settings"}');
+  });
+
   it('切换晨光时写入原生设置并立即更新页面主题', async () => {
+    const morningSettings = { ...settings, themePreference: 'morning' as const };
     sendNativeCommandMock
       .mockResolvedValueOnce(accepted(settings))
-      .mockResolvedValueOnce(accepted({ ...settings, themePreference: 'morning' }));
+      .mockResolvedValueOnce(accepted(morningSettings));
     useBridgeStore.setState({ status: 'ready', snapshot });
     await act(async () => {
       render(<SettingsPage />);
     });
     await screen.findByText('本机已同步');
 
-    fireEvent.click(screen.getByRole('button', { name: /晨光/ }));
+    fireEvent.click(screen.getByRole('radio', { name: '晨光，清爽浅色' }));
 
     expect(document.documentElement.dataset.theme).toBe('morning');
     await waitFor(() =>
@@ -196,7 +244,111 @@ describe('真实本地设置', () => {
         themePreference: 'morning',
       }),
     );
+    expect(await screen.findByRole('radio', { name: '晨光，清爽浅色' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(await screen.findByText('外观已保存')).toBeVisible();
+  });
+
+  it.each([
+    ['ArrowRight', 'night', 'morning'],
+    ['ArrowDown', 'night', 'morning'],
+    ['ArrowLeft', 'morning', 'night'],
+    ['ArrowUp', 'morning', 'night'],
+    ['Home', 'night', 'morning'],
+    ['End', 'morning', 'night'],
+  ] as const)('主题单选组支持 %s 并维护 roving tabindex', async (key, initial, next) => {
+    const initialSettings = { ...settings, themePreference: initial };
+    const nextSettings = { ...settings, themePreference: next };
+    sendNativeCommandMock
+      .mockResolvedValueOnce(accepted(initialSettings))
+      .mockResolvedValueOnce(accepted(nextSettings));
+    useBridgeStore.setState({
+      status: 'ready',
+      snapshot: { ...snapshot, settings: initialSettings, theme: initial },
+    });
+    document.documentElement.dataset.theme = initial;
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    await screen.findByText('本机已同步');
+
+    const initialRadio = screen.getByRole('radio', {
+      name: initial === 'morning' ? '晨光，清爽浅色' : '夜萤，沉静深色',
+    });
+    const nextRadio = screen.getByRole('radio', {
+      name: next === 'morning' ? '晨光，清爽浅色' : '夜萤，沉静深色',
+    });
+
+    expect(initialRadio).toHaveAttribute('tabindex', '0');
+    expect(nextRadio).toHaveAttribute('tabindex', '-1');
+    initialRadio.focus();
+    fireEvent.keyDown(initialRadio, { key });
+
+    expect(document.documentElement.dataset.theme).toBe(next);
+    expect(nextRadio).toHaveFocus();
+    await waitFor(() => {
+      expect(nextRadio).toHaveAttribute('aria-checked', 'true');
+      expect(nextRadio).toHaveAttribute('tabindex', '0');
+      expect(initialRadio).toHaveAttribute('aria-checked', 'false');
+      expect(initialRadio).toHaveAttribute('tabindex', '-1');
+    });
+    expect(sendNativeCommandMock).toHaveBeenLastCalledWith('settings.update', {
+      themePreference: next,
+    });
+  });
+
+  it('保存主题时标记整组忙碌并锁定全部选项', async () => {
+    let resolveUpdate: (result: ReturnType<typeof accepted>) => void = () => {};
+    const pendingUpdate = new Promise<ReturnType<typeof accepted>>((resolve) => {
+      resolveUpdate = resolve;
+    });
+    sendNativeCommandMock
+      .mockResolvedValueOnce(accepted(settings))
+      .mockReturnValueOnce(pendingUpdate);
+    useBridgeStore.setState({ status: 'ready', snapshot });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    await screen.findByText('本机已同步');
+
+    fireEvent.click(screen.getByRole('radio', { name: '晨光，清爽浅色' }));
+
+    const group = screen.getByRole('radiogroup', { name: '界面主题' });
+    expect(group).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('radio', { name: '晨光，清爽浅色' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: '夜萤，沉静深色' })).toBeDisabled();
+
+    await act(async () => {
+      resolveUpdate(accepted({ ...settings, themePreference: 'morning' }));
+      await pendingUpdate;
+    });
+
+    expect(group).toHaveAttribute('aria-busy', 'false');
+    expect(screen.getByRole('radio', { name: '晨光，清爽浅色' })).toBeEnabled();
+  });
+
+  it('主题保存失败时回滚页面主题且不宣称已保存', async () => {
+    sendNativeCommandMock
+      .mockResolvedValueOnce(accepted(settings))
+      .mockRejectedValueOnce(new Error('主题保存失败'));
+    useBridgeStore.setState({ status: 'ready', snapshot });
+    await act(async () => {
+      render(<SettingsPage />);
+    });
+    await screen.findByText('本机已同步');
+
+    fireEvent.click(screen.getByRole('radio', { name: '晨光，清爽浅色' }));
+
+    expect(document.documentElement.dataset.theme).toBe('morning');
+    expect(await screen.findByText('主题保存失败')).toBeVisible();
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('night'));
+    expect(screen.getByRole('radio', { name: '夜萤，沉静深色' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.queryByText('外观已保存')).not.toBeInTheDocument();
   });
 
   it('校验后保存跑步配置，并明确下一次开跑生效', async () => {
@@ -221,7 +373,13 @@ describe('真实本地设置', () => {
     fireEvent.change(screen.getByLabelText(/目标配速/), { target: { value: '6:30' } });
     fireEvent.change(screen.getByLabelText(/目标距离/), { target: { value: '8' } });
     fireEvent.change(screen.getByLabelText(/最大心率/), { target: { value: '170' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: /语音提醒/ }));
+    const voiceToggle = screen.getByRole('checkbox', { name: '语音提醒' });
+    expect(voiceToggle).toBeChecked();
+    expect(voiceToggle.closest('label')).toHaveTextContent('已开启');
+    fireEvent.click(voiceToggle);
+    expect(voiceToggle).not.toBeChecked();
+    expect(voiceToggle.closest('label')).toHaveTextContent('已关闭');
+    expect(sendNativeCommandMock).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByLabelText('陪跑语气'), { target: { value: 'gentle' } });
     fireEvent.change(screen.getByLabelText('动态效果'), { target: { value: 'reduced' } });
     fireEvent.click(screen.getByRole('button', { name: '保存跑步偏好' }));
@@ -328,4 +486,15 @@ function accepted(value: AppSnapshot['settings']) {
       settings: value,
     },
   };
+}
+
+function LocationProbe() {
+  const location = useLocation();
+
+  return (
+    <>
+      <span data-testid="location-pathname">{location.pathname}</span>
+      <span data-testid="location-state">{JSON.stringify(location.state)}</span>
+    </>
+  );
 }

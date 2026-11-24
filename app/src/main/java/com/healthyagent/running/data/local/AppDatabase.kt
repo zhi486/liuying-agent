@@ -11,8 +11,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * Room 数据库 — 管理跑步会话 + 分段数据
  */
 @Database(
-    entities = [RunSessionEntity::class, SplitEntity::class, RoutePointEntity::class],
-    version = 2,
+    entities = [RunSessionEntity::class, SplitEntity::class, RoutePointEntity::class, RunMetricSampleEntity::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,9 +30,33 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "healthy_agent.db",
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `run_metric_samples` (
+                        `sessionId` TEXT NOT NULL,
+                        `sequence` INTEGER NOT NULL,
+                        `startElapsedSeconds` INTEGER NOT NULL,
+                        `endElapsedSeconds` INTEGER NOT NULL,
+                        `segmentId` INTEGER NOT NULL,
+                        `averagePaceSecPerKm` REAL,
+                        `averageHeartRate` REAL,
+                        `paceValidSeconds` INTEGER NOT NULL,
+                        `heartRateValidSeconds` INTEGER NOT NULL,
+                        PRIMARY KEY(`sessionId`, `sequence`),
+                        FOREIGN KEY(`sessionId`) REFERENCES `run_sessions`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_run_metric_samples_sessionId` ON `run_metric_samples` (`sessionId`)")
             }
         }
 

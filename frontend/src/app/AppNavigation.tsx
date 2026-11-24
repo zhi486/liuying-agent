@@ -2,9 +2,12 @@ import { ChatCircleDots, PersonSimpleRun } from '@phosphor-icons/react';
 import { Link, useLocation } from 'react-router-dom';
 
 export function AppNavigation() {
-  const isAgentPage = useLocation().pathname === '/agent';
+  const pathname = useLocation().pathname;
+  if (pathname !== '/agent' && pathname !== '/run') return null;
+
+  const isAgentPage = pathname === '/agent';
   const target = isAgentPage ? '/run' : '/agent';
-  const label = isAgentPage ? '跑步' : '对话';
+  const label = isAgentPage ? '跑步' : '聊天';
   const Icon = isAgentPage ? PersonSimpleRun : ChatCircleDots;
 
   return (

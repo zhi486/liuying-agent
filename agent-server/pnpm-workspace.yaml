@@ -1,0 +1,9 @@
+allowBuilds:
+  esbuild: true
+  workerd: true
+minimumReleaseAgeExclude: []
+overrides:
+  '@modelcontextprotocol/client>zod': 4.5.0
+  '@modelcontextprotocol/core>zod': 4.5.0
+patchedDependencies:
+  '@huggingface/tokenizers@0.2.0': patches/@huggingface__tokenizers@0.2.0.patch

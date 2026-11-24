@@ -1,0 +1,57 @@
+/* 双类优先级使业务页的通用 button 样式不能重绘返回控件。 */
+.control.control {
+  --back-surface: var(--canvas);
+  --back-color: var(--accent);
+  --back-border: var(--line-strong);
+  display: inline-flex;
+  flex: none;
+  width: var(--back-control-size);
+  height: var(--back-control-size);
+  min-height: var(--back-control-size);
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--back-border);
+  border-radius: var(--radius-circle);
+  background: var(--back-surface);
+  color: var(--back-color);
+  box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--back-surface) 72%, transparent);
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.control.control[data-inverse] {
+  --back-surface: var(--run-background, var(--canvas));
+  --back-color: var(--sport-accent);
+  --back-border: rgb(255 255 255 / 24%);
+  box-shadow: none;
+}
+
+.control.control[data-sticky] {
+  position: sticky;
+  z-index: 2;
+  top: var(--space-2);
+}
+
+.control.control > svg {
+  width: var(--back-icon-size);
+  height: var(--back-icon-size);
+}
+
+.control.control:hover:enabled,
+a.control.control:hover {
+  background: color-mix(in srgb, var(--back-color) 8%, var(--back-surface));
+}
+
+.control.control:focus-visible {
+  outline: 2px solid var(--back-color);
+  outline-offset: 3px;
+}
+
+.control.control:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

@@ -1,0 +1,333 @@
+.phone {
+  min-height: 600px;
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+.timelineHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 2rem 0 1rem;
+}
+.timelineHeading p {
+  margin: 0.25rem 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.phone[data-variant='B'] .steps {
+  padding-left: 0.5rem;
+}
+.phone[data-variant='B'] .steps li {
+  position: relative;
+  background: transparent;
+  border-radius: 0;
+  min-height: 70px;
+  padding-left: 1.5rem;
+}
+.phone[data-variant='B'] .steps li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.report {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  padding: 1.25rem 0;
+}
+.report dt {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+.report dd {
+  margin: 0.35rem 0 0;
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+.report small {
+  font-size: 0.75rem;
+}
+.report > div:last-child {
+  grid-column: 1 / -1;
+}
+.report > div:last-child dd {
+  font-size: 1rem;
+}
+.readerHeading {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  margin-top: 2rem;
+}
+.readerHeading h4 {
+  flex: 1;
+  font-size: 1rem;
+}
+.readerHeading span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.phone blockquote {
+  margin: 0.5rem 0 1.5rem;
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+.phone[data-variant='B'] .list button {
+  min-height: 76px;
+  background: transparent;
+  justify-content: flex-start;
+}
+.phone[data-variant='C'][data-kind='sourceFeedback'] .evidence {
+  margin-top: 1.5rem;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 1rem;
+}
+.draftLanding {
+  margin: 1.5rem 0;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+.draftLanding h4 {
+  font-size: 1rem;
+  margin: 0.75rem 0 0;
+}
+.draftLanding p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.fullEditor {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.fullEditor h4 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+}
+.fullEditor label {
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.fullEditor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  flex: 1;
+  min-height: 210px;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.fullEditor .actions {
+  margin-top: 1rem;
+  justify-content: space-between;
+}
+.fullEditor textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.message {
+  margin: 2rem 0 1.5rem 1.5rem;
+  padding: 0.85rem 1rem;
+  border-radius: 20px;
+  background: var(--surface);
+}
+.meta {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+.phone button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.phone .disclosure {
+  display: flex;
+  width: 100%;
+  background: transparent;
+  padding: 0.5rem 0;
+  text-align: left;
+}
+.disclosure span {
+  flex: 1;
+}
+.steps,
+.process {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 1.5rem;
+}
+.steps li,
+.process li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0;
+  font-size: 0.75rem;
+}
+.steps small,
+.process small {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
+.steps li {
+  padding: 0.8rem 0.65rem;
+  background: var(--surface);
+  border-radius: 12px;
+  margin-bottom: 0.4rem;
+}
+.phone .demo {
+  display: flex;
+  margin: 2rem auto 0;
+  background: transparent;
+  color: var(--text-muted);
+}
+.phone .citation {
+  position: relative;
+  min-width: 12px;
+  min-height: 12px;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  margin-left: 0.15rem;
+  border-radius: 50%;
+  font-size: 0.425rem;
+  line-height: 1;
+  color: #414141;
+  background: #dedede;
+  vertical-align: super;
+}
+.phone .citation:hover:not(:disabled) {
+  background: #cacaca;
+}
+.citation::before {
+  content: '';
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+.phone .list button {
+  display: flex;
+  width: 100%;
+  text-align: left;
+}
+.list span {
+  flex: 1;
+}
+.evidence {
+  margin-top: 1rem;
+  padding: 0.75rem 0;
+}
+.evidence h4 {
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.phone button[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.recovery {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+.feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.feedback svg,
+.bottom > svg {
+  flex: none;
+}
+.editor {
+  margin-top: 1rem;
+}
+.editor label {
+  display: block;
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.8rem;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  margin-bottom: 0.5rem;
+}
+.editor textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.bottom {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  margin-top: auto;
+  background: var(--glass-strong);
+  backdrop-filter: blur(16px);
+  border-radius: 18px;
+}
+.bottom > div {
+  flex: 1;
+  min-width: 0;
+}
+.bottom strong {
+  font-size: 0.8rem;
+}
+.bottom p {
+  margin: 0.3rem 0 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  margin-top: auto;
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.bottom + .composer {
+  margin-top: 0.75rem;
+}
+.phone .composer button {
+  border-radius: 50%;
+}

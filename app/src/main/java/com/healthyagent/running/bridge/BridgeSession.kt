@@ -60,6 +60,12 @@ class BridgeSession(
         }
     }
 
+    /** 仅通知页面重读原生状态，不把暂存正文直接广播给旧文档。 */
+    fun pushCloudChanged() {
+        val epoch = synchronized(stateLock) { if (activeHelloId == null) return; documentEpoch }
+        sendEnvelopeForEpoch(epoch, BridgeMessageType.EVENT, buildJsonObject { put("name", "cloud.changed") })
+    }
+
     private fun acceptHello(envelope: BridgeEnvelope) {
         val epoch = synchronized(stateLock) {
             activeHelloId = envelope.id
@@ -72,7 +78,7 @@ class BridgeSession(
                 "capabilities",
                 BridgeCodec.json.parseToJsonElement(
                     BridgeCodec.json.encodeToString(
-                        listOf("snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1", "deepseek-companion.v1"),
+                        listOf("snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1", "deepseek-companion.v1", "agent.tasks.v1", "memory.v1", "agent.cloud.tasks.v1"),
                     ),
                 ),
             )

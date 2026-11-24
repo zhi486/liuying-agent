@@ -1,0 +1,47 @@
+{
+  "submission": {
+    "clientRequestId": "11111111-1111-4111-8111-111111111111",
+    "localTaskId": "22222222-2222-4222-8222-222222222222",
+    "prompt": "查找今晚的安排",
+    "consent": { "cloudProcessing": true, "runSummaries": false },
+    "summaries": [],
+    "conversation": {
+      "version": "conversation_v1",
+      "id": "00000004-1111-4111-8111-000000000004",
+      "approved": true,
+      "messages": []
+    },
+    "mcpTools": {
+      "version": "native_mcp_v1",
+      "services": [{
+        "serviceId": "00000001-1111-4111-8111-000000000001",
+        "revision": "00000002-1111-4111-8111-000000000002",
+        "generation": "00000003-1111-4111-8111-000000000003"
+      }]
+    }
+  },
+  "confirmation": {
+    "version": "native_mcp_v1",
+    "requestId": "11111111-1111-4111-8111-111111111111",
+    "taskId": "00000005-1111-4111-8111-000000000005",
+    "serviceId": "00000001-1111-4111-8111-000000000001",
+    "revision": "00000002-1111-4111-8111-000000000002",
+    "generation": "00000003-1111-4111-8111-000000000003",
+    "endpoint": "https://tools.example.com/mcp",
+    "invocationId": "00000006-1111-4111-8111-000000000006",
+    "intentDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "argumentsDigest": "0a6b0a94ee44476d3f690c2d417cc611d591e5c713b7900af9d0261b4491faa2",
+    "modelName": "mcp_00000001111141118111000000000001_0",
+    "name": "notes.search",
+    "mode": "confirm",
+    "argumentsJson": "{\"query\":\"今晚\",\"pace\":6.5}",
+    "expiresAtMillis": 31000
+  },
+  "decision": {
+    "version": "native_mcp_v1",
+    "invocationId": "00000006-1111-4111-8111-000000000006",
+    "intentDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "generation": "00000003-1111-4111-8111-000000000003",
+    "decision": "approve"
+  }
+}

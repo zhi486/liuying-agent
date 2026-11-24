@@ -2,6 +2,16 @@ package com.healthyagent.running.di
 
 import android.os.Build
 import android.os.SystemClock
+import com.healthyagent.running.agent.AgentTaskService
+import com.healthyagent.running.agent.cloud.CloudAgentService
+import com.healthyagent.running.agent.cloud.CloudChatConsent
+import com.healthyagent.running.agent.cloud.CloudRunSummary
+import com.healthyagent.running.agent.cloud.CloudAgentConfiguration
+import com.healthyagent.running.agent.cloud.CloudDeviceCredentials
+import com.healthyagent.running.agent.cloud.CloudTaskHttpClient
+import com.healthyagent.running.agent.memory.MemoryService
+import com.healthyagent.running.agent.memory.MemoryToolConsent
+import com.healthyagent.running.agent.local.AgentDatabase
 import com.healthyagent.running.ai.DeepseekCompanionTextSource
 import com.healthyagent.running.data.local.DeepseekCredentialsStore
 import com.healthyagent.running.coordinator.PausedHeartRateMonitor
@@ -56,6 +66,51 @@ import org.koin.dsl.module
  * Koin DI 模块定义
  */
 val appModule = module {
+    single { AgentDatabase.create(androidContext()) }
+    single { AgentTaskService(get<AgentDatabase>().taskDao()) }
+    single { MemoryService(get<AgentDatabase>().memoryDao()) }
+    single { CloudDeviceCredentials.create(androidContext()) }
+    single {
+        com.healthyagent.running.agent.voice.VoiceInputService(
+            com.healthyagent.running.agent.cloud.CloudVoiceStreamClient(get<CloudAgentConfiguration>()::read,
+                get<CloudDeviceCredentials>(), com.healthyagent.running.agent.voice.AndroidVoiceRecorder()),
+        )
+    }
+    single { CloudAgentConfiguration(File(androidContext().noBackupFilesDir, "cloud-agent/identity.json"), get()) }
+    single { CloudChatConsent.create(File(androidContext().noBackupFilesDir, "cloud-agent/chat-consent.json")) }
+    single { MemoryToolConsent.create(File(androidContext().noBackupFilesDir, "cloud-agent/memory-consent.json")) }
+    single { com.healthyagent.running.agent.mcp.McpPrivateConfiguration.create(androidContext()) }
+    single { com.healthyagent.running.agent.mcp.McpTaskConfirmation() }
+    single {
+        com.healthyagent.running.agent.mcp.McpTaskRunner(get<CloudAgentConfiguration>()::read, get(),
+            api = { CloudTaskHttpClient(it.origin, get<CloudDeviceCredentials>()) },
+            management = { CloudTaskHttpClient(it.origin, get<CloudDeviceCredentials>()) },
+            confirm = get<com.healthyagent.running.agent.mcp.McpTaskConfirmation>()::ask)
+    }
+    single { com.healthyagent.running.agent.mcp.McpDiscoveryJournal.create(File(androidContext().noBackupFilesDir, "mcp-discoveries")) }
+    single {
+        com.healthyagent.running.agent.mcp.McpDiscoveryService(get<CloudAgentConfiguration>()::read, get(),
+            apiFactory = { CloudTaskHttpClient(it.origin, get<CloudDeviceCredentials>()) }, journal = get())
+    }
+    single {
+        com.healthyagent.running.agent.mcp.McpManagementService(get<CloudAgentConfiguration>()::read, get(),
+            api = { CloudTaskHttpClient(it.origin, get<CloudDeviceCredentials>()) }, discovery = get())
+    }
+    single {
+        val configuration = get<CloudAgentConfiguration>()
+        val credentials = get<CloudDeviceCredentials>()
+        val runDao = get<RunSessionDao>()
+        CloudAgentService(get(), configuration::read, { CloudTaskHttpClient(it.origin, credentials, streaming = true) },
+            loadRunSummary = { id -> runDao.getSession(id)?.let(CloudRunSummary::from) }, chatConsent = get(), memoryConsent = get(), mcpRunner = get(),
+            chatSpeech = get(), speechAllowed = {
+                val settings = get<AtomicReference<SettingsSnapshot>>().get()
+                settings.ttsEnabled && settings.fishApiKey.isNotBlank() && settings.fishReferenceId.isNotBlank() &&
+                    get<RunSessionManager>().currentState !in setOf(
+                        com.healthyagent.running.core.model.RunState.PREPARING,
+                        com.healthyagent.running.core.model.RunState.RUNNING,
+                        com.healthyagent.running.core.model.RunState.PAUSED)
+            })
+    }
     single { DeepseekCredentialsStore(File(androidContext().noBackupFilesDir, "deepseek/key")) }
 
     single<DiagnosticLogger> {

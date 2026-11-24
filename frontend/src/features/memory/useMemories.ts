@@ -6,12 +6,14 @@ import {
   memoryDetailSchema,
   memoryPageSchema,
   type MemoryRecord,
+  type MemoryRevision,
 } from '../../bridge/memories';
 
 const PAGE_SIZE = 20;
 type Change =
   | { kind: 'create'; content: string }
   | { kind: 'update'; memory: MemoryRecord; content: string }
+  | { kind: 'restore'; memory: MemoryRecord; revision: MemoryRevision }
   | { kind: 'delete'; memory: MemoryRecord };
 
 export function useMemories(status: 'unavailable' | 'connecting' | 'ready' | 'error') {
@@ -69,9 +71,14 @@ export function useMemories(status: 'unavailable' | 'connecting' | 'ready' | 'er
 
   async function change(change: Change): Promise<boolean> {
     if (status !== 'ready' || locked.current) return false;
-    if (change.kind !== 'delete' && !memoryContentSchema.safeParse(change.content).success)
-      return false;
-    const content = change.kind === 'delete' ? '' : change.content.trim();
+    const content =
+      change.kind === 'delete'
+        ? ''
+        : change.kind === 'restore'
+          ? change.revision.content
+          : change.content.trim();
+    if (change.kind !== 'delete' && !memoryContentSchema.safeParse(content).success) return false;
+    if (change.kind === 'restore' && change.revision.version >= change.memory.version) return false;
     const generation = epoch.current;
     locked.current = true;
     sequence.current++;
@@ -92,15 +99,22 @@ export function useMemories(status: 'unavailable' | 'connecting' | 'ready' | 'er
                 version: change.memory.version,
                 content,
               })
-            : await sendNativeCommand('memory.delete', {
-                memoryId,
-                version: change.memory.version,
-                confirmed: true,
-              });
+            : change.kind === 'restore'
+              ? await sendNativeCommand('memory.restore', {
+                  memoryId,
+                  version: change.memory.version,
+                  targetVersion: change.revision.version,
+                  confirmed: true,
+                })
+              : await sendNativeCommand('memory.delete', {
+                  memoryId,
+                  version: change.memory.version,
+                  confirmed: true,
+                });
       if (generation !== epoch.current) return false;
       if (result.status === 'rejected') {
         if (result.error.code === 'SESSION_CONFLICT') {
-          setError('这条记忆已变化。请关闭编辑或删除确认，刷新后重新操作；草稿未清空。');
+          setError('这条记忆已变化。请关闭编辑或操作确认，刷新后重新操作；草稿未清空。');
           return false;
         }
         throw new Error();
@@ -121,7 +135,13 @@ export function useMemories(status: 'unavailable' | 'connecting' | 'ready' | 'er
       }
       if (change.kind === 'create') retry.current = null;
       setPage(null);
-      setNotice(change.kind === 'delete' ? '已删除这条记忆。' : '记忆已保存在本机。');
+      setNotice(
+        change.kind === 'delete'
+          ? '已删除这条记忆。'
+          : change.kind === 'restore'
+            ? '已恢复为新版本，原有版本仍保留。'
+            : '记忆已保存在本机。',
+      );
       void query(0);
       return true;
     } catch {

@@ -40,10 +40,16 @@ describe('跑步记录', () => {
     render(<HistoryPage />);
 
     expect(screen.getByText('正在读取本地记录')).toBeVisible();
-    expect(await screen.findByText('5.02')).toBeVisible();
+    expect(
+      await screen.findByRole('link', { name: /查看 9月1日 19:14 跑步总结，5.02 公里/ }),
+    ).toHaveAttribute('href', '/history/run-latest');
     expect(screen.getByText('30:18')).toBeVisible();
-    expect(screen.getByText('4.08 km →')).toBeVisible();
-    expect(screen.getByText('共 2 次')).toBeVisible();
+    expect(screen.getByRole('link', { name: /查看 8月29日 18:00 的跑步总结/ })).toHaveAttribute(
+      'href',
+      '/history/run-older',
+    );
+    expect(screen.getByText('2 次跑步')).toBeVisible();
+    expect(screen.getByRole('link', { name: /演示记录/ })).toHaveAttribute('href', '/history/demo');
     expect(screen.queryByText('本周计划')).not.toBeInTheDocument();
     expect(screen.queryByText('趋势洞察')).not.toBeInTheDocument();
     expect(sendNativeCommandMock).toHaveBeenCalledWith('history.query', {
@@ -102,7 +108,9 @@ describe('跑步记录', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '加载更多' }));
 
-    expect(await screen.findByText('4.08 km →')).toBeVisible();
+    expect(
+      await screen.findByRole('link', { name: /查看 8月29日 18:00 的跑步总结/ }),
+    ).toBeVisible();
     expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument();
     await waitFor(() =>
       expect(sendNativeCommandMock).toHaveBeenLastCalledWith('history.query', {

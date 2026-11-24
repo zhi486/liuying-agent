@@ -126,21 +126,6 @@ describe('Bridge v1 schema', () => {
     expect(() => bridgeEnvelopeSchema.parse(fixture)).not.toThrow();
   });
 
-  it('旧版及 Agent 扩展版 ready 能力清单均可接入，但拒绝不完整扩展', () => {
-    const ready = fixtureByType('ready') as { payload: { capabilities: string[] } };
-    const legacy = ready.payload.capabilities.slice(0, 6);
-    const extended = [...legacy, 'agent.tasks.v1', 'memory.v1', 'agent.cloud.tasks.v1'];
-    const accepts = (capabilities: string[]) =>
-      bridgeEnvelopeSchema.safeParse({
-        ...ready,
-        payload: { ...ready.payload, capabilities },
-      }).success;
-
-    expect(accepts(legacy)).toBe(true);
-    expect(accepts(extended)).toBe(true);
-    expect(accepts(extended.slice(0, 7))).toBe(false);
-  });
-
   it.each(Object.entries(invalidFixtures))('拒绝非法样本 %s', (_, fixture) => {
     expect(() => bridgeEnvelopeSchema.parse(fixture)).toThrow();
   });

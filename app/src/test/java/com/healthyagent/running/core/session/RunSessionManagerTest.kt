@@ -17,6 +17,38 @@ import org.junit.Test
  */
 class RunSessionManagerTest {
 
+    @Test
+    fun `五秒序列在暂停结束时保留短窗口且恢复后断线`() {
+        val manager = RunSessionManager()
+        manager.startSession(RunConfig(targetDistanceMeters = 5000.0))
+        (0L..7L).forEach { manager.onFrame(makeFrame(it)) }
+        manager.pause()
+        assertEquals(listOf(5L, 7L), manager.currentSession!!.metricSamples.map { it.endElapsedSeconds })
+        manager.onFrame(makeFrame(99))
+        manager.resume()
+        (7L..10L).forEach { manager.onFrame(makeFrame(it)) }
+        val saved = manager.finishSession()!!
+        assertEquals(listOf(0, 0, 1), saved.metricSamples.map { it.segmentId })
+        assertEquals(400.0, saved.metricSamples.last().averagePaceSecPerKm!!, 0.01)
+        assertEquals(3, saved.metricSamples.size)
+    }
+
+    @Test
+    fun `恢复检查点保留旧序列且不跨进程计算距离`() {
+        val first = RunSessionManager()
+        first.startSession(RunConfig(targetDistanceMeters = 5000.0))
+        (0L..5L).forEach { first.onFrame(makeFrame(it)) }
+        val restored = RunSessionManager()
+        restored.restoreSession(first.currentSession!!)
+        (6L..10L).forEach { restored.onFrame(makeFrame(it)) }
+        val points = restored.finishSession()!!.metricSamples
+        assertEquals(2, points.size)
+        assertEquals(1, points.last().segmentId)
+        assertNull(points.last().averagePaceSecPerKm)
+        restored.startSession(RunConfig(targetDistanceMeters = 5000.0))
+        assertTrue(restored.currentSession!!.metricSamples.isEmpty())
+    }
+
     private val config = RunConfig(targetDistanceMeters = 5000.0)
 
     private fun makeFrame(

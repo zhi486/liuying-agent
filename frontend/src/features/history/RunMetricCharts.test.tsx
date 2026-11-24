@@ -35,6 +35,7 @@ beforeEach(() => {
 it('展示两种曲线，详情可查看窗口数值并关闭', async () => {
   send.mockResolvedValue({ status: 'accepted', data: page });
   render(<RunMetricCharts record={record} />);
+  fireEvent.click(await screen.findByRole('button', { name: '心率' }));
   fireEvent.click(await screen.findByRole('button', { name: '查看跑步心率区间详情' }));
   const dialog = screen.getByRole('dialog', { name: '跑步心率区间' });
   expect(within(dialog).getByText('心率区间用时分布')).toBeVisible();

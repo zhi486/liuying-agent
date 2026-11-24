@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { agentCommandSchemas } from './agentTasks';
-import { memoryCommandSchemas } from './memories';
+import { memoryCommandSchemas, memoryExportCommandSchemas } from './memories';
 import { cloudCommandSchemas } from './cloudAgent';
 import { voiceCommandSchemas } from './voiceInput';
+import { mcpCommandSchemas } from './mcp';
 
 import type {
   AppSnapshot,
@@ -282,9 +283,11 @@ export const historySeriesResultSchema: z.ZodType<HistorySeriesResult> = z
 
 const commandPayloadSchema = z.discriminatedUnion('name', [
   ...voiceCommandSchemas,
+  ...mcpCommandSchemas,
   ...agentCommandSchemas,
   ...cloudCommandSchemas,
   ...memoryCommandSchemas,
+  ...memoryExportCommandSchemas,
   z
     .object({
       helloId: canonicalUuidV4Schema,
@@ -409,26 +412,16 @@ const readyEnvelopeSchema = z
       .object({
         helloId: canonicalUuidV4Schema,
         buildId: z.string().min(1),
-        capabilities: z.union([
-          z.tuple([
-            z.literal('snapshot.v1'),
-            z.literal('history.pagination'),
-            z.literal('settings.v1'),
-            z.literal('heart-rate-alerts.v1'),
-            z.literal('data-quality.v1'),
-            z.literal('deepseek-companion.v1'),
-          ]),
-          z.tuple([
-            z.literal('snapshot.v1'),
-            z.literal('history.pagination'),
-            z.literal('settings.v1'),
-            z.literal('heart-rate-alerts.v1'),
-            z.literal('data-quality.v1'),
-            z.literal('deepseek-companion.v1'),
-            z.literal('agent.tasks.v1'),
-            z.literal('memory.v1'),
-            z.literal('agent.cloud.tasks.v1'),
-          ]),
+        capabilities: z.tuple([
+          z.literal('snapshot.v1'),
+          z.literal('history.pagination'),
+          z.literal('settings.v1'),
+          z.literal('heart-rate-alerts.v1'),
+          z.literal('data-quality.v1'),
+          z.literal('deepseek-companion.v1'),
+          z.literal('agent.tasks.v1'),
+          z.literal('memory.v1'),
+          z.literal('agent.cloud.tasks.v1'),
         ]),
         snapshot: appSnapshotSchema,
       })
@@ -496,6 +489,7 @@ const eventEnvelopeSchema = z
     ...baseEnvelopeShape,
     type: z.literal('event'),
     payload: z.discriminatedUnion('name', [
+      z.object({ name: z.literal('cloud.changed') }).strict(),
       z
         .object({
           name: z.literal('permission.result'),

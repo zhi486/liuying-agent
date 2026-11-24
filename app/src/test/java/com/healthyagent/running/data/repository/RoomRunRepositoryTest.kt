@@ -1,10 +1,12 @@
 package com.healthyagent.running.data.repository
 
 import com.healthyagent.running.core.model.RoutePoint
+import com.healthyagent.running.core.model.RunMetricSample
 import com.healthyagent.running.core.model.RunSession
 import com.healthyagent.running.core.model.RunState
 import com.healthyagent.running.core.model.Split
 import com.healthyagent.running.data.local.RoutePointEntity
+import com.healthyagent.running.data.local.RunMetricSampleEntity
 import com.healthyagent.running.data.local.RunSessionDao
 import com.healthyagent.running.data.local.RunSessionEntity
 import com.healthyagent.running.data.local.SplitEntity
@@ -14,6 +16,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RoomRunRepositoryTest {
+    @Test
+    fun `检查点与结束记录读回五秒序列且保留缺失与覆盖秒数`() = runTest {
+        val entity = RunSessionEntity(id = "samples", startTimeMillis = 1000, state = "RUNNING")
+        val dao = RecordingRunSessionDao(active = entity, session = entity)
+        val repository = RoomRunRepository(dao)
+        val samples = listOf(
+            RunMetricSample(0, 5, 0, 400.0, 142.5, 5, 4),
+            RunMetricSample(5, 8, 1, null, null, 0, 0),
+        )
+        val session = RunSession(id = "samples", startTimeMillis = 1000, metricSamples = samples)
+        repository.checkpointSession(session)
+        assertEquals(samples, repository.getActiveSession()!!.metricSamples)
+        repository.saveSession(session.copy(metricSamples = samples.take(1)))
+        assertEquals(samples.take(1), repository.getSessionWithSplits("samples")!!.metricSamples)
+    }
     @Test
     fun `历史分页使用 limit offset 和 count 且不加载 splits`() = runTest {
         val dao = RecordingRunSessionDao(
@@ -125,6 +142,10 @@ private class RecordingRunSessionDao(
     private val session: RunSessionEntity? = null,
     private val routePoints: List<RoutePointEntity> = emptyList(),
 ) : RunSessionDao {
+    private val metricSamples = mutableListOf<RunMetricSampleEntity>()
+    override suspend fun insertMetricSamples(samples: List<RunMetricSampleEntity>) { metricSamples += samples }
+    override suspend fun deleteMetricSamples(sessionId: String) { metricSamples.removeAll { it.sessionId == sessionId } }
+    override suspend fun getMetricSamples(sessionId: String) = metricSamples.filter { it.sessionId == sessionId }.sortedBy { it.sequence }
     var lastOffset: Int? = null
     var lastLimit: Int? = null
     var countCalls = 0

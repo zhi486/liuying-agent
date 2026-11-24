@@ -1,0 +1,11 @@
+.page {
+  display: grid;
+  gap: var(--space-3);
+}
+.actions {
+  min-width: 0;
+}
+.service {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}

@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.healthyagent.running.HealthyAgentApp
+import com.healthyagent.running.agent.memory.MemoryService
+import com.healthyagent.running.agent.cloud.CloudAgentService
 import com.healthyagent.running.coordinator.AppCoordinator
 import com.healthyagent.running.core.engine.RuleEngine
 import com.healthyagent.running.data.sensor.SensorDataSource
@@ -27,6 +29,8 @@ class AppModuleSmokeTest {
         val koin = GlobalContext.get()
 
         assertNotNull(koin.get<AppCoordinator>())
+        assertSame(koin.get<MemoryService>(), koin.get<MemoryService>())
+        assertSame(koin.get<CloudAgentService>(), koin.get<CloudAgentService>())
         assertTrue(koin.get<TtsEngine>() is VoicePolicyTtsEngine)
         assertNotNull(koin.get<SensorDataSource>())
         assertNotNull(koin.get<RuleEngine>())

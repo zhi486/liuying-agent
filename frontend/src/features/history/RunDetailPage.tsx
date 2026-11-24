@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { sendNativeCommand, useBridgeStore } from '../../bridge/bridgeStore';
-import type { HistoryDetailResult } from '../../bridge/contract';
+import type { HistoryDetailResult, RunMetricSample } from '../../bridge/contract';
 import { historyDetailResultSchema } from '../../bridge/schemas';
 import styles from './RunDetailPage.module.css';
 import { RunMetricCharts } from './RunMetricCharts';
+import { formatMetric } from './runMetricChart';
 
 export function RunDetailPage() {
   const { sessionId = '' } = useParams();
@@ -49,16 +50,7 @@ export function RunDetailPage() {
 
   const current = status === 'ready' && result?.id === sessionId ? result : null;
   return (
-    <section className={`standard-page ${styles.page}`}>
-      <Link className={styles.back} to="/history">
-        ← 跑步记录
-      </Link>
-      <header className="page-title-row">
-        <div>
-          <p className="eyebrow">每一步，都算数</p>
-          <h1>跑后总结</h1>
-        </div>
-      </header>
+    <section className="standard-page">
       {status !== 'ready' ? (
         <p className={styles.notice} role="status">
           {status === 'unavailable'
@@ -85,10 +77,19 @@ export function RunDetailPage() {
   );
 }
 
-function RunSummary({ data }: { data: HistoryDetailResult }) {
+export function RunSummary({
+  data,
+  previewSamples,
+}: {
+  data: HistoryDetailResult;
+  previewSamples?: RunMetricSample[];
+}) {
   const { record } = data;
   const splits = [...data.splits].sort((a, b) => a.index - b.index);
-  const longestPace = Math.max(1, ...splits.map((split) => split.averagePaceSecPerKm));
+  const [splitsOpen, setSplitsOpen] = useState(false);
+  const fastestPace = splits.length
+    ? Math.min(...splits.map((split) => split.averagePaceSecPerKm))
+    : null;
   return (
     <>
       <article className={styles.hero}>
@@ -102,97 +103,184 @@ function RunSummary({ data }: { data: HistoryDetailResult }) {
             hour12: false,
           }).format(new Date(record.startedAt))}
         </p>
+        <h2 className={styles.activity}>户外跑步</h2>
         <div className="distance-lockup">
           <strong>{(record.distanceMeters / 1000).toFixed(2)}</strong>
           <span>公里</span>
         </div>
+      </article>
+      <section className={styles.section} aria-labelledby="metrics-title">
+        <h2 id="metrics-title">运动数据</h2>
         <dl className={styles.metrics}>
           <div>
             <dt>运动用时</dt>
             <dd>{duration(record.durationSeconds)}</dd>
           </div>
           <div>
-            <dt>平均配速 / 公里</dt>
+            <dt>平均配速</dt>
+            <dd>{formatMetric(record.averagePaceSecPerKm, 'pace')}</dd>
+          </div>
+          <div>
+            <dt>平均心率</dt>
             <dd>
-              {record.averagePaceSecPerKm === null
-                ? '未采集'
-                : duration(record.averagePaceSecPerKm)}
+              {optional(record.averageHeartRate)}
+              <small> 次/分</small>
             </dd>
           </div>
           <div>
-            <dt>平均心率 / 次每分</dt>
-            <dd>{optional(record.averageHeartRate)}</dd>
+            <dt>平均步频</dt>
+            <dd>
+              {optional(record.averageCadence)}
+              <small> 步/分</small>
+            </dd>
           </div>
           <div>
-            <dt>平均步频 / 步每分</dt>
-            <dd>{optional(record.averageCadence)}</dd>
+            <dt>最快分段配速</dt>
+            <dd>{formatMetric(fastestPace, 'pace')}</dd>
+          </div>
+          <div>
+            <dt>已保存分段</dt>
+            <dd>
+              {splits.length}
+              <small> 段</small>
+            </dd>
           </div>
         </dl>
-      </article>
+      </section>
       <section className={styles.section} aria-labelledby="splits-title">
-        <h2 id="splits-title">每公里分段</h2>
+        <header className={styles.sectionHeader}>
+          <h2 id="splits-title">分段详情</h2>
+          {splits.length > 0 && (
+            <button onClick={() => setSplitsOpen(true)} aria-label="查看分段详情">
+              查看详情 ›
+            </button>
+          )}
+        </header>
         {splits.length === 0 ? (
           <p className={styles.muted}>未保存分段数据</p>
         ) : (
-          <>
-            <div
-              className={styles.tableScroll}
-              tabIndex={0}
-              role="region"
-              aria-label="分段表，可横向滚动"
-            >
-              <table aria-label="每公里分段">
-                <thead>
-                  <tr>
-                    <th scope="col">段</th>
-                    <th scope="col">公里点</th>
-                    <th scope="col">用时</th>
-                    <th scope="col">配速</th>
-                    <th scope="col">心率</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {splits.map((split) => (
-                    <tr key={split.index}>
-                      <th scope="row">{split.index}</th>
-                      <td>{(split.endDistanceMeters / 1000).toFixed(2)}</td>
-                      <td>{duration(split.durationSeconds)}</td>
-                      <td>{duration(split.averagePaceSecPerKm)}</td>
-                      <td>{optional(split.averageHeartRate)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <h2 className={styles.chartTitle}>每公里平均配速</h2>
-            <p className={styles.muted}>条形越短，用时越少。下图为分段均值，不是实时配速曲线。</p>
-            <div className={styles.chart} aria-hidden="true">
-              {splits.map((split) => (
-                <div className={styles.barRow} key={split.index}>
-                  <span>{split.index}</span>
-                  <div className={styles.track}>
-                    <span
-                      style={{ width: `${(split.averagePaceSecPerKm / longestPace) * 100}%` }}
-                    />
-                  </div>
-                  <span>{duration(split.averagePaceSecPerKm)}</span>
-                </div>
-              ))}
-            </div>
-          </>
+          <SplitTable splits={splits} fastestPace={fastestPace} />
         )}
       </section>
-      <RunMetricCharts key={record.id} record={record} />
-      <section className={styles.recap} aria-labelledby="recap-title">
-        <p className="eyebrow">流萤 · 本次记录</p>
-        <h2 id="recap-title">为这一程留个记号</h2>
-        <p>
-          你完成了 {(record.distanceMeters / 1000).toFixed(2)} 公里，用时{' '}
-          {duration(record.durationSeconds)}。本次保存了 {splits.length} 个分段。
-        </p>
-        <p className={styles.muted}>以上为本地数据摘要，暂不提供训练评分或 AI 健康判断。</p>
-      </section>
+      {splitsOpen && (
+        <SplitDialog
+          splits={splits}
+          fastestPace={fastestPace}
+          onClose={() => setSplitsOpen(false)}
+          simulated={previewSamples !== undefined}
+        />
+      )}
+      <RunMetricCharts key={record.id} record={record} previewSamples={previewSamples} />
+      {!previewSamples && (
+        <section className={styles.recap} aria-labelledby="recap-title">
+          <p className="eyebrow">流萤 · 本次记录</p>
+          <h2 id="recap-title">为这一程留个记号</h2>
+          <p>
+            你完成了 {(record.distanceMeters / 1000).toFixed(2)} 公里，用时{' '}
+            {duration(record.durationSeconds)}。本次保存了 {splits.length} 个分段。
+          </p>
+          <p className={styles.muted}>以上为本地数据摘要，暂不提供训练评分或 AI 健康判断。</p>
+          <Link className="secondary-button" to="/agent" state={{ runId: record.id }}>
+            让流萤复盘本次跑步
+          </Link>
+          <p className={styles.muted}>先到对话页核对概要并单次授权；点击不会上传或调用模型。</p>
+        </section>
+      )}
     </>
+  );
+}
+
+function SplitTable({
+  splits,
+  fastestPace,
+  expanded = false,
+}: {
+  splits: HistoryDetailResult['splits'];
+  fastestPace: number | null;
+  expanded?: boolean;
+}) {
+  let cumulativeSeconds = 0;
+  return (
+    <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="分段表，可横向滚动">
+      <table aria-label="每公里分段">
+        <thead>
+          <tr>
+            <th scope="col">段</th>
+            <th scope="col">公里点</th>
+            <th scope="col">用时</th>
+            {expanded && <th scope="col">分段累计</th>}
+            <th scope="col">配速</th>
+            <th scope="col">心率</th>
+          </tr>
+        </thead>
+        <tbody>
+          {splits.map((split) => {
+            cumulativeSeconds += split.durationSeconds;
+            const fastest = split.averagePaceSecPerKm === fastestPace;
+            return (
+              <tr key={split.index} className={fastest ? styles.fastest : undefined}>
+                <th scope="row">
+                  {split.index}
+                  {fastest && <small> 最快</small>}
+                </th>
+                <td>{(split.endDistanceMeters / 1000).toFixed(2)}</td>
+                <td>{duration(split.durationSeconds)}</td>
+                {expanded && <td>{duration(cumulativeSeconds)}</td>}
+                <td className={styles.pace}>{formatMetric(split.averagePaceSecPerKm, 'pace')}</td>
+                <td>{optional(split.averageHeartRate)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SplitDialog({
+  splits,
+  fastestPace,
+  onClose,
+  simulated,
+}: {
+  splits: HistoryDetailResult['splits'];
+  fastestPace: number | null;
+  onClose: () => void;
+  simulated: boolean;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    dialog.current?.showModal();
+    if (dialog.current) dialog.current.scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = overflow;
+      previous?.focus({ preventScroll: true });
+    };
+  }, []);
+  return (
+    <dialog
+      ref={dialog}
+      className={styles.dialog}
+      aria-label="分段详情"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <button className={styles.close} onClick={onClose} aria-label="关闭分段详情">
+        ×
+      </button>
+      <h2>分段详情</h2>
+      {simulated && <p className={styles.muted}>模拟数据 · 仅供界面演示</p>}
+      <p className={styles.muted}>左右滑动查看完整数据</p>
+      <SplitTable splits={splits} fastestPace={fastestPace} expanded />
+      <p className={styles.muted}>
+        公里点为该段结束位置；分段累计仅累加已保存分段的用时，不包含未保存的尾段。心率单位为次/分，缺失数据保留为“未采集”。
+      </p>
+    </dialog>
   );
 }
 

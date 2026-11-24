@@ -1,0 +1,300 @@
+.phone {
+  min-height: 740px;
+}
+.demoLabel {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.distance {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 1.6rem 0;
+}
+.distance strong {
+  font-size: 3rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.distance span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem 0.5rem;
+  margin: 1.2rem 0 1.8rem;
+}
+.metrics div,
+.metricList div {
+  min-width: 0;
+}
+.metrics dt,
+.metricList dt {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.metrics dd {
+  font-size: 1.1rem;
+  margin: 0.3rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.metricList {
+  display: grid;
+  gap: 1rem;
+  margin: 1.3rem 0;
+}
+.metricList div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.metricList dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.splits {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.splits > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+}
+.splits > div:first-child {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.splits span:not(:first-child) {
+  text-align: right;
+}
+.tabs {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.2rem;
+  border-radius: 16px;
+  background: var(--surface);
+  margin: 1rem 0;
+}
+.tabs button {
+  flex: 1;
+  background: transparent;
+}
+.tabs button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.wide {
+  width: 100%;
+}
+.chart {
+  margin: 1.5rem 0;
+  min-width: 0;
+}
+.chart svg {
+  max-width: 100%;
+}
+.controlScene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 570px;
+  padding: 1.5rem 1rem;
+  margin: 1rem -0.5rem 0;
+  border-radius: 28px;
+  background: #343237;
+  color: #fff;
+}
+.phone .controlScene p,
+.controlScene .distance span {
+  color: #ccc8ce;
+}
+.controlScene .distance {
+  margin: 2rem 0 2.5rem;
+}
+.controlScene .distance strong {
+  font-size: 72px;
+  white-space: nowrap;
+  font-weight: 750;
+}
+.controlScene .distance span {
+  white-space: nowrap;
+}
+.controlMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem 0.75rem;
+  margin: 0;
+}
+.controlMetrics div {
+  display: flex;
+  flex-direction: column-reverse;
+  min-width: 0;
+  gap: 0.4rem;
+}
+.controlMetrics dt {
+  color: #ccc8ce;
+  font-size: 0.8rem;
+}
+.controlMetrics dd {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.controlMetrics small {
+  font-size: 0.7rem;
+}
+.controlScene[data-layout='B'] .controlMetrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.controlScene[data-layout='B'] .controlMetrics dd {
+  font-size: 22px;
+  min-height: 3rem;
+}
+.controlScene[data-layout='B'] .controlMetrics small {
+  display: block;
+  margin-top: 0.3rem;
+}
+.controlScene[data-layout='C'] .distance {
+  justify-content: center;
+  margin-top: 3rem;
+}
+.controlScene[data-layout='C'] .controlMetrics {
+  text-align: center;
+}
+.runActions {
+  display: flex;
+  justify-content: center;
+  gap: 1.75rem;
+  margin-top: auto;
+  padding-top: 3.5rem;
+}
+.actionItem {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+  font-size: 0.8rem;
+}
+.holdLabel {
+  position: absolute;
+  bottom: calc(100% + 0.65rem);
+  white-space: nowrap;
+  color: #e7e4e9;
+}
+.phone .runActions button {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  background: #25c48b;
+  color: #132e24;
+  border: 0;
+  padding: 0;
+  touch-action: none;
+  user-select: none;
+  position: relative;
+}
+.phone .runActions button svg {
+  width: 24px;
+  height: 24px;
+}
+.phone .runActions .stopButton {
+  background: #ff7872;
+  color: #3d1716;
+}
+.phone .runActions button:hover:not(:disabled) {
+  background: #25c48b;
+  filter: brightness(1.08);
+}
+.phone .runActions .stopButton:hover:not(:disabled) {
+  background: #ff7872;
+}
+.stopButton::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+}
+.stopButton[data-holding='true']::after {
+  border-color: white;
+  animation: holdProgress 1.2s linear forwards;
+}
+@keyframes holdProgress {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+.runActions button:focus-visible {
+  outline: 3px solid white;
+  outline-offset: 4px;
+}
+.runActions button:disabled {
+  opacity: 0.4;
+}
+.confirm {
+  position: absolute;
+  z-index: 1;
+  inset: auto 0.75rem 8rem;
+  box-shadow: 0 12px 40px #0006;
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: 22px;
+}
+.phone .controlScene .confirm {
+  color: var(--text);
+}
+.phone .controlScene .confirm p {
+  color: var(--text-muted);
+}
+.confirmActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.phone .finish {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.phone .reset {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  background: transparent;
+  color: #e7e4e9;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stopButton[data-holding='true']::after {
+    animation: none;
+  }
+}
+@media (max-width: 350px) {
+  .metrics dd {
+    font-size: 1rem;
+  }
+  .confirmActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

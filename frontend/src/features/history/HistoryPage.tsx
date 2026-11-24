@@ -1,8 +1,10 @@
+import { ArrowRight, CaretRight } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import { useBridgeStore } from '../../bridge/bridgeStore';
 import type { HistoryRunRecord } from '../../bridge/contract';
 import styles from './HistoryPage.module.css';
 import { useHistoryRecords } from './useHistoryRecords';
+import { LoadingSkeleton } from '../../design-system/LoadingSkeleton';
 
 export function HistoryPage() {
   const bridgeStatus = useBridgeStore((state) => state.status);
@@ -10,16 +12,15 @@ export function HistoryPage() {
   const latestRun = history.data?.items[0];
 
   return (
-    <section className="standard-page history-page">
-      <header className="page-title-row">
-        <div>
-          <p className="eyebrow">你的节奏</p>
-          <h1>跑步记录</h1>
-        </div>
-        <span className="month-label">
+    <section className={`${styles.page} standard-page history-page`}>
+      <div className={styles.historyMeta}>
+        <span className={styles.recordPeriod}>
           {latestRun ? formatMonth(latestRun.startedAt) : '本地记录'}
         </span>
-      </header>
+        <Link className={styles.demoLink} to="/history/demo">
+          演示记录 <ArrowRight size={15} weight="bold" aria-hidden="true" />
+        </Link>
+      </div>
 
       {bridgeStatus === 'unavailable' ? (
         <StatePanel
@@ -28,7 +29,7 @@ export function HistoryPage() {
           detail="这里不会展示虚构成绩。请在流萤 App 内打开此页，查看保存在手机上的真实跑步记录。"
         />
       ) : bridgeStatus === 'connecting' ? (
-        <StatePanel title="正在连接跑步记录" detail="正在建立安全的本地 Bridge 连接。" />
+        <LoadingSkeleton label="正在连接跑步记录" />
       ) : bridgeStatus === 'error' ? (
         <StatePanel
           eyebrow="连接失败"
@@ -37,7 +38,7 @@ export function HistoryPage() {
           alert
         />
       ) : history.phase === 'loading' ? (
-        <StatePanel title="正在读取本地记录" detail="流萤正在整理刚刚保存的跑步数据。" />
+        <LoadingSkeleton label="正在读取本地记录" />
       ) : history.phase === 'error' ? (
         <StatePanel
           eyebrow="读取失败"
@@ -89,63 +90,73 @@ function HistoryContent({
 }: HistoryContentProps) {
   return (
     <>
-      <article className="latest-run">
-        <div className="latest-run-heading">
-          <div>
-            <span>{formatRunTime(latestRun.startedAt)}</span>
-            <h2>最近一次跑步</h2>
-          </div>
-          <span className="run-status">已保存</span>
-        </div>
-        <div className="distance-lockup">
+      <Link
+        className={styles.latestRun}
+        to={`/history/${encodeURIComponent(latestRun.id)}`}
+        aria-label={`查看 ${formatRunTime(latestRun.startedAt)} 跑步总结，${formatDistanceKm(latestRun.distanceMeters)} 公里`}
+      >
+        <span className={styles.latestRunHeading}>
+          <span className={styles.latestRunLabel}>最近一次</span>
+          <time>{formatRunTime(latestRun.startedAt)}</time>
+        </span>
+        <span className={styles.distanceLockup}>
           <strong>{formatDistanceKm(latestRun.distanceMeters)}</strong>
           <span>公里</span>
-        </div>
-        <dl className="compact-stats">
-          <div>
-            <dt>用时</dt>
-            <dd>{formatDuration(latestRun.durationSeconds)}</dd>
-          </div>
-          <div>
-            <dt>平均配速</dt>
-            <dd>{formatPace(latestRun.averagePaceSecPerKm)}</dd>
-          </div>
-          <div>
-            <dt>平均心率</dt>
-            <dd>{formatOptionalInteger(latestRun.averageHeartRate)}</dd>
-          </div>
-        </dl>
-        <Link
-          className={`secondary-button ${styles.loadMore}`}
-          to={`/history/${encodeURIComponent(latestRun.id)}`}
-        >
-          查看本次总结
-        </Link>
-      </article>
+        </span>
+        <span className={styles.latestStats}>
+          <span>
+            <small>用时</small>
+            <strong>{formatDuration(latestRun.durationSeconds)}</strong>
+          </span>
+          <span>
+            <small>平均配速</small>
+            <strong>
+              {formatPace(latestRun.averagePaceSecPerKm)}
+              <small> /km</small>
+            </strong>
+          </span>
+          <span>
+            <small>平均心率</small>
+            <strong>
+              {formatOptionalInteger(latestRun.averageHeartRate)}
+              <small> bpm</small>
+            </strong>
+          </span>
+        </span>
+        <span className={styles.latestRunAction}>
+          查看跑步总结 <CaretRight size={17} weight="bold" aria-hidden="true" />
+        </span>
+      </Link>
 
       <section className={`past-runs ${styles.recordCount}`} aria-labelledby="past-runs-title">
-        <div className="section-heading">
+        <div className={styles.sectionHeading}>
           <h2 id="past-runs-title">更早记录</h2>
-          <span>共 {totalItems} 次</span>
+          <span>{totalItems} 次跑步</span>
         </div>
         {olderRuns.length > 0 && (
-          <ul>
+          <ul className={styles.runList}>
             {olderRuns.map((run) => (
               <li key={run.id}>
-                <div className="date-chip">
-                  <strong>{formatDay(run.startedAt)}</strong>
-                  <span>{formatShortMonth(run.startedAt)}</span>
-                </div>
-                <div>
-                  <strong>{formatDuration(run.durationSeconds)}</strong>
-                  <span>{formatPace(run.averagePaceSecPerKm)} /km</span>
-                </div>
                 <Link
-                  className={styles.detailLink}
+                  className={styles.runRow}
                   to={`/history/${encodeURIComponent(run.id)}`}
                   aria-label={`查看 ${formatRunTime(run.startedAt)} 的跑步总结`}
                 >
-                  {formatListDistance(run.distanceMeters)} →
+                  <span className={styles.runDate}>
+                    <strong>{formatDay(run.startedAt)}</strong>
+                    <small>{formatShortMonth(run.startedAt)}</small>
+                  </span>
+                  <span className={styles.runSummary}>
+                    <strong>{formatListDistance(run.distanceMeters)}</strong>
+                    <small>
+                      {formatDuration(run.durationSeconds)} · {formatRunTime(run.startedAt, false)}
+                    </small>
+                  </span>
+                  <span className={styles.runPace}>
+                    {formatPace(run.averagePaceSecPerKm)}
+                    <small> /km</small>
+                    <CaretRight size={16} weight="bold" aria-hidden="true" />
+                  </span>
                 </Link>
               </li>
             ))}
@@ -203,13 +214,11 @@ function formatMonth(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { month: 'long' }).format(new Date(value));
 }
 
-function formatRunTime(value: string) {
+function formatRunTime(value: string, includeTime = true) {
   return new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
     day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
+    ...(includeTime ? { hour: '2-digit', minute: '2-digit', hour12: false as const } : {}),
   }).format(new Date(value));
 }
 

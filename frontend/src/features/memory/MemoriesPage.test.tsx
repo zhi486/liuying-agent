@@ -5,6 +5,7 @@ import { useBridgeStore } from '../../bridge/bridgeStore';
 import { MemoriesPage } from './MemoriesPage';
 
 const send = vi.hoisted(() => vi.fn());
+vi.mock('./MemoryAuthorization', () => ({ MemoryAuthorization: () => null }));
 vi.mock('../../bridge/bridgeStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../bridge/bridgeStore')>()),
   sendNativeCommand: send,
@@ -46,12 +47,38 @@ beforeEach(() => {
   };
 });
 
+it('分组审阅仅展开一条且当前页搜索不新增命令', async () => {
+  const second = { ...memory, id: commandId, content: '回答简洁一些' };
+  send.mockResolvedValue(accepted(page([memory, second])));
+  mount();
+  await screen.findByText(memory.content);
+  expect(screen.getByRole('region', { name: '跑步相关' })).toBeVisible();
+  expect(screen.getByRole('region', { name: '表达偏好' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '审阅记忆：' + second.content }));
+  expect(screen.getByRole('button', { name: '审阅记忆：' + memory.content })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  expect(screen.getByRole('button', { name: '编辑记忆：' + second.content })).toBeVisible();
+  const calls = send.mock.calls.length;
+  fireEvent.change(screen.getByRole('searchbox', { name: '搜索当前页' }), {
+    target: { value: '不存在' },
+  });
+  expect(screen.getByText('当前页没有匹配的记忆。')).toBeVisible();
+  expect(send).toHaveBeenCalledTimes(calls);
+});
+
 it('未接原生时不展示假记忆且不发读写命令', () => {
   useBridgeStore.setState({ status: 'unavailable' });
   mount();
   expect(screen.getByRole('button', { name: '保存记忆' })).toBeDisabled();
   expect(send).not.toHaveBeenCalled();
-  expect(screen.getByText(/尚未用于 Agent 回答/)).toBeVisible();
+  expect(screen.getByText(/记忆保存在本机/)).toBeVisible();
+  expect(screen.getByRole('link', { name: '用户须知' })).toHaveAttribute(
+    'href',
+    '/settings/notices',
+  );
+  expect(screen.queryByRole('link', { name: '返回首页' })).not.toBeInTheDocument();
 });
 
 it('显式新增后核对回执再清空草稿，不发任何在线命令', async () => {
@@ -255,4 +282,87 @@ it('翻页携带精确offset且刷新不追加旧列表', async () => {
   expect(screen.queryByText('偏好0')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '刷新记忆' }));
   await screen.findByText(/还没有记忆/);
+});
+
+it('历史只读，恢复必须核对内容后确认并另存新版本', async () => {
+  const current = { ...memory, version: 2, content: '更喜欢晨跑' };
+  const old = {
+    version: 1,
+    content: memory.content,
+    changedAtMillis: 1000,
+    changeSource: 'manual',
+    turnId: null,
+  };
+  let restored = false;
+  send.mockImplementation(async (name, body) => {
+    if (name === 'memory.list')
+      return accepted(
+        page([restored ? { ...current, content: old.content, version: 3 } : current]),
+      );
+    if (name === 'memory.history')
+      return accepted({
+        commandId,
+        memoryId: id,
+        currentVersion: 2,
+        offset: 0,
+        limit: 10,
+        totalItems: 2,
+        items: [{ ...old, version: 2, content: current.content }, old],
+      });
+    if (name === 'memory.restore') {
+      expect(body).toEqual({ memoryId: id, version: 2, targetVersion: 1, confirmed: true });
+      restored = true;
+      return accepted({ commandId, memory: { ...current, version: 3, content: old.content } });
+    }
+    throw new Error('合成测试不允许其他命令');
+  });
+  mount();
+  await screen.findByText(current.content);
+  fireEvent.click(screen.getByRole('button', { name: `版本历史：${current.content}` }));
+  fireEvent.click(await screen.findByRole('button', { name: '恢复版本 1' }));
+  expect(send.mock.calls.map(([name]) => name)).toEqual(['memory.list', 'memory.history']);
+  expect(within(screen.getByRole('dialog')).getByText(old.content)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '取消恢复' }));
+  expect(send).toHaveBeenCalledTimes(2);
+  fireEvent.click(screen.getByRole('button', { name: '恢复版本 1' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认恢复' }));
+  await screen.findByText('已恢复为新版本，原有版本仍保留。');
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByText(/版本 3/)).toBeVisible();
+});
+
+it.each(['冲突', '错误回执'])('恢复%s时保留确认内容，不假报成功或自动重试', async (invalid) => {
+  const current = { ...memory, version: 2 };
+  const old = {
+    version: 1,
+    content: '原来喜欢晨跑',
+    changedAtMillis: 1000,
+    changeSource: 'manual',
+    turnId: null,
+  };
+  send.mockImplementation(async (name) => {
+    if (name === 'memory.list') return accepted(page([current]));
+    if (name === 'memory.history')
+      return accepted({
+        commandId,
+        memoryId: id,
+        currentVersion: 2,
+        offset: 0,
+        limit: 10,
+        totalItems: 1,
+        items: [old],
+      });
+    return invalid === '冲突'
+      ? { status: 'rejected', error: { code: 'SESSION_CONFLICT' } }
+      : accepted({ commandId, memory: { ...current, content: old.content } });
+  });
+  mount();
+  await screen.findByText(current.content);
+  fireEvent.click(screen.getByRole('button', { name: `版本历史：${current.content}` }));
+  fireEvent.click(await screen.findByRole('button', { name: '恢复版本 1' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认恢复' }));
+  await within(screen.getByRole('dialog')).findByRole('alert');
+  expect(within(screen.getByRole('dialog')).getByText(old.content)).toBeVisible();
+  expect(send.mock.calls.filter(([name]) => name === 'memory.restore')).toHaveLength(1);
+  expect(screen.queryByText(/已恢复为新版本/)).not.toBeInTheDocument();
 });

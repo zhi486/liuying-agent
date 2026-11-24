@@ -1,28 +1,88 @@
+import {
+  ArrowRight,
+  Bluetooth,
+  Check,
+  Heartbeat,
+  MapPin,
+  Pause,
+  Play,
+  Shield,
+  Stop,
+  Warning,
+} from '@phosphor-icons/react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { sendNativeCommand, useBridgeStore } from '../../bridge/bridgeStore';
 import type { AppSnapshot, ResultPayload } from '../../bridge/contract';
 import { formatPace } from './formatters';
 import styles from './RunningPage.module.css';
+import { BackLink } from '../../design-system/BackControl';
 
 type RunPhase = 'idle' | 'running' | 'paused' | 'finished';
+type ReadinessTone = 'ready' | 'optional' | 'warning' | 'muted';
 
 const permissionSettingsGuide =
   '请到系统设置 > 应用 > 流萤 > 权限，开启位置信息；若使用 Keep B5，再允许附近的设备。';
 
 export function RunningPage() {
+  const navigate = useNavigate();
+  const [dismissedRun, setDismissedRun] = useState(() => {
+    try {
+      return localStorage.getItem('liuying.completedRun.dismissed');
+    } catch {
+      return null;
+    }
+  });
   const [previewPhase, setPreviewPhase] = useState<RunPhase>('idle');
   const [confirmingStop, setConfirmingStop] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [connectionPending, setConnectionPending] = useState(false);
+  const [holdingStop, setHoldingStop] = useState(false);
+  const stopHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelStopHold = () => {
+    if (stopHoldTimer.current !== null) clearTimeout(stopHoldTimer.current);
+    stopHoldTimer.current = null;
+    setHoldingStop(false);
+  };
   const stopTriggerRef = useRef<HTMLButtonElement>(null);
   const continueRunRef = useRef<HTMLButtonElement>(null);
   const bridgeStatus = useBridgeStore((state) => state.status);
   const bridgeSnapshot = useBridgeStore((state) => state.snapshot);
   const nativeSnapshot = bridgeStatus === 'ready' ? bridgeSnapshot : null;
   const isPreview = bridgeStatus === 'unavailable';
-  const displayPhase = nativeSnapshot ? toRunPhase(nativeSnapshot.session.state) : previewPhase;
+  const completedRunKey = nativeSnapshot
+    ? JSON.stringify([
+        nativeSnapshot.session.id,
+        nativeSnapshot.session.startedAt,
+        nativeSnapshot.completedRun?.endedAt,
+      ])
+    : null;
+  const nativePhase = nativeSnapshot ? toRunPhase(nativeSnapshot.session.state) : previewPhase;
+  const displayPhase =
+    nativePhase === 'finished' && completedRunKey !== null && dismissedRun === completedRunKey
+      ? 'idle'
+      : nativePhase;
+  const finishReview = () => {
+    if (completedRunKey !== null) {
+      try {
+        localStorage.setItem('liuying.completedRun.dismissed', completedRunKey);
+      } catch {
+        setCommandError('无法保存完成状态，请重试');
+        return;
+      }
+      setDismissedRun(completedRunKey);
+    }
+    setPreviewPhase('idle');
+    navigate('/agent', { replace: true });
+  };
+  useEffect(() => {
+    setHoldingStop(false);
+    return () => {
+      if (stopHoldTimer.current !== null) clearTimeout(stopHoldTimer.current);
+      stopHoldTimer.current = null;
+    };
+  }, [displayPhase]);
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -139,30 +199,58 @@ export function RunningPage() {
   if (displayPhase === 'finished') {
     const completedRun = nativeSnapshot?.completedRun ?? null;
     const historySaved = nativeSnapshot?.persistenceState === 'saved';
+    const localRecordText = persistenceText(nativeSnapshot?.persistenceState, isPreview);
+    const healthStatusText = healthSyncText(nativeSnapshot?.healthSync, isPreview);
+    const persistenceTone = isPreview
+      ? 'muted'
+      : nativeSnapshot?.persistenceState === 'saved'
+        ? 'ready'
+        : nativeSnapshot?.persistenceState === 'failed'
+          ? 'warning'
+          : 'loading';
+    const healthTone = isPreview
+      ? 'muted'
+      : nativeSnapshot?.healthSync.state === 'synced'
+        ? 'ready'
+        : nativeSnapshot?.healthSync.state === 'syncing'
+          ? 'loading'
+          : nativeSnapshot?.healthSync.state === 'idle'
+            ? 'muted'
+            : 'warning';
+    const safetyLevel = nativeSnapshot?.safetyState.level;
+    const showSafetyAlert = !isPreview && safetyLevel != null && safetyLevel !== 'normal';
 
     return (
-      <section className={styles.page}>
+      <section className={`${styles.page} ${styles.finishedScorecardPage}`}>
         <h1 className="sr-only">跑步</h1>
-        {isPreview && <PreviewBadge />}
-        <div className={styles.finishedIntro}>
-          <span className={styles.firefly} aria-hidden="true" />
-          <p className="eyebrow">本次跑步已结束</p>
-          <h2>{completedRun ? '完成摘要' : '摘要暂不可用'}</h2>
-          <p>
-            {completedRun
-              ? `结束时间 ${formatCompletedAt(completedRun.endedAt)}`
-              : isPreview
-                ? '交互预览不会生成或保存跑步数据。'
-                : '正在等待原生跑步服务返回完成数据。'}
-          </p>
-        </div>
+        <div className={styles.finishedScorecard} data-testid="running-finished-scorecard">
+          <RunBackLink />
+          <header className={styles.finishedScorecardHeader}>
+            <span>
+              <Check size={15} weight="bold" aria-hidden="true" />
+              跑步完成
+            </span>
+            <time>{completedRun ? formatCompletedAt(completedRun.endedAt) : '--'}</time>
+          </header>
 
-        <div className={styles.summary} aria-label="本次跑步摘要">
-          <div className={styles.summaryPrimary}>
-            <strong>{formatDistance(completedRun?.distanceMeters)}</strong>
-            <span>{completedRun ? '公里' : ''}</span>
-          </div>
-          <dl>
+          {isPreview && <PreviewBadge />}
+
+          <section className={styles.finishedDistanceHero} aria-label="本次跑步摘要">
+            <span>{completedRun ? '本次距离' : '摘要暂不可用'}</span>
+            <div>
+              <strong>{formatDistance(completedRun?.distanceMeters)}</strong>
+              {completedRun && <small>公里</small>}
+            </div>
+            <p>
+              {completedRun
+                ? `结束于 ${formatCompletedAt(completedRun.endedAt)}`
+                : isPreview
+                  ? '交互预览不会生成或保存跑步数据。'
+                  : '正在等待原生跑步服务返回完成数据。'}
+            </p>
+          </section>
+
+          <dl className={styles.finishedScoreGrid}>
             <div>
               <dt>用时</dt>
               <dd>{formatElapsed(completedRun?.durationSeconds)}</dd>
@@ -180,60 +268,98 @@ export function RunningPage() {
               <dd>{formatMetric(completedRun?.averageCadence, 'spm')}</dd>
             </div>
           </dl>
-        </div>
 
-        <div
-          className={styles.syncStatus}
-          role={nativeSnapshot?.persistenceState === 'failed' ? 'alert' : 'status'}
-        >
-          <div>
-            <span>本地记录</span>
-            <strong>{persistenceText(nativeSnapshot?.persistenceState, isPreview)}</strong>
-          </div>
-          <div>
-            <span>Health Connect</span>
-            <strong>{healthSyncText(nativeSnapshot?.healthSync, isPreview)}</strong>
-          </div>
-        </div>
-
-        <SafetyNotice safetyState={nativeSnapshot?.safetyState} preview={isPreview} />
-
-        <aside className={styles.coachNote}>
-          <span className={styles.coachLabel}>流萤提醒</span>
-          <p>{nativeSnapshot?.latestCoachMessage?.text ?? '暂无提醒'}</p>
-        </aside>
-
-        {commandError && (
-          <p className={styles.commandError} role="alert">
-            {commandError}
-          </p>
-        )}
-
-        <div className={styles.finishedActions}>
-          {historySaved && nativeSnapshot?.session.id && (
-            <Link
-              className="secondary-button"
-              to={`/history/${encodeURIComponent(nativeSnapshot.session.id)}`}
-            >
-              查看本次总结
-            </Link>
-          )}
-          {historySaved ? (
-            <Link className="primary-button" to="/history">
-              查看记录
-            </Link>
-          ) : (
-            <button className="primary-button" type="button" disabled>
-              {historyActionText(nativeSnapshot?.persistenceState, isPreview)}
-            </button>
-          )}
-          <button
-            className="quiet-button"
-            type="button"
-            onClick={() => (isPreview ? setPreviewPhase('idle') : startRun())}
+          <div
+            className={styles.finishedSyncRail}
+            role={nativeSnapshot?.persistenceState === 'failed' ? 'alert' : 'status'}
           >
-            再跑一次
-          </button>
+            <span data-tone={persistenceTone}>
+              <i aria-hidden="true" />
+              <span>本地记录</span>
+              <strong>{localRecordText}</strong>
+            </span>
+            <span data-tone={healthTone}>
+              <i aria-hidden="true" />
+              <span>Health Connect</span>
+              <strong>{healthStatusText}</strong>
+            </span>
+          </div>
+
+          {showSafetyAlert && (
+            <div className={styles.finishedSafetyAlert} role="alert">
+              <Warning size={17} weight="fill" aria-hidden="true" />
+              <div>
+                <strong>安全提醒</strong>
+                <p>{nativeSnapshot?.safetyState.message ?? '当前安全状态需要关注。'}</p>
+              </div>
+            </div>
+          )}
+
+          <aside className={styles.finishedCoachStrip}>
+            <Heartbeat size={17} weight="fill" aria-hidden="true" />
+            <div>
+              <strong>本次提醒</strong>
+              <p>{nativeSnapshot?.latestCoachMessage?.text ?? '暂无提醒'}</p>
+            </div>
+          </aside>
+
+          <p
+            className={styles.finishedNotice}
+            data-tone={commandError ? 'error' : 'default'}
+            role={commandError ? 'alert' : undefined}
+          >
+            {commandError ??
+              (isPreview
+                ? '交互预览不显示、不保存设备数据。'
+                : historySaved
+                  ? '本地记录已保存；Health Connect 同步结果单独显示。'
+                  : '记录保存完成后才会开放历史与复盘入口。')}
+          </p>
+
+          <div className={styles.finishedScorecardActions}>
+            <button type="button" className={styles.completeButton} onClick={finishReview}>
+              <Check size={18} weight="bold" aria-hidden="true" />
+              完成
+            </button>
+            {historySaved && nativeSnapshot?.session.id ? (
+              <>
+                <Link
+                  className={styles.finishedReviewLink}
+                  to="/agent"
+                  state={{ runId: nativeSnapshot.session.id }}
+                >
+                  让流萤复盘本次跑步
+                  <ArrowRight size={16} weight="bold" aria-hidden="true" />
+                </Link>
+                <div>
+                  <Link to={`/history/${encodeURIComponent(nativeSnapshot.session.id)}`}>
+                    查看本次总结
+                  </Link>
+                  <Link to="/history">查看记录</Link>
+                  <button
+                    type="button"
+                    onClick={() => (isPreview ? setPreviewPhase('idle') : startRun())}
+                  >
+                    再跑一次
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <button type="button" className={styles.finishedReviewLink} disabled>
+                  {historyActionText(nativeSnapshot?.persistenceState, isPreview)}
+                </button>
+                <div className={styles.finishedSingleAction}>
+                  <button
+                    type="button"
+                    onClick={() => (isPreview ? setPreviewPhase('idle') : startRun())}
+                  >
+                    再跑一次
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </section>
     );
@@ -243,6 +369,10 @@ export function RunningPage() {
     const permissionState = nativeSnapshot?.permissions.runningSensors;
     const permissionGranted = permissionState === 'granted';
     const serviceUnavailable = !isPreview && !nativeSnapshot;
+    const wearableState = nativeSnapshot?.wearable.state;
+    const wearableConnected = wearableState === 'connected';
+    const wearableConnecting = connectionPending || wearableState === 'connecting';
+    const showWearableControl = Boolean(nativeSnapshot?.wearable.supported);
     const heading = isPreview
       ? '跑步页交互预览'
       : serviceUnavailable
@@ -252,117 +382,268 @@ export function RunningPage() {
         : permissionGranted
           ? '准备开始本次跑步'
           : '开跑前需要系统授权';
+    const targetDistance = formatTargetDistanceKm(nativeSnapshot?.settings.targetDistanceKm);
+    const targetPace = formatPace(nativeSnapshot?.settings.targetPaceSecPerKm);
+    const hasTarget =
+      Boolean(nativeSnapshot?.settings.targetDistanceKm) ||
+      Boolean(nativeSnapshot?.settings.targetPaceSecPerKm);
+    const locationTone: ReadinessTone = isPreview
+      ? 'muted'
+      : permissionGranted
+        ? 'ready'
+        : 'warning';
+    const wearableTone: ReadinessTone = wearableConnected
+      ? 'ready'
+      : wearableState === 'error'
+        ? 'warning'
+        : 'optional';
+    const safetyLevel = nativeSnapshot?.safetyState.level;
+    const hasNativeSafety = safetyLevel !== undefined;
+    const safetyTone: ReadinessTone = hasNativeSafety
+      ? safetyLevel === 'normal'
+        ? 'ready'
+        : 'warning'
+      : 'muted';
+    const safetyMessage = isPreview
+      ? '交互预览不接收设备安全状态。'
+      : nativeSnapshot
+        ? (nativeSnapshot.safetyState.message ?? '当前没有安全提醒。')
+        : bridgeStatus === 'error'
+          ? '安全状态暂时无法读取。'
+          : '跑步服务连接后读取安全状态。';
+    const safetyBadgeText = isPreview
+      ? '示例'
+      : hasNativeSafety
+        ? safetyLevel === 'normal'
+          ? '正常'
+          : '需关注'
+        : '待读取';
+    const connectionActionLabel = wearableConnected
+      ? '手环已连接'
+      : wearableConnecting
+        ? '正在连接手环…'
+        : wearableState === 'error'
+          ? '重试连接手环'
+          : '连接手环';
+    const connectionActionText = wearableConnected
+      ? '已连接'
+      : wearableConnecting
+        ? '连接中'
+        : wearableState === 'error'
+          ? '重试连接'
+          : '连接手环';
+    const startActionLabel = isPreview
+      ? '进入交互预览'
+      : permissionGranted
+        ? '开始跑步'
+        : serviceUnavailable
+          ? '等待跑步服务'
+          : '请求系统授权';
+    const startActionText = isPreview
+      ? '进入预览'
+      : permissionGranted
+        ? '开始跑步'
+        : serviceUnavailable
+          ? '等待服务'
+          : '请求授权';
+    const startActionUnavailable = serviceUnavailable;
+    const badgeText = isPreview
+      ? '示例'
+      : bridgeStatus === 'error'
+        ? '服务异常'
+        : serviceUnavailable
+          ? '连接中'
+          : permissionGranted
+            ? '可开跑'
+            : '待授权';
+    const badgeTone: ReadinessTone =
+      isPreview || (serviceUnavailable && bridgeStatus !== 'error')
+        ? 'muted'
+        : bridgeStatus === 'error' || !permissionGranted
+          ? 'warning'
+          : 'ready';
 
     return (
-      <section className={styles.page}>
+      <section className={`${styles.page} ${styles.readinessPage}`}>
         <h1 className="sr-only">跑步</h1>
-        {isPreview && <PreviewBadge />}
-        <div className={styles.readinessHeader}>
-          <div>
-            <p className="eyebrow">
-              {isPreview ? '未连接 Android 设备' : permissionGranted ? '跑前检查' : '权限检查'}
-            </p>
+        <div
+          className={styles.readinessConsole}
+          data-testid="running-readiness-console"
+          aria-label="跑前状态仪表"
+        >
+          {isPreview && <PreviewBadge />}
+          <RunBackLink />
+          <header className={styles.readinessHeader}>
             <h2>{heading}</h2>
-          </div>
-          <div
-            className={`${styles.devicePulse} ${
-              permissionGranted && !isPreview ? '' : styles.devicePulseMuted
-            }`}
-            aria-label={readinessBadgeText(nativeSnapshot, isPreview)}
-          >
-            <span aria-hidden="true" />
-            {readinessBadgeText(nativeSnapshot, isPreview)}
-          </div>
-        </div>
+            <span
+              className={styles.readinessStatusBadge}
+              data-tone={badgeTone}
+              aria-label={badgeText}
+            >
+              <span aria-hidden="true" />
+              {badgeText}
+            </span>
+          </header>
 
-        <div className={styles.goalPanel}>
-          <div className={styles.goalHeading}>
-            <span>默认目标</span>
-            {nativeSnapshot && <Link to="/settings">调整目标</Link>}
+          <div className={styles.readinessGoalContext}>
+            <span>{hasTarget ? '今日目标' : '今日目标未设置'}</span>
+            {nativeSnapshot && (
+              <Link to="/settings" aria-label="调整跑步目标">
+                调整目标
+              </Link>
+            )}
           </div>
-          <dl className={styles.targetGrid}>
+
+          <div className={styles.readinessGauge} aria-label="跑前里程 0.00 公里">
+            <strong>0.00</strong>
+            <span>km</span>
+          </div>
+
+          <dl className={styles.readinessFactGrid}>
             <div>
               <dt>目标配速</dt>
-              <dd>{formatPace(nativeSnapshot?.settings.targetPaceSecPerKm)}</dd>
+              <dd>{targetPace}</dd>
             </div>
             <div>
               <dt>目标距离</dt>
-              <dd>{formatTargetDistanceKm(nativeSnapshot?.settings.targetDistanceKm)}</dd>
+              <dd>{targetDistance}</dd>
             </div>
           </dl>
-          {!nativeSnapshot?.settings.targetPaceSecPerKm &&
-            !nativeSnapshot?.settings.targetDistanceKm && (
-              <p className={styles.goalEmpty}>
-                {isPreview ? '交互预览不提供设备目标。' : '未设置距离和配速目标。'}
-              </p>
+          {!hasTarget && (
+            <p className={styles.readinessEmptyTarget}>
+              {isPreview ? '交互预览不提供设备目标。' : '未设置距离和配速目标。'}
+            </p>
+          )}
+
+          <ul className={styles.readinessTrack} aria-label="跑前检查">
+            <li className={styles.readinessTrackItem}>
+              <span className={styles.readinessTrackIcon} data-tone={locationTone}>
+                {permissionGranted ? (
+                  <Check size={16} weight="bold" aria-hidden="true" />
+                ) : isPreview ? (
+                  <MapPin size={16} aria-hidden="true" />
+                ) : (
+                  <Warning size={16} weight="fill" aria-hidden="true" />
+                )}
+              </span>
+              <span className={styles.readinessTrackCopy}>
+                <strong>手机定位</strong>
+                <small>
+                  {permissionGranted
+                    ? connectionText(nativeSnapshot?.connection, false)
+                    : isPreview
+                      ? '交互预览不请求位置权限'
+                      : serviceUnavailable
+                        ? '跑步服务连接后读取位置状态'
+                        : '等待位置信息授权'}
+                </small>
+              </span>
+              <em>{permissionGranted ? '就绪' : isPreview ? '示例' : '待授权'}</em>
+            </li>
+            <li className={styles.readinessTrackItem}>
+              <span className={styles.readinessTrackIcon} data-tone={wearableTone}>
+                {wearableConnected ? (
+                  <Check size={16} weight="bold" aria-hidden="true" />
+                ) : (
+                  <Bluetooth size={16} aria-hidden="true" />
+                )}
+              </span>
+              <span className={styles.readinessTrackCopy}>
+                <strong>{nativeSnapshot?.wearable.deviceName || 'Keep B5'}</strong>
+                <small>{wearableText(nativeSnapshot?.wearable, isPreview)}</small>
+              </span>
+              <em>
+                {wearableConnected ? '已连接' : wearableState === 'error' ? '可重试' : '可选'}
+              </em>
+            </li>
+            <li className={styles.readinessTrackItem}>
+              <span className={styles.readinessTrackIcon} data-tone={safetyTone}>
+                {safetyTone === 'ready' ? (
+                  <Check size={16} weight="bold" aria-hidden="true" />
+                ) : safetyTone === 'warning' ? (
+                  <Warning size={16} weight="fill" aria-hidden="true" />
+                ) : (
+                  <Shield size={16} aria-hidden="true" />
+                )}
+              </span>
+              <span className={styles.readinessTrackCopy}>
+                <strong>安全状态</strong>
+                <small
+                  role={
+                    safetyTone === 'warning'
+                      ? 'alert'
+                      : safetyTone === 'ready'
+                        ? 'status'
+                        : undefined
+                  }
+                >
+                  {safetyMessage}
+                </small>
+              </span>
+              <em>{safetyBadgeText}</em>
+            </li>
+          </ul>
+
+          <div className={styles.readinessActions} data-count={showWearableControl ? 2 : 1}>
+            {showWearableControl && (
+              <div className={styles.readinessAction}>
+                <button
+                  className={styles.readinessConnectionOrb}
+                  type="button"
+                  data-testid="running-connect-orb"
+                  data-state={
+                    wearableConnected ? 'connected' : wearableConnecting ? 'connecting' : 'idle'
+                  }
+                  aria-label={connectionActionLabel}
+                  aria-busy={wearableConnecting}
+                  disabled={wearableConnected || wearableConnecting}
+                  onClick={() => void connectWearable()}
+                >
+                  <span className={styles.readinessOrbGlyph} aria-hidden="true">
+                    {wearableConnected ? (
+                      <Check size={28} weight="bold" />
+                    ) : (
+                      <Bluetooth size={28} />
+                    )}
+                  </span>
+                </button>
+                <span aria-hidden="true">{connectionActionText}</span>
+              </div>
             )}
-        </div>
-
-        <ul className={styles.readinessList} aria-label="跑前检查">
-          <li>
-            <span>定位主源</span>
-            <strong>
-              {permissionGranted
-                ? connectionText(nativeSnapshot?.connection, false)
-                : isPreview
-                  ? '未连接设备'
-                  : '等待位置信息授权'}
-            </strong>
-          </li>
-          <li>
-            <span>Keep B5</span>
-            <strong>{wearableText(nativeSnapshot?.wearable, isPreview)}</strong>
-          </li>
-        </ul>
-
-        {!isPreview && nativeSnapshot?.wearable.supported && (
-          <div className={styles.wearableControls}>
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={
-                connectionPending ||
-                nativeSnapshot.wearable.state === 'connecting' ||
-                nativeSnapshot.wearable.state === 'connected'
-              }
-              onClick={() => void connectWearable()}
-            >
-              {nativeSnapshot.wearable.state === 'connected'
-                ? '手环已连接'
-                : connectionPending || nativeSnapshot.wearable.state === 'connecting'
-                  ? '正在连接手环…'
-                  : nativeSnapshot.wearable.state === 'error'
-                    ? '重试连接手环'
-                    : '连接手环'}
-            </button>
-            <p>只连接蓝牙，不开始运动。心率将在开跑后获取；请先断开 Keep 的连接。</p>
+            <div className={styles.readinessAction}>
+              <button
+                className={styles.readinessStartOrb}
+                type="button"
+                data-testid="running-start-orb"
+                aria-label={startActionLabel}
+                disabled={startActionUnavailable}
+                onClick={startRun}
+              >
+                <span className={styles.readinessOrbGlyph} aria-hidden="true">
+                  {isPreview || permissionGranted ? (
+                    <Play size={28} weight="fill" />
+                  ) : (
+                    <Warning size={28} weight="fill" />
+                  )}
+                </span>
+              </button>
+              <span aria-hidden="true">{startActionText}</span>
+            </div>
           </div>
-        )}
 
-        <SafetyNotice safetyState={nativeSnapshot?.safetyState} preview={isPreview} />
-
-        <button
-          className="primary-button"
-          type="button"
-          disabled={serviceUnavailable}
-          onClick={startRun}
-        >
-          {isPreview
-            ? '进入交互预览'
-            : permissionGranted
-              ? '开始跑步'
-              : serviceUnavailable
-                ? '等待跑步服务'
-                : '请求系统授权'}
-        </button>
-        <p className={styles.startHint} role={commandError ? 'alert' : undefined}>
-          {commandError ??
-            (isPreview
-              ? '交互预览不显示、不保存设备数据。'
-              : permissionGranted
-                ? '开跑后由手机 GPS 记录距离和路线。'
-                : '手机 GPS 需要位置信息；Keep B5 需要附近的设备权限。')}
-        </p>
+          <p
+            className={styles.readinessHint}
+            data-tone={commandError ? 'error' : 'default'}
+            role={commandError ? 'alert' : undefined}
+          >
+            {commandError ??
+              (isPreview
+                ? '交互预览不显示、不保存设备数据。'
+                : permissionGranted
+                  ? '开跑后由手机 GPS 记录距离和路线。'
+                  : '手机 GPS 需要位置信息；Keep B5 需要附近的设备权限。')}
+          </p>
+        </div>
       </section>
     );
   }
@@ -375,120 +656,246 @@ export function RunningPage() {
     heartRate != null && maxHeartRate != null && maxHeartRate > 0
       ? Math.min(100, Math.max(0, Math.round((heartRate / maxHeartRate) * 100)))
       : null;
-  const liveMetrics = buildLiveMetrics(nativeSnapshot);
+  const currentPace = nativeSnapshot?.metrics.paceSecPerKm ?? null;
+  const targetPaceSeconds = nativeSnapshot?.session.targetPaceSecPerKm ?? null;
+  const targetPace = formatPace(targetPaceSeconds);
+  const targetDistance = formatTargetDistanceMeters(nativeSnapshot?.session.targetDistanceMeters);
+  const paceDeltaSeconds =
+    currentPace != null && targetPaceSeconds != null ? targetPaceSeconds - currentPace : null;
+  const paceRelation =
+    paceDeltaSeconds == null
+      ? null
+      : Math.abs(paceDeltaSeconds) < 2
+        ? '与目标配速一致'
+        : paceDeltaSeconds > 0
+          ? `比目标快 ${Math.round(paceDeltaSeconds)} 秒`
+          : `比目标慢 ${Math.round(Math.abs(paceDeltaSeconds))} 秒`;
+  const gpsSourceLabel = isPreview
+    ? '定位示例'
+    : nativeSnapshot?.dataQuality.gps === 'waiting'
+      ? '定位等待'
+      : nativeSnapshot?.dataQuality.gps === 'stale'
+        ? '定位延迟'
+        : 'GPS 正常';
+  const gpsTone = !isPreview && nativeSnapshot?.dataQuality.gps !== 'fresh' ? 'warning' : 'ready';
+  const wearableTone = nativeSnapshot?.wearable.state === 'connected' ? 'ready' : 'muted';
+  const wearableSourceLabel = isPreview
+    ? 'B5 示例'
+    : !nativeSnapshot?.wearable.supported
+      ? 'B5 未启用'
+      : nativeSnapshot.wearable.state === 'connected'
+        ? `B5 ${nativeSnapshot.wearable.batteryPercent == null ? '已连接' : `${nativeSnapshot.wearable.batteryPercent}%`}`
+        : nativeSnapshot.wearable.state === 'connecting'
+          ? 'B5 连接中'
+          : nativeSnapshot.wearable.state === 'error'
+            ? 'B5 异常'
+            : 'B5 未连接';
+  const heartSourceLabel = isPreview
+    ? '心率示例'
+    : !nativeSnapshot?.wearable.supported
+      ? '心率未接入'
+      : nativeSnapshot.dataQuality.heartRate === 'fresh' && heartRate != null
+        ? `心率 ${heartRate}`
+        : nativeSnapshot.dataQuality.heartRate === 'stale'
+          ? '心率延迟'
+          : nativeSnapshot.dataQuality.heartRate === 'waiting'
+            ? '心率等待'
+            : '心率不可用';
+  const heartTone =
+    !isPreview &&
+    (nativeSnapshot?.dataQuality.heartRate === 'stale' ||
+      nativeSnapshot?.dataQuality.heartRate === 'not_available')
+      ? 'warning'
+      : !isPreview && nativeSnapshot?.dataQuality.heartRate === 'fresh'
+        ? 'ready'
+        : 'muted';
+  const safetyLevel = nativeSnapshot?.safetyState.level;
+  const showSafetyAlert = !isPreview && safetyLevel != null && safetyLevel !== 'normal';
+  const distance = nativeSnapshot
+    ? (nativeSnapshot.metrics.distanceMeters / 1000).toFixed(2)
+    : '--';
+  const cadence = nativeSnapshot?.metrics.cadence?.toString() ?? '--';
+  const elapsed = formatElapsed(nativeSnapshot?.metrics.elapsedSeconds);
 
   return (
-    <section className={`${styles.page} ${styles.activePage}`}>
-      <div inert={confirmingStop ? true : undefined} aria-hidden={confirmingStop || undefined}>
+    <section
+      className={`${styles.page} ${styles.activeConsolePage} ${paused ? styles.pausedPage : ''}`}
+    >
+      <div
+        className={styles.activeRunLayout}
+        inert={confirmingStop ? true : undefined}
+        aria-hidden={confirmingStop || undefined}
+      >
         <h1 className="sr-only">跑步</h1>
-        {isPreview && <PreviewBadge />}
-        <div className={styles.liveHeadline} role="status">
-          <span
-            className={paused || isPreview ? styles.pauseIndicator : styles.liveIndicator}
-            aria-hidden="true"
-          />
-          <strong>{paused ? '已暂停' : isPreview ? '跑步交互预览' : '跑步中'}</strong>
-        </div>
+        <div
+          className={styles.activeRunConsole}
+          data-testid="running-active-console"
+          data-paused={paused || undefined}
+        >
+          <RunBackLink />
+          <header className={styles.activeRunHeader}>
+            <div className={styles.activeRunStatus} role="status">
+              <span data-paused={paused || undefined} aria-hidden="true" />
+              <strong>{paused ? '已暂停' : isPreview ? '跑步交互预览' : '跑步中'}</strong>
+            </div>
+            <time>{elapsed}</time>
+          </header>
 
-        <div className={styles.sourceStatusList} aria-label="数据源状态">
-          <div>
-            <span>定位主源</span>
-            <strong>
-              {!isPreview && nativeSnapshot?.dataQuality.gps === 'waiting'
-                ? '等待定位'
-                : !isPreview && nativeSnapshot?.dataQuality.gps === 'stale'
-                  ? '定位暂未更新'
-                  : connectionText(nativeSnapshot?.connection, isPreview)}
-            </strong>
+          <div className={styles.activeSourceRail} aria-label="数据源状态">
+            <span
+              data-tone={gpsTone}
+              aria-label={
+                isPreview ? '交互预览不读取定位' : connectionText(nativeSnapshot?.connection, false)
+              }
+            >
+              <MapPin size={13} weight="fill" aria-hidden="true" />
+              {gpsSourceLabel}
+            </span>
+            <span
+              data-tone={wearableTone}
+              aria-label={wearableText(nativeSnapshot?.wearable, isPreview)}
+            >
+              <Bluetooth size={13} weight="bold" aria-hidden="true" />
+              {wearableSourceLabel}
+            </span>
+            <span data-tone={heartTone}>
+              <Heartbeat size={13} weight="bold" aria-hidden="true" />
+              {heartSourceLabel}
+            </span>
           </div>
-          <div>
-            <span>Keep B5</span>
-            <strong>{wearableText(nativeSnapshot?.wearable, isPreview)}</strong>
-          </div>
-          {!isPreview && nativeSnapshot?.wearable.supported && (
-            <div>
-              <span>心率数据</span>
-              <strong>
-                {nativeSnapshot.dataQuality.heartRate === 'waiting'
-                  ? '等待心率'
-                  : nativeSnapshot.dataQuality.heartRate === 'stale'
-                    ? '心率暂未更新'
-                    : nativeSnapshot.dataQuality.heartRate === 'fresh'
-                      ? '心率正常更新'
-                      : '心率不可用'}
-              </strong>
+
+          {showSafetyAlert && (
+            <div className={styles.activeSafetyAlert} role="alert">
+              <Warning size={17} weight="fill" aria-hidden="true" />
+              <div>
+                <strong>安全提醒</strong>
+                <p>{nativeSnapshot?.safetyState.message ?? '当前安全状态需要关注。'}</p>
+              </div>
             </div>
           )}
-        </div>
 
-        <div className={styles.activePlan} aria-label="本次冻结目标">
-          <span>本次目标</span>
-          <strong>配速 {formatPace(nativeSnapshot?.session.targetPaceSecPerKm)}</strong>
-          <small>
-            距离 {formatTargetDistanceMeters(nativeSnapshot?.session.targetDistanceMeters)}
-          </small>
-        </div>
+          {paused && (
+            <>
+              <div className={styles.pausedDistance}>
+                <strong>{distance}</strong>
+                <span>公里</span>
+              </div>
+              <dl className={styles.pausedMetrics}>
+                <div>
+                  <dt>运动用时</dt>
+                  <dd>{elapsed}</dd>
+                </div>
+                <div>
+                  <dt>当前配速</dt>
+                  <dd>{formatPace(currentPace)}</dd>
+                </div>
+                <div>
+                  <dt>实时心率</dt>
+                  <dd>
+                    {heartRate ?? '--'} <small>次/分</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>步频</dt>
+                  <dd>
+                    {cadence} <small>步/分</small>
+                  </dd>
+                </div>
+              </dl>
+            </>
+          )}
+          {!paused && (
+            <>
+              <section
+                hidden={paused}
+                className={styles.activePaceHero}
+                data-paused={paused || undefined}
+              >
+                <span>当前配速</span>
+                <div>
+                  <strong>{formatPace(currentPace)}</strong>
+                  <small>/公里</small>
+                </div>
+                <p>
+                  {isPreview ? (
+                    '交互预览不读取实时配速。'
+                  ) : targetPace !== '--' || targetDistance !== '--' ? (
+                    <>
+                      <span>配速 {targetPace}</span>
+                      <span>距离 {targetDistance}</span>
+                      {paceRelation && <em>{paceRelation}</em>}
+                    </>
+                  ) : (
+                    '本次未设置目标。'
+                  )}
+                </p>
+              </section>
 
-        <div className={styles.paceHero}>
-          <span>当前配速</span>
-          <strong>{formatPace(nativeSnapshot?.metrics.paceSecPerKm)}</strong>
-          <small>分钟 / 公里</small>
-        </div>
+              <dl hidden={paused} className={styles.activeRunMetrics}>
+                <div>
+                  <dt>距离</dt>
+                  <dd>
+                    {distance}
+                    {nativeSnapshot && <small> km</small>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>心率</dt>
+                  <dd>
+                    {heartRate ?? '--'}
+                    {heartRate != null && <small> bpm</small>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>步频</dt>
+                  <dd>
+                    {cadence}
+                    {cadence !== '--' && <small> spm</small>}
+                  </dd>
+                </div>
+              </dl>
+            </>
+          )}
 
-        <div className={styles.metricsGrid}>
-          {liveMetrics.map((metric) => (
-            <div key={metric.label}>
-              <span>{metric.label}</span>
-              <strong>{metric.value}</strong>
-              {metric.unit && <small>{metric.unit}</small>}
-            </div>
-          ))}
-        </div>
-
-        {intensityPercent != null && (
-          <div className={styles.zoneStrip}>
+          <div
+            className={styles.activeZoneRail}
+            role={intensityPercent != null ? 'meter' : undefined}
+            aria-label={
+              intensityPercent != null ? `当前强度 ${intensityPercent}%` : '当前强度等待心率'
+            }
+            aria-valuemin={intensityPercent != null ? 0 : undefined}
+            aria-valuemax={intensityPercent != null ? 100 : undefined}
+            aria-valuenow={intensityPercent ?? undefined}
+          >
+            <span style={{ width: `${intensityPercent ?? 0}%` }} aria-hidden="true" />
             <div>
               <span>当前强度</span>
-              <strong>{zoneLabel(nativeSnapshot?.metrics.hrZone)}</strong>
-              <small>{intensityPercent}% 最大心率</small>
-            </div>
-            <div
-              className={styles.zoneTrack}
-              role="meter"
-              aria-label={`当前强度 ${intensityPercent}%`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={intensityPercent}
-            >
-              <span style={{ width: `${intensityPercent}%` }} />
+              <strong>
+                {intensityPercent == null ? '等待心率' : zoneLabel(nativeSnapshot?.metrics.hrZone)}
+              </strong>
+              <em>{intensityPercent == null ? '--' : `${intensityPercent}%`}</em>
             </div>
           </div>
-        )}
 
-        <SafetyNotice safetyState={nativeSnapshot?.safetyState} preview={isPreview} />
+          <aside className={styles.activeCoachLine}>
+            <strong>流萤提醒</strong>
+            <p>{nativeSnapshot?.latestCoachMessage?.text ?? '暂无提醒'}</p>
+          </aside>
 
-        <aside className={styles.liveCoach}>
-          <span className={styles.coachLabel}>流萤提醒</span>
-          <p>{nativeSnapshot?.latestCoachMessage?.text ?? '暂无提醒'}</p>
-        </aside>
-
-        {commandError && (
-          <p className={styles.commandError} role="alert">
-            {commandError}
-          </p>
-        )}
-
-        <div className={styles.runControls}>
-          <button
-            ref={stopTriggerRef}
-            className="secondary-button"
-            type="button"
-            onClick={() => setConfirmingStop(true)}
+          <p
+            className={styles.activeRunNotice}
+            data-tone={commandError ? 'error' : 'default'}
+            role={commandError ? 'alert' : undefined}
           >
-            结束
-          </button>
+            {commandError ??
+              (isPreview
+                ? '交互预览不显示、不保存设备数据。'
+                : '实时数据仅用于本次跑步，结束并确认后才会保存。')}
+          </p>
+        </div>
+
+        <div className={styles.activeRunControls}>
           <button
-            className="primary-button"
             type="button"
             onClick={() =>
               isPreview
@@ -496,7 +903,36 @@ export function RunningPage() {
                 : runNativeCommand(paused ? 'run.resume' : 'run.pause')
             }
           >
-            {paused ? '继续' : '暂停'}
+            {paused ? (
+              <Play size={18} weight="fill" aria-hidden="true" />
+            ) : (
+              <Pause size={18} weight="fill" aria-hidden="true" />
+            )}
+            <span>{paused ? '继续' : '暂停'}</span>
+          </button>
+          <button
+            ref={stopTriggerRef}
+            type="button"
+            data-holding={holdingStop}
+            onPointerDown={(event) => {
+              if (!paused || event.button !== 0) return;
+              cancelStopHold();
+              setHoldingStop(true);
+              stopHoldTimer.current = setTimeout(() => {
+                cancelStopHold();
+                setConfirmingStop(true);
+              }, 1200);
+            }}
+            onPointerUp={cancelStopHold}
+            onPointerCancel={cancelStopHold}
+            onPointerLeave={cancelStopHold}
+            onBlur={cancelStopHold}
+            onClick={(event) => {
+              if (!paused || event.detail === 0) setConfirmingStop(true);
+            }}
+          >
+            <Stop size={18} weight="fill" aria-hidden="true" />
+            <span>结束</span>
           </button>
         </div>
       </div>
@@ -542,63 +978,12 @@ export function RunningPage() {
   );
 }
 
+function RunBackLink() {
+  return <BackLink to="/agent" label="返回聊天" inverse />;
+}
+
 function PreviewBadge() {
   return <p className={styles.previewBadge}>交互预览，不代表设备数据</p>;
-}
-
-function SafetyNotice({
-  safetyState,
-  preview,
-}: {
-  safetyState: AppSnapshot['safetyState'] | undefined;
-  preview: boolean;
-}) {
-  const level = safetyState?.level ?? 'normal';
-  const message = preview
-    ? '交互预览不接收设备安全状态。'
-    : (safetyState?.message ?? '当前没有安全提醒。');
-  return (
-    <div
-      className={`${styles.safetyNotice} ${styles[`safety_${level}`]}`}
-      role={level === 'normal' ? 'status' : 'alert'}
-    >
-      <span>安全状态</span>
-      <strong>{message}</strong>
-    </div>
-  );
-}
-
-function buildLiveMetrics(snapshot: AppSnapshot | null) {
-  const heartRate = snapshot?.dataQuality.heartRate === 'fresh' ? snapshot.metrics.heartRate : null;
-  return [
-    {
-      label: '心率',
-      value: heartRate?.toString() ?? '--',
-      unit: heartRate == null ? '' : 'bpm',
-    },
-    {
-      label: '步频',
-      value: snapshot?.metrics.cadence?.toString() ?? '--',
-      unit: snapshot?.metrics.cadence == null ? '' : 'spm',
-    },
-    {
-      label: '距离',
-      value: snapshot ? (snapshot.metrics.distanceMeters / 1000).toFixed(2) : '--',
-      unit: snapshot ? 'km' : '',
-    },
-    {
-      label: '用时',
-      value: formatElapsed(snapshot?.metrics.elapsedSeconds),
-      unit: '',
-    },
-  ];
-}
-
-function readinessBadgeText(snapshot: AppSnapshot | null, preview: boolean): string {
-  if (preview) return '示例';
-  if (!snapshot) return '连接中';
-  if (snapshot.permissions.runningSensors !== 'granted') return '待授权';
-  return '可开跑';
 }
 
 function connectionText(

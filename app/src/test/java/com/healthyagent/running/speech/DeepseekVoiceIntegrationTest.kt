@@ -14,6 +14,68 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DeepseekVoiceIntegrationTest {
+    @Test fun `自然提及配速与一步的公里鼓励通过实际过滤后整段合成`() = runTest {
+        val core = "第一公里，用时六分整，配速每公里六分整。"
+        for (suffix in listOf("不必纠结配速，我会陪在你身边。", "又迈出了一步，我为你开心。", "这六分钟的陪伴，我很珍惜。")) {
+            val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+            val km = request("km_split", SpeechPriority.SPLIT)
+            voice.bus.enqueue(km.copy(trigger = km.trigger.copy(speakText = core)))
+            runCurrent()
+            voice.calls.single().respond(core + suffix)
+            runCurrent()
+            assertEquals(listOf(core + suffix), voice.fishTexts)
+            assertEquals(1, voice.startedFiles.size)
+            voice.ports.single().listener.onCompletion()
+            runCurrent()
+            assertEquals(core + suffix, voice.bus.latestMessage.value?.text)
+            voice.bus.shutdown()
+            runCurrent()
+        }
+    }
+
+    @Test fun `公里核定建议整段播放而改数遗漏建议或新增动作只回退核心`() = runTest {
+        val core = "第一公里，用时六分整，配速每公里六分整。"
+        val guidance = KilometerGuidance.HIGH_HEART_RATE
+        val whole = core + guidance.text + "开拓者，我会一直陪着你。"
+        for (response in listOf(whole, whole.replace("六分整", "五分整"), core + "我会陪着你。", whole + "加快脚步。", whole + "放慢一点。")) {
+            val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+            val km = request("km_split", SpeechPriority.SPLIT)
+            voice.bus.enqueue(km.copy(trigger = km.trigger.copy(speakText = core), kilometerGuidance = guidance))
+            runCurrent()
+            assertEquals(1, voice.calls.size)
+            voice.calls.single().respond(response)
+            runCurrent()
+            assertEquals(listOf(if (response == whole) whole else core), voice.fishTexts)
+            assertEquals(1, voice.startedFiles.size)
+            assertTrue(voice.localRules.isEmpty())
+            voice.ports.single().listener.onCompletion()
+            runCurrent()
+            assertEquals(1, voice.focusReleases)
+            voice.bus.shutdown()
+            runCurrent()
+        }
+    }
+
+    @Test fun `AI返回完整公里与多句鼓励直接整段合成一次不再拼接`() = runTest {
+        val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+        val core = "第一公里，用时六分整，配速每公里六分整。"
+        val companion = "开拓者，我们又一起完成了一公里。我会一直陪着你。"
+        val kmRequest = request("km_split", SpeechPriority.SPLIT)
+        voice.bus.enqueue(kmRequest.copy(trigger = kmRequest.trigger.copy(speakText = core)))
+        runCurrent()
+        assertEquals(1, voice.calls.size)
+        voice.calls.single().respond(core + companion)
+        runCurrent()
+        assertEquals(listOf(core + companion), voice.fishTexts)
+        assertTrue(voice.localRules.isEmpty())
+        voice.ports.single().listener.onCompletion()
+        runCurrent()
+        assertEquals(core + companion, voice.bus.latestMessage.value?.text)
+        assertEquals(1, voice.focusReleases)
+        voice.bus.shutdown()
+        runCurrent()
+    }
+
     @Test fun `有效鼓励和核心仅合成一次且准备阶段不取焦点`() = runTest {
         val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
         voice.bus.enqueueSessionStatus(request())
@@ -105,16 +167,17 @@ class DeepseekVoiceIntegrationTest {
         }
     }
 
-    @Test fun `排队及文字两秒包含在普通八秒和公里十五秒总期限内`() = runTest {
+    @Test fun `排队及文字等待包含在普通八秒和公里十五秒总期限内`() = runTest {
         for ((rule, limit) in listOf("session_paused" to 8_000L, "km_split" to 15_000L)) {
             val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
             voice.holdFish = true
             voice.bus.enqueue(request(rule))
-            // 接纳后 actor 尚未执行，模拟排队消耗，仅留下三秒总准备时间。
-            voice.clock += (limit - 3_000).milliseconds
+            val textWait = if (rule == "km_split") 6_000L else 2_000L
+            // 接纳后模拟排队消耗，文字超时后仅留一秒用于语音合成。
+            voice.clock += (limit - textWait - 1_000).milliseconds
             runCurrent()
             assertEquals(1, voice.calls.size)
-            advance(voice, 2_000)
+            advance(voice, textWait)
             assertTrue(voice.calls.single().isCanceled())
             assertEquals(1, voice.fishTexts.size)
             assertEquals(0, voice.focusRequests)
@@ -129,6 +192,24 @@ class DeepseekVoiceIntegrationTest {
             voice.bus.shutdown()
             runCurrent()
         }
+    }
+
+    @Test fun `公里排队后文字等待不能超出剩余三秒期限`() = runTest {
+        val voice = DeepseekVoiceFixture(StandardTestDispatcher(testScheduler))
+        voice.bus.enqueue(request("km_split"))
+        voice.clock += 12_000.milliseconds
+        runCurrent()
+        advance(voice, 2_999)
+        assertFalse(voice.calls.single().isCanceled())
+        advance(voice, 1)
+        assertTrue(voice.calls.single().isCanceled())
+        assertTrue(voice.calls.single().respond().closed)
+        runCurrent()
+        assertTrue(voice.fishTexts.isEmpty())
+        assertTrue(voice.startedFiles.isEmpty())
+        assertEquals(0, voice.focusRequests)
+        voice.bus.shutdown()
+        runCurrent()
     }
 
     @Test fun `紧急抢占和停止取消文字且旧响应不播放`() = runTest {

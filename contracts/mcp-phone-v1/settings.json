@@ -1,0 +1,86 @@
+{
+  "status": {
+    "commandId": "22222222-2222-4222-8222-222222222222",
+    "configured": true,
+    "identityToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "operations": [
+      {
+        "requestId": "66666666-6666-4666-8666-666666666666",
+        "serviceId": "44444444-4444-4444-8444-444444444444",
+        "endpoint": "https://tools.example.com/mcp/synthetic-long-service-for-mobile-review",
+        "status": "unknown",
+        "reason": null
+      }
+    ]
+  },
+  "list": {
+    "commandId": "22222222-2222-4222-8222-222222222222",
+    "identityToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "services": [
+      {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "revision": "55555555-5555-4555-8555-555555555555",
+        "endpoint": "https://tools.example.com/mcp/synthetic-long-service-for-mobile-review",
+        "enabled": false,
+        "private": {
+          "configured": true,
+          "hasCredential": true,
+          "context": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "endpointMatches": true
+        }
+      }
+    ],
+    "nextCursor": null,
+    "phoneDiscoveryAvailable": true
+  },
+  "detail": {
+    "commandId": "22222222-2222-4222-8222-222222222222",
+    "identityToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "service": {
+      "id": "44444444-4444-4444-8444-444444444444",
+      "revision": "55555555-5555-4555-8555-555555555555",
+      "endpoint": "https://tools.example.com/mcp/synthetic-long-service-for-mobile-review",
+      "enabled": false,
+      "catalog": {
+        "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "tools": [
+          {
+            "name": "notes.search",
+            "definition": {
+              "name": "notes.search",
+              "description": "检索合成笔记，不会修改资料。工具说明仅作为第三方数据展示。",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          },
+          {
+            "name": "__proto__",
+            "definition": {
+              "name": "__proto__",
+              "description": "合成边界工具，用于验证特殊名称不会破坏权限选择。",
+              "inputSchema": {
+                "type": "object"
+              }
+            }
+          }
+        ]
+      },
+      "grants": []
+    },
+    "private": {
+      "configured": true,
+      "hasCredential": true,
+      "context": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "endpointMatches": true
+    }
+  }
+}

@@ -12,6 +12,15 @@ import androidx.room.Upsert
 @Dao
 interface RunSessionDao {
 
+    @Insert
+    suspend fun insertMetricSamples(samples: List<RunMetricSampleEntity>)
+
+    @Query("DELETE FROM run_metric_samples WHERE sessionId = :sessionId")
+    suspend fun deleteMetricSamples(sessionId: String)
+
+    @Query("SELECT * FROM run_metric_samples WHERE sessionId = :sessionId ORDER BY sequence ASC")
+    suspend fun getMetricSamples(sessionId: String): List<RunMetricSampleEntity>
+
     @Upsert
     suspend fun upsertSession(session: RunSessionEntity)
 
@@ -32,12 +41,15 @@ interface RunSessionDao {
         session: RunSessionEntity,
         splits: List<SplitEntity>,
         routePoints: List<RoutePointEntity>,
+        metricSamples: List<RunMetricSampleEntity> = emptyList(),
     ) {
         upsertSession(session)
         deleteSplits(session.id)
         deleteRoutePoints(session.id)
+        deleteMetricSamples(session.id)
         if (splits.isNotEmpty()) insertSplits(splits)
         if (routePoints.isNotEmpty()) insertRoutePoints(routePoints)
+        if (metricSamples.isNotEmpty()) insertMetricSamples(metricSamples)
     }
 
     @Query("SELECT * FROM run_sessions WHERE state = 'FINISHED' ORDER BY startTimeMillis DESC")

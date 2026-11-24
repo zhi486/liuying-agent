@@ -1,6 +1,8 @@
 package com.healthyagent.running.ui.web
 
 import android.graphics.Color
+import android.app.Activity
+import android.content.ContextWrapper
 import android.net.Uri
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -15,16 +17,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import com.healthyagent.running.BuildConfig
+import com.healthyagent.running.agent.AgentTaskService
+import com.healthyagent.running.agent.cloud.CloudAgentService
+import com.healthyagent.running.agent.memory.MemoryService
+import com.healthyagent.running.agent.memory.MemoryDocumentExport
 import com.healthyagent.running.coordinator.AppCoordinator
 import com.healthyagent.running.coordinator.RunCommandDispatcher
 import java.io.ByteArrayInputStream
 
 private const val APP_ASSET_HOST = "appassets.androidplatform.net"
 private const val WEB_ROOT_PATH = "/assets/web/"
-private const val WEB_ENTRY_URL = "https://$APP_ASSET_HOST${WEB_ROOT_PATH}index.html#/run"
+private const val WEB_ENTRY_URL = "https://$APP_ASSET_HOST${WEB_ROOT_PATH}index.html#/agent"
 
 /**
  * 正式 React 宿主：只加载 APK 内资源，并通过受限 WebMessage Bridge 消费原生快照。
@@ -33,12 +43,44 @@ private const val WEB_ENTRY_URL = "https://$APP_ASSET_HOST${WEB_ROOT_PATH}index.
 fun WebPreviewHost(
     coordinator: AppCoordinator,
     commandDispatcher: RunCommandDispatcher,
+    agentTaskService: AgentTaskService,
+    memoryService: MemoryService,
+    cloudAgentService: CloudAgentService,
+    voiceInputService: com.healthyagent.running.agent.voice.VoiceInputService,
+    mcpManagementService: com.healthyagent.running.agent.mcp.McpManagementService,
     modifier: Modifier = Modifier,
 ) {
     var activeWebView by remember { mutableStateOf<WebView?>(null) }
+    val activity = generateSequence(LocalContext.current) { (it as? ContextWrapper)?.baseContext }
+        .filterIsInstance<Activity>().firstOrNull()
+    BackHandler(enabled = activeWebView != null) {
+        val view = activeWebView
+        if (view != null && view.url?.let { Uri.parse(it).isTrustedEntry() } == true) {
+            // 页面按钮与系统返回共用导航；根页面退到后台，不停止跑步服务。
+            view.evaluateJavascript(
+                "window.dispatchEvent(new Event('liuying:navigate-back', {cancelable:true}))",
+            ) { unhandled ->
+                if (unhandled == "true" && activeWebView === view) activity?.moveTaskToBack(true)
+            }
+        } else activity?.moveTaskToBack(true)
+    }
     val scope = rememberCoroutineScope()
-    val nativeBridge = remember(coordinator, commandDispatcher, scope) {
-        NativeWebBridge(coordinator, commandDispatcher, scope)
+    val resolver = LocalContext.current.applicationContext.contentResolver
+    var exportController by remember { mutableStateOf<MemoryDocumentExport?>(null) }
+    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        exportController?.selected(uri?.let { selected ->
+            {
+                require(selected.scheme == "content")
+                checkNotNull(resolver.openOutputStream(selected, "w")).bufferedWriter(Charsets.UTF_8)
+            }
+        })
+    }
+    val memoryDocumentExport = remember(scope, memoryService) {
+        MemoryDocumentExport(scope, { documentLauncher.launch("流萤长期记忆.md") }, memoryService::document)
+            .also { exportController = it }
+    }
+    val nativeBridge = remember(coordinator, commandDispatcher, agentTaskService, memoryService, cloudAgentService, voiceInputService, mcpManagementService, scope, memoryDocumentExport) {
+        NativeWebBridge(coordinator, commandDispatcher, agentTaskService, memoryService, scope, cloudAgentService, voiceInputService, mcpManagementService, memoryDocumentExport)
     }
 
     DisposableEffect(Unit) {

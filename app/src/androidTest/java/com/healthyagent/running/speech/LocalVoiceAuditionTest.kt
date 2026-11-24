@@ -1,6 +1,8 @@
 package com.healthyagent.running.speech
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.core.app.ActivityScenario
+import com.healthyagent.running.MainActivity
 import androidx.test.platform.app.InstrumentationRegistry
 import com.healthyagent.running.core.model.SpeechPriority
 import com.healthyagent.running.data.repository.RunRepository
@@ -23,8 +25,10 @@ class LocalVoiceAuditionTest {
         val arguments = InstrumentationRegistry.getArguments()
         assumeTrue("需用户明确准备好才播放", arguments.getString("allowLocalVoiceAudition") == "true")
         val sample = arguments.getString("auditionSample")
-        require(sample in setOf("core", "stitched", "companion", "continuous", "km-whole")) { "未知试听小样" }
-        runBlocking {
+        require(sample in setOf("core", "stitched", "companion", "continuous", "km-whole", "km-replay")) { "未知试听小样" }
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        try { runBlocking {
             val koin = GlobalContext.get()
             val repository = koin.get<RunRepository>()
             assertNull("有未结束跑步，不执行试听", repository.getActiveSession())
@@ -52,6 +56,9 @@ class LocalVoiceAuditionTest {
                 logger.flush()
             }
             assertNull("试听不应新增活动跑步", repository.getActiveSession())
+        } } finally {
+            scenario.onActivity { it.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        }
         }
     }
 }

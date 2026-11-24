@@ -1,12 +1,8 @@
-.page {
-  padding: 1.35rem 1.4rem 2rem;
-}
-
 .selectionFieldset {
   margin: 1rem 0 0;
   padding: 1.05rem 1.15rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-panel);
   background: var(--canvas-raised);
   min-width: 0;
 }
@@ -30,7 +26,7 @@
   margin: 0.5rem 0;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-input);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -58,54 +54,53 @@
   line-height: 1.7;
 }
 
+.selectionFieldset > button {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.selectionFieldset .mcpOption {
+  align-items: flex-start;
+  padding: 0.75rem 0;
+}
+
+.mcpOption input {
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+}
+
+.mcpOption span,
+.mcpPreview {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mcpOption small {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--text-muted);
+}
+
+.selectionFieldset > button:disabled,
+.mcpOption:has(input:disabled) {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .detail {
   overflow-wrap: anywhere;
 }
 
-.intro h1 {
-  position: relative;
-  z-index: 1;
-  max-width: 14ch;
-  margin: 0;
-  font-size: clamp(1.85rem, 7vw, 2.35rem);
-  font-weight: 700;
-  line-height: 1.32;
-  letter-spacing: -0.055em;
-  text-wrap: balance;
-}
-
-.intro {
-  position: relative;
-  min-height: 9rem;
-  padding: 0.7rem 0 1.3rem;
-  overflow: hidden;
-}
-
-.intro::after {
-  position: absolute;
-  top: -5.5rem;
-  right: -6rem;
-  width: 15rem;
-  height: 15rem;
-  border-radius: 50%;
-  background: repeating-radial-gradient(circle, transparent 0 0.95rem, var(--line) 1rem 1.04rem);
-  opacity: 0.3;
-  content: '';
-  pointer-events: none;
-}
-
-.intro > p:last-child,
 .recent p {
   color: var(--text-muted);
   font-size: 0.84rem;
   line-height: 1.6;
-}
-
-.intro > p:last-child {
-  position: relative;
-  z-index: 1;
-  max-width: 22rem;
-  margin: 0.7rem 0 0;
 }
 
 .recent {
@@ -122,30 +117,6 @@
   margin: 0;
 }
 
-.composer {
-  padding: 1rem 1rem 1.1rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
-  border-radius: var(--radius-lg);
-  background: var(--canvas-raised);
-  box-shadow: 0 0.8rem 2.5rem -2rem var(--shadow);
-}
-
-.composer textarea {
-  width: 100%;
-  min-height: 6.2rem;
-  resize: vertical;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 0.96rem;
-  line-height: 1.7;
-}
-
-.composer textarea::placeholder {
-  color: var(--text-muted);
-}
-
 .quickPrompts {
   display: flex;
   gap: 0.55rem;
@@ -159,7 +130,7 @@
   min-height: 2.7rem;
   padding: 0.55rem 0.9rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-round);
+  border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text);
   font-size: 0.78rem;
@@ -189,17 +160,8 @@
   overflow-wrap: anywhere;
 }
 
-.composer textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.composerFooter {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-  color: var(--text-muted);
-  font-size: 0.8rem;
+.composer textarea:focus {
+  outline: none;
 }
 
 .voiceInput {
@@ -216,7 +178,7 @@
   margin-right: 0.5rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-round);
+  border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
@@ -238,49 +200,15 @@
   line-height: 1.6;
 }
 
-.composerFooter button {
-  min-height: 3rem;
-  padding: 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--canvas-raised);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.composerFooter .saveButton:enabled {
-  border-color: var(--line);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.composerFooter .composerAction:last-child button:enabled {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
 .onlineInfo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
   margin-top: 0.8rem;
-  padding: 0 0.25rem;
+  padding: 0.5rem 0.25rem;
   color: var(--text-muted);
   font-size: 0.8rem;
   line-height: 1.7;
-}
-
-.onlineInfo summary {
-  padding: 0.65rem 0;
-  cursor: pointer;
-}
-
-.onlineInfo summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: var(--radius-sm);
-}
-
-.onlineInfo p {
-  margin: 0 0 0.65rem;
 }
 
 .page button:disabled {
@@ -304,7 +232,7 @@
   gap: 0.75rem;
   width: 100%;
   text-align: left;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-row);
 }
 
 .taskList span,
@@ -324,7 +252,7 @@
   min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-button);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -344,7 +272,7 @@
   padding: 1rem;
   margin-bottom: 1.5rem;
   border: 1px solid var(--line);
-  border-radius: 1rem;
+  border-radius: var(--radius-card);
 }
 
 .detailHeader {
@@ -383,7 +311,7 @@
   align-items: center;
   padding: 0.6rem 1rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-button);
   color: var(--text);
   font-size: 0.85rem;
   text-decoration: none;
@@ -408,7 +336,7 @@
   min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-button);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -446,13 +374,6 @@
   color: var(--text-muted);
 }
 
-.page {
-  display: flex;
-  flex-direction: column;
-  min-height: calc(100dvh - env(safe-area-inset-top) - 4.4rem);
-  padding: 0 1.25rem 1.25rem;
-}
-
 .chatHeader,
 .accountHeader {
   display: flex;
@@ -473,7 +394,7 @@
   min-height: 2.75rem;
   padding: 0.4rem 0.7rem;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-button);
   background: transparent;
   color: var(--text-muted);
   font-size: 0.82rem;
@@ -484,53 +405,40 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: 9rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.intro {
-  display: flex;
+.conversation > * {
+  flex-shrink: 0;
+}
+
+.page .conversation[data-empty] {
+  container-type: size;
+  overflow: clip;
+  padding: 0;
+}
+
+.page .conversation[data-empty] > :first-child {
   flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 14rem;
-  padding: 1rem 0;
-  text-align: center;
+  min-height: 0;
 }
 
-.intro::after {
-  display: none;
+.page .conversation[data-empty] > .onlineSection {
+  padding: 0;
 }
 
-.intro h1 {
-  max-width: none;
-  font-size: clamp(1.45rem, 5.5vw, 1.85rem);
-  letter-spacing: -0.035em;
-}
-
-.intro > p:last-child {
-  max-width: none;
-  margin: 0.55rem 0 0;
+.sidebarReturn {
+  flex: none;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--agent-line);
 }
 
 .onlineSection {
   margin: 0;
   padding: 0.75rem 0;
   border-top: 0;
-}
-
-.composer {
-  padding: 0.75rem;
-  border-color: var(--line);
-  border-radius: 1.15rem;
-  box-shadow: 0 0.75rem 2rem -1.65rem var(--shadow);
-}
-
-.composer textarea {
-  min-height: 3.6rem;
-  max-height: 11rem;
-  resize: vertical;
-  padding: 0.2rem;
-  font-size: 0.93rem;
 }
 
 .referencePicker {
@@ -543,19 +451,13 @@
   align-items: center;
   min-height: 2.5rem;
   padding: 0.2rem 0.5rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-button);
   color: var(--text-muted);
   cursor: pointer;
 }
 
 .referencePicker .selectionFieldset {
   margin: 0.55rem 0;
-}
-
-.composerFooter {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
 }
 
 .voiceInput {
@@ -569,23 +471,6 @@
 .voiceInput button {
   min-height: 2.75rem;
   margin: 0;
-}
-
-.composerFooter > button {
-  min-height: 2.75rem;
-  padding: 0.4rem 0.7rem;
-  white-space: nowrap;
-}
-
-.composerFooter .saveButton {
-  border: 0;
-  background: transparent;
-}
-
-.composerFooter .sendButton:enabled {
-  border-color: var(--firefly);
-  background: var(--firefly);
-  color: var(--firefly-ink);
 }
 
 .availability {
@@ -614,7 +499,7 @@
   margin: 1.3rem 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-card);
   background: var(--canvas-raised);
 }
 
@@ -628,7 +513,18 @@
   text-decoration: none;
 }
 
-.accountLinks a:last-child {
+.accountLinks button {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.75rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+}
+
+.accountLinks > :last-child {
   border-bottom: 0;
 }
 
@@ -652,44 +548,84 @@
 .chatTurn {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--line);
+  gap: 0.6rem;
+  padding: 1.2rem 0;
   overflow-wrap: anywhere;
 }
 
-.chatTurn > p {
+.chatTurn + .chatTurn {
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.chatTurn p {
   margin: 0;
 }
 
-.chatTurn > p[role='status'] {
+.userTurn {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.turnStatus {
   color: var(--text-muted);
   font-size: 0.72rem;
+  line-height: 1.6;
 }
 
 .userMessage {
-  align-self: flex-end;
+  width: fit-content;
   max-width: 85%;
-  padding: 0.75rem 0.9rem;
-  border-radius: 1rem 1rem 0.2rem 1rem;
-  background: var(--accent-soft);
+  padding: 0.68rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: var(--radius-message);
+  background: color-mix(in srgb, var(--accent-soft) 64%, var(--canvas-raised));
+  color: var(--text);
+  line-height: 1.65;
   white-space: pre-wrap;
 }
 
-.chatTurn > section[aria-label='流萤的回答'] {
+.assistantAnswer {
   order: 1;
-  padding: 0.6rem 0.15rem;
-  line-height: 1.7;
+  padding: 0.25rem 0;
+  color: var(--text);
+  line-height: 1.75;
 }
 
-.chatTurn > section[aria-label='流萤的回答'] h3 {
-  margin: 0 0 0.4rem;
-  color: var(--accent);
+.assistantLabel {
+  margin: 0 0 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.69rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
+.assistantAnswer > p {
+  margin: 0;
+}
+
+.turnNotice {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-notice);
+  background: var(--canvas-raised);
+  color: var(--text-muted);
   font-size: 0.8rem;
+  line-height: 1.65;
 }
 
-.chatTurn > section[aria-label='流萤的回答'] p {
-  margin: 0.35rem 0;
+.turnError {
+  padding: 0.7rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--line));
+  border-radius: var(--radius-notice);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+.inlineActions {
+  gap: 0.5rem;
 }
 
 .messageMeta {
@@ -699,19 +635,100 @@
   line-height: 1.65;
 }
 
+.memorySaved {
+  order: 2;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.15rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+  text-underline-offset: 0.2em;
+}
+
+.memorySaved:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-marker);
+}
+
 .messageMeta summary {
   width: fit-content;
-  min-height: 2.5rem;
-  padding: 0.45rem 0;
+  min-height: 2.75rem;
+  padding: 0.55rem 0;
   cursor: pointer;
 }
 
+.messageActions {
+  margin-top: 0.1rem;
+}
+
+.actionDetail {
+  margin: 0.25rem 0 0.55rem;
+}
+
+.sourceContent {
+  margin: 0.15rem 0 0.45rem;
+  padding-left: 0.85rem;
+  border-left: 2px solid var(--line);
+}
+
+.sourceContent ul {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sourceItem {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sourceItem strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sourceUrl {
+  color: var(--text-muted);
+  font-size: 0.71rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.sourceItem small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.memoryRefs {
+  margin: 0.2rem 0 0.5rem;
+  padding-left: 1.1rem;
+  font-family: var(--font-numeric);
+  font-size: 0.7rem;
+}
+
 .page {
-  min-height: calc(100dvh - env(safe-area-inset-bottom));
-  padding: env(safe-area-inset-top) 1rem 0.75rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) 1rem calc(env(safe-area-inset-bottom) + 0.75rem);
+  touch-action: pan-y;
 }
 
 .chatHeader {
+  position: relative;
+  gap: 0.25rem;
+  flex: none;
   min-height: 3.6rem;
   border: 0;
 }
@@ -735,94 +752,114 @@
 
 .headerSpacer {
   width: 5.1rem;
+  flex: none;
 }
 
 .intro {
-  min-height: 17rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: min(26rem, 58dvh);
+  gap: 0.75rem;
+  align-items: center;
+  text-align: center;
 }
 
 .intro h1 {
-  font-weight: 620;
+  font-size: 1.2rem;
+  font-weight: 550;
+}
+
+.chatTitle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 30%;
+  text-align: center;
+}
+
+.chatHeader .newChatButton {
+  flex: none;
+  width: 2.75rem;
+  border-radius: var(--radius-circle);
+  margin-right: auto;
+  background: transparent;
 }
 
 .composer {
-  padding: 0.8rem 0.8rem 0.45rem;
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 0.65rem 0.7rem 0.35rem;
   border: 1px solid var(--line);
-  border-radius: 1.45rem;
+  border-radius: var(--radius-compact-surface);
+  outline: 2px solid transparent;
+  outline-offset: 1px;
   background: var(--canvas-raised);
-  box-shadow: 0 0.6rem 1.8rem -1.5rem var(--shadow);
+  box-shadow: none;
+  transition:
+    border-color 160ms ease,
+    outline-color 160ms ease;
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+  outline-color: var(--accent);
 }
 
 .composer textarea {
   display: block;
-  min-height: 3.3rem;
-  max-height: 11rem;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.8rem;
+  max-height: min(11rem, 25dvh);
+  resize: none;
   padding: 0.15rem 0.2rem;
+  border: 0;
+  background: transparent;
   font-size: 0.96rem;
   line-height: 1.55;
 }
 
 .composerFooter {
+  display: flex;
   align-items: center;
   gap: 0.2rem;
+  min-width: 0;
   min-height: 2.9rem;
 }
 
-.toolsMenu {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
-.toolsMenu > summary {
+.toolsTrigger,
+.composerFooter .voiceTrigger,
+.composerFooter .sendButton {
   display: grid;
-  width: 2.65rem;
-  height: 2.65rem;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex: none;
   place-items: center;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--accent);
-  cursor: pointer;
-  list-style: none;
-}
-
-.toolsMenu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.toolsMenu > summary:focus-visible {
-  outline: 2px solid var(--accent);
-}
-
-.toolsPanel {
-  position: absolute;
-  z-index: 5;
-  bottom: calc(100% + 0.65rem);
-  left: -0.2rem;
-  width: min(19rem, calc(100vw - 2.5rem));
-  max-height: min(60dvh, 29rem);
-  overflow-y: auto;
-  padding: 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  background: var(--canvas-raised);
-  box-shadow: 0 1rem 2.5rem -1rem var(--shadow);
-}
-
-.toolsPanel > button {
-  width: 100%;
-  min-height: 2.75rem;
-  padding: 0.4rem 0.75rem;
+  margin: 0;
+  padding: 0;
   border: 0;
-  border-radius: 0.7rem;
+  border-radius: var(--radius-circle);
+}
+
+.toolsTrigger {
+  margin-right: auto;
   background: transparent;
   color: var(--text);
-  text-align: left;
 }
 
-.toolsPanel > button:enabled:hover,
-.toolsMenu > summary:hover {
+.toolsTrigger:enabled:hover,
+.composerFooter .voiceTrigger:enabled:hover {
   background: var(--surface);
+}
+
+.toolsTrigger:focus-visible,
+.composerFooter .voiceTrigger:focus-visible,
+.composerFooter .sendButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .referencePicker {
@@ -840,32 +877,159 @@
   width: auto;
 }
 
-.composerFooter .voiceTrigger,
-.composerFooter .sendButton {
-  display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-height: 2.75rem;
-  place-items: center;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-}
-
 .composerFooter .voiceTrigger {
   background: transparent;
   color: var(--text);
 }
 
 .composerFooter .sendButton {
-  background: var(--firefly);
-  color: var(--firefly-ink);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.composerFooter .sendButton:enabled:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
 .composerFooter .sendButton:disabled {
   background: var(--surface);
   color: var(--text-muted);
+}
+
+.toolsOverlay {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  top: var(--tools-viewport-top, 0px);
+  bottom: auto;
+  height: var(--tools-viewport-height, 100vh);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  isolation: isolate;
+}
+
+.toolsBackdrop {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.34);
+  animation: toolsBackdropIn 160ms ease-out;
+}
+
+.toolsSheet {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 34rem);
+  max-height: min(calc(var(--tools-viewport-height, 100vh) * 0.82), 42rem);
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius-sheet) var(--radius-sheet) var(--radius-none) var(--radius-none);
+  background: var(--canvas-raised);
+  box-shadow: 0 -1rem 2.5rem -1.35rem var(--shadow);
+  animation: toolsSheetIn 180ms cubic-bezier(0.22, 0.7, 0.2, 1);
+}
+
+.toolsSheetHeader {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.8rem 0.9rem 0.65rem 1.15rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas-raised);
+}
+
+.toolsSheetHeader h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.toolsSheetHeader button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.toolsSheetHeader button:focus-visible,
+.saveButton:focus-visible,
+.referencePicker > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.toolsSheetBody {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  gap: 0.85rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.15rem calc(1rem + env(safe-area-inset-bottom));
+}
+
+.toolsSheetBody > * {
+  min-width: 0;
+}
+
+.saveButton {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 0.9rem;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-button);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.saveButton:enabled:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
+}
+
+.saveButton:disabled {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@keyframes toolsBackdropIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes toolsSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 }
 
 .availability {
@@ -880,31 +1044,202 @@
   inset: 0;
   display: flex;
   width: 100%;
+  isolation: isolate;
+  overflow: hidden;
+  pointer-events: none;
+  touch-action: pan-y;
+}
+
+.sidebarOverlay[data-open='true'] {
+  pointer-events: auto;
+}
+
+.menuAnchor {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
+.sidebarOverlay .menuToggle {
+  position: absolute;
+  z-index: 2;
+  left: var(--menu-left, 16px);
+  top: var(--menu-top, 6px);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--agent-text);
+  pointer-events: auto;
+  transition:
+    left var(--motion-menu) var(--ease-out),
+    top var(--motion-menu) var(--ease-out);
+}
+
+.sidebarOverlay[data-open='true'] .menuToggle {
+  left: max(16px, calc((100vw - 34rem) / 2 + 16px));
+  top: calc(env(safe-area-inset-top, 0px) + 6px);
+}
+
+@media (min-width: 960px) {
+  .sidebarOverlay[data-open='true'] .menuToggle {
+    left: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebarOverlay .menuToggle {
+    transition: none;
+  }
+}
+
+:global(html[data-motion='reduced']) .sidebarOverlay .menuToggle {
+  transition: none !important;
+}
+
+.sidebarOverlay .menuToggle:hover {
+  background: var(--agent-surface-strong);
+}
+
+.sidebarOverlay .menuToggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .sidebarBackdrop {
   position: absolute;
+  z-index: 0;
   inset: 0;
   width: 100%;
   border: 0;
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(0, 0, 0, 0.22);
+  opacity: var(--chat-drawer-progress, 0);
+  transition: opacity 240ms ease;
 }
 
 .sidebar {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  width: min(86vw, 21rem);
-  height: 100dvh;
+  width: var(--chat-drawer-width, min(86vw, 21rem));
+  margin-left: max(0px, calc((100vw - 34rem) / 2));
+  transform: translateX(
+    calc(var(--chat-drawer-x, 0px) - var(--chat-drawer-width, min(86vw, 21rem)))
+  );
+  transition: transform 240ms cubic-bezier(0.22, 0.7, 0.2, 1);
+  height: 100%;
+  min-height: 0;
+  flex-shrink: 0;
   padding: env(safe-area-inset-top) 0.95rem env(safe-area-inset-bottom);
-  background: var(--canvas);
+  background: var(--canvas, #fff);
+  border-radius: var(--radius-none) var(--radius-drawer) var(--radius-drawer) var(--radius-none);
+  overflow: hidden;
   box-shadow: 0.5rem 0 2rem -1rem var(--shadow);
+}
+
+:global(:root[data-chat-dragging='true']) .sidebar,
+:global(:root[data-chat-dragging='true']) .sidebarBackdrop {
+  transition: none;
+}
+
+/* 圆形揭示已负责旧新衔接，新快照不能再截到抽屉关闭的半途画面。 */
+:global(html[data-new-chat-reveal]) .sidebar,
+:global(html[data-new-chat-reveal]) .sidebarBackdrop,
+:global(html[data-new-chat-reveal]) .menuToggle,
+:global(html[data-new-chat-reveal]) .menuToggle :global(.menu-glyph > span) {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebarBackdrop,
+  .toolsBackdrop,
+  .toolsSheet {
+    animation: none;
+    transition: none;
+  }
 }
 
 .sidebar .accountHeader {
   flex: none;
   justify-content: space-between;
-  min-height: 3.5rem;
+  min-height: 4.2rem;
+  gap: 0.35rem;
+  border: 0;
+}
+
+.conversationSearch {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-input);
+  background: var(--canvas-raised);
+  color: var(--text-muted);
+}
+
+.conversationSearch input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.conversationSearch:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.conversationSearch input:focus {
+  outline: none;
+}
+
+.sidebarFooter {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.65rem;
+  border: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.sidebarFooter > span:nth-child(2) {
+  flex: 1;
+}
+
+.profileMark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-circle);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.managementTitle {
+  padding-left: 0.65rem;
+  font-weight: 600;
 }
 
 .sidebar .accountHeader h1 {
@@ -912,14 +1247,15 @@
 }
 
 .sidebarScroll {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .sidebarSectionTitle {
-  margin: 1.4rem 0 0.45rem;
-  padding: 0 0.35rem;
+  margin: 1rem 0 0.45rem;
+  padding: 0 0.65rem;
   color: var(--text-muted);
   font-size: 0.72rem;
   font-weight: 650;
@@ -940,14 +1276,16 @@
 }
 
 .sidebar .accountLinks {
+  flex: none;
   margin: 0;
   border: 0;
   background: transparent;
 }
 
-.sidebar .accountLinks a {
+.sidebar .accountLinks a,
+.sidebar .accountLinks button {
   min-height: 3rem;
-  padding: 0.5rem 0.35rem;
+  padding: 0.5rem 0.65rem;
 }
 
 .sidebar .accountSection {
@@ -960,6 +1298,15 @@
   list-style: none;
 }
 
+.conversationPeriod {
+  margin: 1rem 0 0.35rem;
+  padding: 0 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.sidebarAction,
 .sidebarChats button {
   display: block;
   width: 100%;
@@ -967,23 +1314,159 @@
   padding: 0.55rem 0.65rem;
   overflow: hidden;
   border: 0;
-  border-radius: 0.65rem;
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--text);
+  font: inherit;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sidebarChats button:hover {
+.sidebarAction {
+  margin: 0.35rem 0;
+  border-radius: var(--radius-button);
   background: var(--surface);
+  color: var(--accent);
+  white-space: normal;
+}
+
+.sidebarAction > svg {
+  vertical-align: middle;
+  margin-right: 0.25rem;
+}
+
+.sidebarChats button:enabled:hover {
+  background: var(--surface);
+}
+
+.sidebarChats button[aria-current='page'] {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.sidebar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.sidebarAction:focus-visible,
+.sidebarChats button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.conversationRename {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.8rem 0;
+  padding: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
+.conversationRename label {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.conversationRename input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-input);
+  background: var(--canvas);
+  color: var(--text);
+  font: inherit;
+}
+
+.conversationRename input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .sidebarEmpty {
   margin: 0.3rem 0 0.8rem;
-  padding: 0 0.35rem;
+  padding: 0 0.65rem;
   color: var(--text-muted);
   font-size: 0.78rem;
+}
+
+.conversationRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.conversationRow > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversationRow > .conversationAction {
+  flex: none;
+  width: auto;
+  min-height: 2.75rem;
+  padding: 0.55rem;
+  border: 0;
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.conversationAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.conversationOperation,
+.cleanupStatus {
+  padding: 0.65rem;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.conversationOperation h2,
+.cleanupStatus h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.conversationOperation p,
+.cleanupStatus p,
+.lifecycleMessage {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+.lifecycleMessage {
+  padding: 0 0.65rem;
+  overflow-wrap: anywhere;
+}
+
+.conversationOperation .destructiveAction {
+  color: var(--danger, var(--text));
+}
+
+.archivedNotice {
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.archivedNotice p {
+  margin: 0.25rem 0 0.65rem;
 }
 
 .voiceInput {
@@ -992,14 +1475,12 @@
 
 .voicePanel,
 .voiceToast {
-  position: absolute;
-  z-index: 6;
-  right: -3.1rem;
-  bottom: calc(100% + 0.7rem);
-  width: min(19rem, calc(100vw - 2.5rem));
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.9rem;
   border: 1px solid var(--line);
-  border-radius: 1rem;
+  border-radius: var(--radius-control-surface);
   background: var(--canvas-raised);
   box-shadow: 0 1rem 2.5rem -1rem var(--shadow);
   color: var(--text);
@@ -1013,10 +1494,4162 @@
 }
 
 .voiceToast {
-  bottom: calc(100% + 0.7rem);
   padding: 0.55rem 0.8rem;
 }
 
 .voiceToast {
   margin: 0;
+}
+.voiceStatusSlot {
+  /* 与聊天页共用实际可视高度，避免 WebView 动态视口异常时提示区塌缩。 */
+  max-height: 13rem;
+  max-height: clamp(5rem, calc(var(--chat-viewport-height, 100vh) / 4), 13rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-shrink: 0;
+}
+.voiceStatusSlot p {
+  overflow-wrap: anywhere;
+}
+.voicePanel button,
+.voiceDismiss {
+  min-height: 44px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--canvas);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.voiceToast {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.voiceToast p {
+  margin: 0;
+  flex: 1;
+}
+.voiceDismiss {
+  flex-shrink: 0;
+}
+
+/* Agent workspace: task-first hierarchy instead of a centered greeting. */
+.chatHeaderIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  margin-right: auto;
+}
+
+.chatHeader .chatTitle {
+  position: static;
+  left: auto;
+  max-width: none;
+  transform: none;
+  font-size: 1rem;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.chatHeader .chatSubtitle {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.chatHeader .newChatButton {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+.agentTurnContext {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: start;
+  justify-content: initial;
+  gap: 0.5rem;
+  padding: 0.42rem 0 0.42rem 0.95rem;
+  border: 0;
+  border-left: 2px solid color-mix(in srgb, var(--text-muted) 55%, var(--line));
+  border-radius: var(--radius-none);
+  background: transparent;
+}
+
+.userContextLabel {
+  padding-top: 0.14rem;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.agentTurnContext .userMessage {
+  width: auto;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-none);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.agentReadingArea {
+  order: 1;
+  padding: 0.45rem 0 0.3rem 0.95rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 62%, var(--line));
+}
+
+.agentReadingArea > p {
+  max-width: 44rem;
+  font-size: 0.88rem;
+  line-height: 1.8;
+}
+
+.messageMeta {
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', 'Roboto Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+.agentComposerContext {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0 0.2rem 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.67rem;
+  line-height: 1.35;
+}
+
+.agentComposerContext strong {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Codex-aligned direction: flat, rail-structured workspace instead of soft green cards.
+   Confined to the Agent surface so the Keep-style running pages keep their own world. */
+/* Token 挂在 Agent 外壳和两个 Portal 根上：跑步提示条、右上角入口、侧栏抽屉和
+   底部输入 Sheet 都不在 .page 内部，挂在 .page 上它们会拿不到值。 */
+:global(.app-shell-agent),
+.sidebarOverlay,
+.toolsOverlay {
+  --agent-canvas: #ffffff;
+  --agent-surface: #f5f5f4;
+  --agent-surface-strong: #ececea;
+  --agent-raised: #ffffff;
+  --agent-line: #e5e5e2;
+  --agent-line-strong: #d1d2cf;
+  --agent-text: #191a19;
+  --agent-text-muted: #70736f;
+  --agent-ink: #191a19;
+  --agent-ink-hover: #343734;
+  --agent-on-ink: #ffffff;
+  --agent-accent: #0f6b4c;
+  --agent-focus: #191a19;
+}
+
+:global(:root[data-theme='night']) :global(.app-shell-agent),
+:global(:root[data-theme='night']) .sidebarOverlay,
+:global(:root[data-theme='night']) .toolsOverlay {
+  --agent-canvas: #0b0c0c;
+  --agent-surface: #141515;
+  --agent-surface-strong: #1e201f;
+  --agent-raised: #101111;
+  --agent-line: #252726;
+  --agent-line-strong: #363937;
+  --agent-text: #eceeed;
+  --agent-text-muted: #979c99;
+  --agent-ink: #e9ecea;
+  --agent-ink-hover: #ffffff;
+  --agent-on-ink: #0e100f;
+  --agent-accent: #5fce9d;
+  --agent-focus: #e9ecea;
+}
+
+:global(.app-shell-agent) {
+  background: var(--agent-canvas);
+  color: var(--agent-text);
+}
+
+.page {
+  padding: env(safe-area-inset-top) 0.9rem calc(env(safe-area-inset-bottom) + 0.5rem);
+  background: var(--agent-canvas);
+  color: var(--agent-text);
+  box-shadow: 0 0 0 100vmax var(--agent-canvas);
+}
+
+/* 顶部两个全局入口只在本页重绘：薄荷绿胶囊换成中性工具条，绿色只留在信号点上。 */
+:global(.app-content-agent) > :global(.active-run-link) {
+  display: block;
+  min-height: 2.5rem;
+  margin: 0.55rem 0.9rem 0;
+  padding: 0.5rem 5.4rem 0.5rem 0.7rem;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-card);
+  background: var(--agent-surface);
+  color: var(--agent-text);
+  font-family: var(--font-numeric);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+:global(.app-content-agent) > :global(.active-run-link)::before {
+  display: inline-block;
+  width: 0.36rem;
+  height: 0.36rem;
+  margin-right: 0.45rem;
+  border-radius: var(--radius-line);
+  background: var(--agent-accent);
+  content: '';
+  vertical-align: 0.12em;
+}
+
+:global(.app-shell-agent) :global(.app-navigation) :global(.view-switch) {
+  min-height: 2.4rem;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--agent-raised);
+  color: var(--agent-text);
+  font-size: 0.72rem;
+  font-weight: 550;
+}
+
+:global(.app-shell-agent) :global(.app-navigation) :global(.view-switch):hover {
+  border-color: var(--agent-ink);
+}
+
+.chatHeader {
+  min-height: 3.25rem;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--agent-line);
+}
+
+/* 没有跑步提示条时，页头让开右上角浮动入口，否则“+”会被压住。 */
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .chatHeader {
+  padding-top: 2.5rem;
+}
+
+.chatHeader span.chatTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.chatHeader span.chatSubtitle {
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.62rem;
+  font-weight: 480;
+  letter-spacing: 0.1em;
+}
+
+.chatHeader button,
+.accountHeader button {
+  border-radius: var(--radius-button);
+  color: var(--agent-text-muted);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.chatHeader button:hover,
+.chatHeader button:focus-visible,
+.accountHeader button:hover {
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+}
+
+.chatHeader button:focus-visible,
+.accountHeader button:focus-visible,
+.composerFooter button:focus-visible,
+.toolsSheetHeader button:focus-visible,
+.saveButton:focus-visible,
+.referencePicker > summary:focus-visible,
+.sidebarAction:focus-visible,
+.sidebarChats button:focus-visible,
+.conversationAction:focus-visible,
+.conversationRename input:focus-visible {
+  outline: 2px solid var(--agent-focus);
+  outline-offset: -2px;
+}
+
+.conversation {
+  padding: 0 0.25rem;
+}
+
+.chatTurn {
+  gap: 0.55rem;
+  padding: 1.25rem 0;
+}
+
+.chatTurn + .chatTurn {
+  border-top: 1px solid var(--agent-line);
+}
+
+.agentTurnContext {
+  grid-template-columns: 2.4rem minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.1rem 0 0.1rem 0;
+  border-left: 0;
+}
+
+.userContextLabel {
+  padding-top: 0.16rem;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+
+.agentTurnContext .userMessage {
+  color: var(--agent-text);
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.agentReadingArea {
+  padding: 0.9rem 0 0 3rem;
+  border-left: 0;
+  border-top: 1px solid var(--agent-line);
+}
+
+.agentReadingArea > p {
+  max-width: 66ch;
+  color: var(--agent-text);
+  font-size: 0.87rem;
+  line-height: 1.8;
+}
+
+.turnStatus,
+.turnNotice,
+.turnError,
+.messageMeta,
+.availability,
+.saveNotice,
+.sourceUrl,
+.sourceItem small,
+.memoryRefs,
+.memorySaved,
+.lifecycleMessage {
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+
+.turnStatus {
+  padding-left: 3rem;
+}
+
+.turnNotice {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-notice);
+  background: var(--agent-surface);
+}
+
+.turnError {
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-notice);
+  background: transparent;
+}
+
+.messageMeta summary {
+  padding-left: 3rem;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.messageMeta summary:hover {
+  color: var(--agent-text);
+}
+
+.sourceContent {
+  margin-left: 3rem;
+  border-left: 1px solid var(--agent-line-strong);
+}
+
+.memorySaved {
+  align-self: flex-start;
+  margin-left: 3rem;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.7rem;
+}
+
+.taskControls button,
+.detail button,
+.memorySelection button {
+  min-height: 2.5rem;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--agent-text);
+  font-size: 0.78rem;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.taskControls button:hover:enabled,
+.detail button:hover:enabled,
+.memorySelection button:hover:enabled {
+  border-color: var(--agent-ink);
+  background: var(--agent-surface);
+}
+
+.detail {
+  padding: 1rem;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-card);
+  background: var(--agent-raised);
+}
+
+.detail h2 {
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
+.composer {
+  padding: 0.6rem 0.7rem 0.35rem;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-compact-surface);
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  background: var(--agent-raised);
+  box-shadow: none;
+  transition:
+    border-color 140ms ease,
+    outline-color 140ms ease;
+}
+
+.composer:focus-within {
+  border-color: var(--agent-ink);
+  outline-color: var(--agent-ink);
+}
+
+.composer textarea {
+  color: var(--agent-text);
+}
+
+.composer textarea::placeholder {
+  color: var(--agent-text-muted);
+}
+
+.agentComposerContext {
+  padding: 0 0.2rem 0.4rem;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.62rem;
+  letter-spacing: 0.03em;
+}
+
+.agentComposerContext strong {
+  font-weight: 500;
+}
+
+.toolsTrigger,
+.composerFooter .voiceTrigger,
+.composerFooter .sendButton {
+  border-radius: var(--radius-button);
+}
+
+.toolsTrigger {
+  color: var(--agent-text-muted);
+}
+
+.toolsTrigger:enabled:hover,
+.composerFooter .voiceTrigger:enabled:hover {
+  background: var(--agent-surface);
+  color: var(--agent-text);
+}
+
+.composerFooter .voiceTrigger {
+  color: var(--agent-text-muted);
+}
+
+.composerFooter .sendButton {
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+.composerFooter .sendButton:enabled:hover {
+  background: var(--agent-ink-hover);
+}
+
+.composerFooter .sendButton:disabled {
+  background: transparent;
+  color: var(--agent-text-muted);
+}
+
+.referencePicker > summary {
+  color: var(--agent-text-muted);
+}
+
+.availability {
+  color: var(--agent-text-muted);
+}
+
+.toolsBackdrop,
+.sidebarBackdrop {
+  background: rgba(6, 10, 8, 0.42);
+}
+
+.toolsSheet {
+  border-top: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-sheet) var(--radius-sheet) var(--radius-none) var(--radius-none);
+  background: var(--agent-raised);
+  box-shadow: 0 -1rem 2.5rem -1.5rem rgba(0, 0, 0, 0.45);
+}
+
+.toolsSheetHeader {
+  border-bottom: 1px solid var(--agent-line);
+  background: var(--agent-raised);
+}
+
+.toolsSheetHeader h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.saveButton {
+  border: 1px solid var(--agent-ink);
+  border-radius: var(--radius-button);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.saveButton:enabled:hover {
+  background: var(--agent-ink-hover);
+}
+
+.saveButton:disabled {
+  border-color: var(--agent-line);
+  background: transparent;
+  color: var(--agent-text-muted);
+}
+
+.selectionFieldset {
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-card);
+  background: transparent;
+}
+
+.selectionFieldset legend {
+  color: var(--agent-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.selectionFieldset select,
+.conversationRename input {
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-input);
+  background: var(--agent-surface);
+  color: var(--agent-text);
+}
+
+.sidebar {
+  padding: env(safe-area-inset-top) 0.85rem env(safe-area-inset-bottom);
+  border-right: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-none) var(--radius-drawer) var(--radius-drawer) var(--radius-none);
+  background: var(--agent-surface);
+  overflow-x: hidden;
+  box-shadow: 0.5rem 0 2rem -1.5rem rgba(0, 0, 0, 0.4);
+}
+
+.sidebar .accountHeader {
+  min-height: 3.8rem;
+  padding: 0 0.2rem;
+}
+
+.sidebar .accountHeader h1 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.conversationSearch {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-input);
+  background: var(--agent-raised);
+}
+
+.conversationSearch:focus-within {
+  outline: 1px solid var(--agent-focus);
+  outline-offset: -2px;
+}
+
+.sidebarSectionTitle,
+.conversationPeriod {
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.sidebarChats button,
+.sidebarAction {
+  min-height: 2.75rem;
+  border-radius: var(--radius-row);
+  background: transparent;
+  color: var(--agent-text);
+}
+
+.sidebarAction {
+  border-radius: var(--radius-button);
+  background: var(--agent-surface-strong);
+}
+
+.sidebarChats button:enabled:hover {
+  background: var(--agent-surface-strong);
+}
+
+.sidebarChats button[aria-current='page'] {
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+  font-weight: 600;
+}
+
+.sidebarFooter {
+  min-height: 3.6rem;
+  padding: 0.5rem 0.4rem;
+  background: var(--agent-surface);
+  font-size: 0.82rem;
+}
+
+.profileMark {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: var(--radius-circle);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+.voicePanel,
+.voiceToast {
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-control-surface);
+  background: var(--agent-raised);
+  box-shadow: 0 1rem 2.5rem -1.6rem rgba(4, 10, 7, 0.45);
+}
+
+.voicePanel button,
+.voiceDismiss {
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--agent-text);
+}
+
+.voicePanel button:hover:enabled,
+.voiceDismiss:hover:enabled {
+  border-color: var(--agent-ink);
+  background: var(--agent-surface);
+}
+
+@media (max-width: 340px) {
+  .agentReadingArea,
+  .turnStatus,
+  .messageMeta summary,
+  .sourceContent,
+  .memorySaved {
+    padding-left: 2.4rem;
+  }
+
+  .sourceContent,
+  .memorySaved {
+    margin-left: 2.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatHeader button,
+  .composer,
+  .taskControls button,
+  .saveButton {
+    transition: none;
+  }
+}
+
+/* === Codex 工作台：命令栏、阅读轨与编辑器式输入区 ==================
+   这一层替换聊天页的视觉骨架，不再调整上一轮的灰度与圆角。
+   结构语言只有三种：紧凑命令栏、连续左轨阅读流、三段式 composer。
+   绿色仅作为在线/运行信号；其余层级由墨色、细线、密度和等宽元数据承担。 */
+
+:global(.app-shell-agent) :global(.app-navigation) :global(.view-switch) {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.55rem;
+  border-color: var(--agent-line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--agent-surface);
+  font-family: var(--font-numeric);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+:global(.app-content-agent) > :global(.active-run-link) {
+  min-height: 1.95rem;
+  margin: 0;
+  padding: 0.32rem 5.4rem 0.32rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--agent-line);
+  border-radius: var(--radius-none);
+  background: var(--agent-canvas);
+  font-size: 0.62rem;
+  letter-spacing: 0.03em;
+}
+
+:global(.app-content-agent) > :global(.active-run-link)::before {
+  width: 0.3rem;
+  height: 0.3rem;
+  margin-right: 0.5rem;
+  border-radius: var(--radius-none);
+}
+
+.page {
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+.page .chatHeader {
+  min-height: 3.25rem;
+  gap: 0.25rem;
+  padding-right: 6.75rem;
+  padding-left: 0.55rem;
+  background: var(--agent-canvas);
+  border-bottom-color: var(--agent-line-strong);
+}
+
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+  padding-top: 0;
+}
+
+.page .chatHeaderIdentity {
+  position: relative;
+  gap: 0.08rem;
+  padding-left: 0.62rem;
+}
+
+.page .chatHeaderIdentity::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 3px;
+  height: 1.5rem;
+  background: var(--agent-ink);
+  content: '';
+  transform: translateY(-50%);
+}
+
+.page .chatHeader span.chatTitle {
+  color: var(--agent-text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
+
+.page .chatHeader span.chatSubtitle {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.54rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page .chatHeader button {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-button);
+}
+
+.page .chatHeader .newChatButton {
+  width: 44px;
+  height: 44px;
+  margin: 0 0 0 0.2rem;
+  border: 1px solid var(--agent-ink);
+  border-radius: var(--radius-button);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+.page .chatHeader .newChatButton:hover:enabled,
+.page .chatHeader .newChatButton:focus-visible {
+  background: var(--agent-ink-hover);
+  color: var(--agent-on-ink);
+}
+
+.page .chatHeader .newChatButton:disabled {
+  border-color: var(--agent-line);
+  background: transparent;
+  color: var(--agent-text-muted);
+}
+
+.page .conversation {
+  padding: 0;
+  scrollbar-color: var(--agent-line-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.page .conversation::-webkit-scrollbar {
+  width: 4px;
+}
+
+.page .conversation::-webkit-scrollbar-thumb {
+  background: var(--agent-line-strong);
+}
+
+.page .conversation::selection,
+.page .conversation *::selection {
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+}
+
+.page .chatTurn {
+  position: relative;
+  gap: 0;
+  padding: 1.45rem 1rem 1.3rem;
+}
+
+.page .chatTurn::before {
+  position: absolute;
+  top: 1.55rem;
+  bottom: 1.35rem;
+  left: 0.55rem;
+  width: 1px;
+  background: var(--agent-line-strong);
+  content: '';
+}
+
+.page .chatTurn + .chatTurn {
+  border-top: 1px solid var(--agent-line-strong);
+}
+
+.page .agentTurnContext {
+  position: relative;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0 0 1rem 1.1rem;
+}
+
+.page .userContextLabel {
+  display: grid;
+  width: 1.2rem;
+  height: 1.2rem;
+  place-items: center;
+  padding: 0;
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+  font-family: var(--font-numeric);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.page .agentTurnContext .userMessage {
+  font-size: 0.94rem;
+  font-weight: 620;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.page .agentReadingArea {
+  position: relative;
+  margin-left: 2.9rem;
+  padding: 1.05rem 0 0.5rem;
+  border-top: 1px solid var(--agent-line-strong);
+}
+
+.page .agentReadingArea::before {
+  position: absolute;
+  top: -0.21rem;
+  left: 0;
+  width: 0.4rem;
+  height: 0.4rem;
+  background: var(--agent-accent);
+  content: '';
+}
+
+.page .agentReadingArea > p {
+  max-width: 68ch;
+  font-size: 0.91rem;
+  line-height: 1.9;
+}
+
+.page .turnStatus {
+  padding: 0 0 0.7rem 2.9rem;
+  font-family: var(--font-numeric);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+}
+
+.page .turnNotice,
+.page .turnError {
+  margin: 0.2rem 0 0.7rem 2.9rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-none);
+  font-size: 0.74rem;
+}
+
+.page .messageMeta summary {
+  min-height: 2.5rem;
+  padding: 0.55rem 0 0 2.9rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.page .messageMeta summary::marker {
+  color: var(--agent-text-muted);
+}
+
+.page .sourceContent,
+.page .memorySaved {
+  margin-left: 2.9rem;
+}
+
+.page .sourceContent {
+  border-left-color: var(--agent-line-strong);
+}
+
+.page .taskControls button,
+.page .detail button,
+.page .memorySelection button {
+  border-radius: var(--radius-button);
+}
+
+.page .detail {
+  border-radius: var(--radius-card);
+}
+
+.page .composer {
+  width: calc(100% - 1.5rem);
+  max-width: 44rem;
+  margin: 0 auto 0.55rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-compact-surface);
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  background: var(--agent-raised);
+  box-shadow: none;
+}
+
+.page .composer:focus-within {
+  border-color: var(--agent-ink);
+  outline-color: var(--agent-ink);
+}
+
+.page .agentComposerContext {
+  display: flex;
+  min-height: 1.9rem;
+  gap: 0.5rem;
+  padding: 0.38rem 0.62rem;
+  border-bottom: 1px solid var(--agent-line);
+  background: var(--agent-surface);
+  font-family: var(--font-numeric);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+}
+
+.page .agentComposerContext::before {
+  width: auto;
+  height: auto;
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  content: '>';
+}
+
+.page .agentComposerContext strong {
+  color: var(--agent-text);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.page .composer textarea {
+  min-height: 4rem;
+  padding: 0.82rem 0.78rem 0.7rem;
+  caret-color: var(--agent-ink);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.page .composer textarea::placeholder {
+  color: var(--agent-text-muted);
+}
+
+.page .composerFooter {
+  min-height: 3.15rem;
+  gap: 0.15rem;
+  margin-top: 0;
+  padding: 0.28rem 0.35rem 0.32rem;
+  border-top: 1px solid var(--agent-line);
+  background: var(--agent-raised);
+}
+
+.page .toolsTrigger,
+.page .composerFooter .voiceTrigger {
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  color: var(--agent-text-muted);
+}
+
+.page .toolsTrigger:enabled:hover,
+.page .composerFooter .voiceTrigger:enabled:hover {
+  border-color: var(--agent-line);
+  background: var(--agent-surface);
+  color: var(--agent-text);
+}
+
+.page .composerFooter .sendButton {
+  border: 1px solid var(--agent-ink);
+  border-radius: var(--radius-button);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+.page .composerFooter .sendButton:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--agent-text-muted);
+}
+
+.sidebar {
+  color: var(--agent-text);
+}
+
+.sidebar .accountHeader {
+  min-height: 3.6rem;
+  padding: 0;
+  border-bottom: 1px solid var(--agent-line-strong);
+}
+
+.sidebarOverlay .sidebar .accountHeader {
+  min-height: 56px;
+  padding-left: 52px;
+}
+
+.sidebar .accountHeader h1 {
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.sidebar .conversationSearch {
+  padding: 0.48rem 0.6rem;
+  border-radius: var(--radius-input);
+  background: var(--agent-canvas);
+}
+
+.sidebar .sidebarAction {
+  min-height: 2.9rem;
+  margin: 0.55rem 0 0.7rem;
+  padding: 0.65rem;
+  border-radius: var(--radius-button);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.sidebar .sidebarAction:hover {
+  background: var(--agent-ink-hover);
+}
+
+.sidebar .sidebarSectionTitle,
+.sidebar .conversationPeriod {
+  padding: 0 0.55rem;
+  font-size: 0.59rem;
+  letter-spacing: 0.11em;
+}
+
+.sidebarChats {
+  border-top: 1px solid var(--agent-line);
+}
+
+.sidebarChats li {
+  border-bottom: 1px solid var(--agent-line);
+}
+
+.sidebar .sidebarChats button:not(.conversationOpenC):not(.conversationActionC) {
+  min-height: 2.85rem;
+  padding: 0.55rem 0.55rem;
+  border-radius: var(--radius-none);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.sidebar .sidebarChats button:enabled:hover {
+  background: var(--agent-surface-strong);
+}
+
+.sidebar
+  .sidebarChats
+  button[aria-current='page']:not(.conversationOpenC):not(.conversationActionC) {
+  border-radius: var(--radius-none);
+  background: var(--agent-surface-strong);
+  box-shadow: inset 2px 0 0 var(--agent-ink);
+  color: var(--agent-text);
+  font-weight: 600;
+}
+
+.sidebar .conversationRow > .conversationAction {
+  border-radius: var(--radius-button);
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+}
+
+.sidebar .sidebarFooter {
+  min-height: 3.5rem;
+  padding: 0.45rem 0.25rem;
+  border-top: 1px solid var(--agent-line-strong);
+  background: var(--agent-surface);
+}
+
+.sidebar .profileMark {
+  border-radius: var(--radius-circle);
+}
+
+.sidebar .sidebarEmpty,
+.sidebar .lifecycleMessage,
+.sidebar .conversationOperation p,
+.sidebar .cleanupStatus p,
+.sidebar .conversationRename label {
+  color: var(--agent-text-muted);
+}
+
+.sidebar .conversationSearch input {
+  color: var(--agent-text);
+}
+
+.sidebar .conversationSearch input::placeholder {
+  color: var(--agent-text-muted);
+}
+
+.sidebar .conversationRename input {
+  border-radius: var(--radius-input);
+  background: var(--agent-raised);
+}
+
+.toolsSheet {
+  color: var(--agent-text);
+}
+
+.toolsSheetHeader {
+  min-height: 3.4rem;
+  padding: 0 0.55rem 0 1rem;
+  border-bottom-color: var(--agent-line-strong);
+  background: var(--agent-surface);
+}
+
+.toolsSheetHeader h2 {
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.toolsSheetHeader button {
+  border-radius: var(--radius-button);
+}
+
+.toolsSheetBody {
+  gap: 0.8rem;
+  padding: 0.9rem 1rem calc(1rem + env(safe-area-inset-bottom));
+}
+
+.toolsSheetBody > .saveButton {
+  border-radius: var(--radius-button);
+}
+
+.selectionFieldset {
+  margin: 0;
+  padding: 0.85rem 0;
+  border: 0;
+  border-top: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-none);
+  background: transparent;
+}
+
+.selectionFieldset legend {
+  padding: 0 0.45rem 0 0;
+  color: var(--agent-text);
+  font-family: var(--font-numeric);
+  font-size: 0.66rem;
+  font-weight: 550;
+  letter-spacing: 0.08em;
+}
+
+.selectionFieldset > label:not(:has(input)),
+.selectionFieldset > p,
+.mcpOption small {
+  color: var(--agent-text-muted);
+}
+
+.selectionFieldset select {
+  border-radius: var(--radius-input);
+  background: var(--agent-surface);
+  color: var(--agent-text);
+}
+
+.selectionFieldset > button {
+  border-color: var(--agent-line-strong);
+  border-radius: var(--radius-button);
+  background: var(--agent-surface);
+  color: var(--agent-text);
+}
+
+.selectionFieldset > button:hover:enabled {
+  border-color: var(--agent-ink);
+  background: var(--agent-surface-strong);
+}
+
+.selectionFieldset input[type='checkbox'],
+.memoryList input[type='checkbox'] {
+  accent-color: var(--agent-ink);
+}
+
+.page .referencePicker > summary {
+  min-height: 2.5rem;
+  border-radius: var(--radius-button);
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+}
+
+.page .availability,
+.page .saveNotice,
+.page .sourceUrl,
+.page .sourceItem small,
+.page .memoryRefs {
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.62rem;
+}
+
+.page .sourceContent {
+  border-left: 1px solid var(--agent-line-strong);
+}
+
+@media (max-width: 340px) {
+  .page .chatTurn {
+    padding-right: 0.8rem;
+    padding-left: 0.8rem;
+  }
+
+  .page .chatTurn::before {
+    left: 0.45rem;
+  }
+
+  .page .agentTurnContext {
+    grid-template-columns: 1.1rem minmax(0, 1fr);
+    gap: 0.45rem;
+    padding-left: 0.9rem;
+  }
+
+  .page .userContextLabel {
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: 0.52rem;
+  }
+
+  .page .agentReadingArea {
+    margin-left: 2.45rem;
+  }
+
+  .page .turnStatus {
+    padding-left: 2.45rem;
+  }
+
+  .page .turnNotice,
+  .page .turnError,
+  .page .sourceContent,
+  .page .memorySaved {
+    margin-left: 2.45rem;
+  }
+
+  .page .messageMeta summary {
+    padding-left: 2.45rem;
+  }
+
+  .page .composer {
+    width: calc(100% - 1rem);
+  }
+}
+
+/* === Codex 工作台最终视觉：两段式窗口栏、安静画布与单一输入焦点 =====
+   大胆来自留白、对齐和唯一主表面，不靠更多黑框、编号或伪终端符号。
+   本层只覆盖曾经把层级拉平的规则，不改会话、语音或授权逻辑。 */
+
+.page .chatHeader {
+  min-height: 3.35rem;
+  gap: 0;
+  padding: 0 0.2rem 0 0.35rem;
+  border-bottom-color: var(--agent-line);
+}
+
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+  min-height: 5.35rem;
+  padding-top: 2.35rem;
+}
+
+.page .chatHeaderIdentity {
+  gap: 0.14rem;
+  min-width: 0;
+  padding-left: 0.65rem;
+}
+
+.page .chatHeaderIdentity::before {
+  top: 0.18rem;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-circle);
+  background: var(--agent-accent);
+  transform: none;
+}
+
+.page .chatHeader span.chatTitle {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.page .chatHeader span.chatSubtitle {
+  font-size: 0.53rem;
+  letter-spacing: 0.12em;
+}
+
+.page .chatHeader button {
+  border-radius: var(--radius-button);
+}
+
+.page .chatHeader .newChatButton {
+  width: 44px;
+  height: 44px;
+  margin: 0 0 0 auto;
+  border-color: var(--agent-line-strong);
+  background: transparent;
+  color: var(--agent-text);
+}
+
+.page .chatHeader .newChatButton:hover:enabled,
+.page .chatHeader .newChatButton:focus-visible {
+  border-color: var(--agent-ink);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+:global(.app-shell-agent) :global(.app-navigation) {
+  top: calc(env(safe-area-inset-top) + 0.3rem);
+  right: 0.72rem;
+}
+
+:global(.app-shell-agent) :global(.app-navigation) :global(.view-switch) {
+  min-height: 2.15rem;
+  gap: 0.24rem;
+  padding: 0.22rem 0.5rem;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: var(--agent-surface);
+  color: var(--agent-text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+}
+
+:global(.app-shell-agent) :global(.app-navigation) :global(.view-switch):hover {
+  border-color: var(--agent-line-strong);
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+}
+
+.page .conversation {
+  scroll-padding-bottom: 1rem;
+}
+
+.page .chatTurn {
+  padding-top: 1.65rem;
+  padding-bottom: 1.55rem;
+}
+
+.page .chatTurn::before {
+  top: 1.82rem;
+  bottom: 1.58rem;
+  left: 0.68rem;
+  background: var(--agent-line);
+}
+
+.page .chatTurn + .chatTurn {
+  border-top-color: var(--agent-line);
+}
+
+.page .agentTurnContext {
+  grid-template-columns: 1.15rem minmax(0, 1fr);
+  gap: 0.68rem;
+  padding: 0 0 1.1rem 1.05rem;
+}
+
+.page .userContextLabel {
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid var(--agent-line-strong);
+  background: var(--agent-canvas);
+  color: var(--agent-text);
+  font-size: 0.5rem;
+}
+
+.page .agentTurnContext .userMessage {
+  font-size: 0.92rem;
+  font-weight: 560;
+  line-height: 1.62;
+}
+
+.page .agentReadingArea {
+  margin-left: 2.82rem;
+  padding-top: 1.05rem;
+  border-top-color: var(--agent-line);
+}
+
+.page .agentReadingArea::before {
+  top: -0.17rem;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: var(--radius-circle);
+}
+
+.page .agentReadingArea > p {
+  max-width: 62ch;
+  font-size: 0.89rem;
+  line-height: 1.86;
+}
+
+.page .turnStatus,
+.page .messageMeta summary {
+  padding-left: 2.82rem;
+}
+
+.page .turnNotice,
+.page .turnError {
+  margin-left: 2.82rem;
+}
+
+.page .sourceContent,
+.page .memorySaved {
+  margin-left: 2.82rem;
+}
+
+.page .composer {
+  width: calc(100% - 1.2rem);
+  max-width: 42rem;
+  margin-bottom: 0.45rem;
+  padding: 0;
+  border-color: var(--agent-line-strong);
+  border-radius: var(--radius-panel);
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 3%),
+    0 12px 30px -26px rgb(0 0 0 / 48%);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.page .composer:focus-within {
+  border-color: var(--agent-ink);
+  outline: 1px solid var(--agent-ink);
+  outline-offset: 0;
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 3%),
+    0 14px 36px -28px rgb(0 0 0 / 54%);
+}
+
+.page .composer textarea {
+  min-height: 4.5rem;
+  padding: 0.95rem 0.9rem 0.65rem;
+  font-size: 0.95rem;
+  line-height: 1.62;
+}
+
+.page .composerFooter {
+  min-height: 3.1rem;
+  margin-top: 0;
+  padding: 0.25rem 0.38rem 0.35rem;
+  border-top: 0;
+  background: var(--agent-raised);
+}
+
+.page .toolsTrigger,
+.page .composerFooter .voiceTrigger {
+  border: 0;
+  border-radius: var(--radius-compact-surface);
+  color: var(--agent-text-muted);
+}
+
+.page .toolsTrigger:enabled:hover,
+.page .composerFooter .voiceTrigger:enabled:hover {
+  border: 0;
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+}
+
+.composerAuthority {
+  overflow: hidden;
+  max-width: 5.1rem;
+  margin: 0 0.1rem 0 auto;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.53rem;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page .composerFooter .sendButton {
+  margin-left: 0.1rem;
+  border: 1px solid var(--agent-ink);
+  border-radius: var(--radius-button);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+.page .composerFooter .sendButton:disabled {
+  border-color: var(--agent-line);
+  background: var(--agent-surface);
+  color: var(--agent-text-muted);
+}
+
+@media (max-width: 340px) {
+  .page .chatHeader {
+    padding-right: 0.05rem;
+    padding-left: 0.15rem;
+  }
+
+  .page .chatHeaderIdentity {
+    padding-left: 0.55rem;
+  }
+
+  .page .composer {
+    width: calc(100% - 0.8rem);
+  }
+
+  .composerAuthority {
+    max-width: 3.55rem;
+    font-size: 0.49rem;
+  }
+}
+
+/* === Codex 工作台定稿：让画布、任务区和输入舱形成真正的空间层级 =====
+   这一层只负责最终视觉。中性灰承担窗口与画布，绿色仅表示运行状态；
+   任务行共用一个工具表面，输入舱是页面唯一有重量的交互表面。 */
+
+:global(.app-shell-agent),
+.sidebarOverlay,
+.toolsOverlay {
+  --agent-canvas: #f6f6f3;
+  --agent-surface: #edede9;
+  --agent-surface-strong: #e2e2dd;
+  --agent-raised: #ffffff;
+  --agent-line: #deded8;
+  --agent-line-strong: #c5c6bf;
+  --agent-text: #181918;
+  --agent-text-muted: #6b6e69;
+  --agent-ink: var(--brand);
+  --agent-ink-hover: var(--brand-hover);
+  --agent-on-ink: var(--brand-ink);
+  --agent-accent: var(--accent);
+  --agent-focus: var(--accent);
+}
+
+:global(:root[data-theme='night']) :global(.app-shell-agent),
+:global(:root[data-theme='night']) .sidebarOverlay,
+:global(:root[data-theme='night']) .toolsOverlay {
+  --agent-canvas: #0e0f0f;
+  --agent-surface: #181a19;
+  --agent-surface-strong: #242724;
+  --agent-raised: #141615;
+  --agent-line: #292c29;
+  --agent-line-strong: #424641;
+  --agent-text: #f0f2ef;
+  --agent-text-muted: #9b9f99;
+  --agent-ink: var(--brand);
+  --agent-ink-hover: var(--brand-hover);
+  --agent-on-ink: var(--brand-ink);
+  --agent-accent: var(--accent);
+  --agent-focus: var(--accent);
+}
+
+:global(.app-shell-agent) {
+  background: var(--agent-canvas);
+}
+
+:global(.app-shell-agent) :global(.app-navigation) {
+  top: calc(env(safe-area-inset-top) + 0.18rem);
+  right: 0.65rem;
+}
+
+:global(.app-shell-agent) :global(.app-navigation) :global(.view-switch) {
+  min-height: 2.75rem;
+  padding: 0.32rem 0.66rem;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-pill);
+  background: var(--agent-surface);
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.61rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+}
+
+:global(.app-shell-agent) :global(.app-navigation) :global(.view-switch):hover {
+  border-color: var(--agent-line-strong);
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+}
+
+.page {
+  background: var(--agent-canvas);
+}
+
+.page .chatHeader {
+  min-height: 3.5rem;
+  gap: 0.35rem;
+  padding: 0 0.65rem 0 0.55rem;
+  border-bottom: 1px solid var(--agent-line);
+  background: var(--agent-canvas);
+}
+
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+  min-height: 5.8rem;
+  padding-top: 2.8rem;
+}
+
+.page .chatHeader::before {
+  display: none;
+}
+
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader::before {
+  position: absolute;
+  top: 2.8rem;
+  right: 0;
+  left: 0;
+  display: block;
+  height: 1px;
+  background: var(--agent-line);
+  content: '';
+}
+
+.page .chatHeader > button:first-child {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-button);
+  color: var(--agent-text-muted);
+}
+
+.page .chatHeader > button:first-child:hover,
+.page .chatHeader > button:first-child:focus-visible {
+  background: var(--agent-surface);
+  color: var(--agent-text);
+}
+
+.page .chatHeaderIdentity {
+  gap: 0.12rem;
+  padding-left: 0.62rem;
+}
+
+.page .chatHeaderIdentity::before {
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  background: var(--agent-accent);
+  transform: translateY(-50%);
+}
+
+.page .chatHeader span.chatTitle {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.page .chatHeader span.chatSubtitle {
+  font-size: 0.52rem;
+  font-weight: 520;
+  letter-spacing: 0.13em;
+}
+
+.page .chatHeader .newChatButton {
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--agent-text);
+}
+
+.page .chatHeader .newChatButton:hover:enabled,
+.page .chatHeader .newChatButton:focus-visible {
+  border-color: var(--agent-ink);
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+}
+
+.page .chatHeader .newChatButton:disabled {
+  border-color: var(--agent-line);
+  color: var(--agent-text-muted);
+}
+
+.page .conversation {
+  background: var(--agent-canvas);
+}
+
+.page .chatTurn {
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 2rem 1.15rem 1.8rem;
+}
+
+.page .chatTurn::before {
+  top: 2.16rem;
+  bottom: 1.88rem;
+  left: 0.82rem;
+  background: var(--agent-line);
+}
+
+.page .agentTurnContext {
+  grid-template-columns: 1.2rem minmax(0, 1fr);
+  gap: 0.72rem;
+  padding: 0 0 1.2rem 1rem;
+}
+
+.page .userContextLabel {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1px solid var(--agent-line-strong);
+  background: var(--agent-surface);
+  color: var(--agent-text);
+  font-size: 0.51rem;
+}
+
+.page .agentTurnContext .userMessage {
+  font-size: 0.93rem;
+  font-weight: 560;
+  line-height: 1.65;
+}
+
+.page .agentReadingArea {
+  margin-left: 2.4rem;
+  padding: 1.15rem 0 0.55rem;
+  border-top-color: var(--agent-line);
+}
+
+.page .agentReadingArea::before {
+  top: -0.18rem;
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: var(--radius-line);
+}
+
+.page .agentReadingArea > p {
+  max-width: 64ch;
+  font-size: 0.93rem;
+  line-height: 1.88;
+}
+
+.page .turnStatus,
+.page .messageMeta summary {
+  padding-left: 2.4rem;
+}
+
+.page .turnNotice,
+.page .turnError,
+.page .sourceContent,
+.page .memorySaved {
+  margin-left: 2.4rem;
+}
+
+.page .composer {
+  width: calc(100% - 1.5rem);
+  max-width: 44rem;
+  margin-bottom: 0.55rem;
+  overflow: hidden;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-compact-surface);
+  outline: 1px solid transparent;
+  outline-offset: 0;
+  background: var(--agent-raised);
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 4%),
+    0 30px 60px -42px rgb(0 0 0 / 68%);
+}
+
+.page .composer:focus-within {
+  border-color: var(--agent-ink);
+  outline: 1px solid var(--agent-ink);
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 4%),
+    0 34px 68px -42px rgb(0 0 0 / 72%);
+}
+
+.page .composer textarea {
+  min-height: 5.15rem;
+  padding: 1.1rem 1.05rem 0.92rem;
+  color: var(--agent-text);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.page .composerFooter {
+  min-height: 3.15rem;
+  gap: 0.18rem;
+  margin-top: 0;
+  padding: 0.2rem 0.45rem 0.3rem;
+  border-top: 1px solid var(--agent-line);
+  background: transparent;
+}
+
+.page .toolsTrigger,
+.page .composerFooter .voiceTrigger {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-button);
+  color: var(--agent-text-muted);
+}
+
+.page .toolsTrigger:enabled:hover,
+.page .composerFooter .voiceTrigger:enabled:hover {
+  border-color: transparent;
+  background: var(--agent-surface-strong);
+  color: var(--agent-text);
+}
+
+.page .composerAuthority {
+  color: var(--agent-text-muted);
+  font-size: 0.52rem;
+}
+
+.page .composerFooter .sendButton {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--agent-ink);
+  border-radius: var(--radius-button);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+.page .composerFooter .sendButton:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--agent-text-muted);
+}
+
+@media (max-width: 340px) {
+  :global(.app-shell-agent) :global(.app-navigation) {
+    right: 0.45rem;
+  }
+
+  :global(.app-shell-agent) :global(.app-navigation) :global(.view-switch) {
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+  }
+
+  .page .chatHeader {
+    padding-right: 0.45rem;
+    padding-left: 0.35rem;
+  }
+
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+    min-height: 5.45rem;
+    padding-top: 2.6rem;
+  }
+
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader::before {
+    top: 2.6rem;
+  }
+
+  .page .chatHeaderIdentity {
+    padding-left: 0.48rem;
+  }
+
+  .page .composer {
+    width: calc(100% - 0.8rem);
+  }
+
+  .page .composer textarea {
+    min-height: 4.15rem;
+    padding: 0.92rem 0.82rem 0.74rem;
+    font-size: 0.91rem;
+  }
+
+  .page .composerAuthority {
+    max-width: 3.45rem;
+    font-size: 0.48rem;
+  }
+}
+
+@media (max-height: 640px) {
+  .page .composer textarea {
+    min-height: 3.25rem;
+    padding-top: 0.78rem;
+    padding-bottom: 0.58rem;
+  }
+
+  .page .composerFooter {
+    min-height: 3rem;
+    padding-bottom: 0.2rem;
+  }
+}
+
+/* === Codex 终稿：空画布、命令清单和底部运行注记 ===
+   这一层只放大空会话的空间关系：页头退成导航，标题承担视觉峰值，
+   快捷任务从仪表盘中移出，运行状态最后收敛为输入舱上的一行读数。 */
+
+.page .chatHeader {
+  min-height: 3.1rem;
+  border-bottom-color: transparent;
+}
+
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+  min-height: 4.85rem;
+  padding-top: 1.9rem;
+}
+
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader::before {
+  display: none;
+}
+
+.page .chatHeaderIdentity {
+  gap: 0.04rem;
+}
+
+.page .chatHeaderIdentity::before {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-line);
+}
+
+.page .chatHeader span.chatTitle {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.page .chatHeader span.chatSubtitle {
+  font-size: 0.49rem;
+  letter-spacing: 0.09em;
+}
+
+.page .chatHeader .newChatButton {
+  border-color: transparent;
+  background: transparent;
+}
+
+.page .chatHeader .newChatButton:hover:enabled,
+.page .chatHeader .newChatButton:focus-visible {
+  border-color: transparent;
+  background: var(--agent-surface);
+}
+
+.page .conversation {
+  scrollbar-color: var(--agent-line-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.page .conversation ::selection,
+.page .composer ::selection {
+  background: var(--agent-text);
+  color: var(--agent-canvas);
+}
+
+.page .composer {
+  margin-bottom: 0.25rem;
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / 4%),
+    0 22px 52px -38px rgb(0 0 0 / 62%);
+}
+
+.page .composer textarea {
+  min-height: 4.65rem;
+}
+
+@media (max-width: 340px) {
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+    min-height: 4.5rem;
+    padding-top: 1.75rem;
+  }
+
+  .page .composer textarea {
+    min-height: 4.2rem;
+  }
+}
+
+@media (max-height: 640px) {
+  .page .composer textarea {
+    min-height: 3.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page .composer {
+    transition: none;
+  }
+}
+
+/* === 手机端圆角玻璃定稿：统一栅格、表面与触控层级 ===
+   只覆盖窄屏。任务清单与状态读数合成一块连续玻璃面板，输入舱是唯一
+   高对比焦点；圆角、描边、阴影和模糊强度使用同一套局部变量，避免每个
+   控件各长一种样子。 */
+
+@media (max-width: 959px) {
+  :global(.app-shell-agent) {
+    --mobile-gutter: 1rem;
+    --mobile-line: color-mix(in srgb, var(--agent-line-strong) 62%, transparent);
+    --mobile-glass: color-mix(in srgb, var(--agent-raised) 78%, transparent);
+    --mobile-glass-strong: color-mix(in srgb, var(--agent-raised) 90%, transparent);
+    --mobile-glass-tint: color-mix(in srgb, var(--agent-surface) 62%, transparent);
+    --mobile-shadow: 0 20px 48px -38px rgb(0 0 0 / 46%);
+    --mobile-highlight: 0 1px 0 rgb(255 255 255 / 58%) inset;
+
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  :global(:root[data-theme='night']) :global(.app-shell-agent) {
+    --mobile-shadow: 0 22px 52px -34px rgb(0 0 0 / 82%);
+    --mobile-highlight: 0 1px 0 rgb(255 255 255 / 7%) inset;
+  }
+
+  :global(.app-shell-agent) :global(.app-navigation) :global(.view-switch) {
+    min-height: 2.5rem;
+    padding: 0.38rem 0.82rem;
+    border-color: var(--mobile-line);
+    border-radius: var(--radius-pill);
+    background: var(--mobile-glass);
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+    -webkit-backdrop-filter: blur(18px) saturate(112%);
+    backdrop-filter: blur(18px) saturate(112%);
+  }
+
+  :global(.app-content-agent) > :global(.active-run-link) {
+    margin: 0.55rem var(--mobile-gutter) 0;
+    padding-right: 5.4rem;
+    border-color: var(--mobile-line);
+    border-radius: var(--radius-card);
+    background: var(--mobile-glass);
+    box-shadow: var(--mobile-highlight);
+    -webkit-backdrop-filter: blur(18px) saturate(112%);
+    backdrop-filter: blur(18px) saturate(112%);
+  }
+
+  .page .chatHeader {
+    width: calc(100% - var(--mobile-gutter) - var(--mobile-gutter));
+    margin-right: auto;
+    margin-left: auto;
+    padding-right: 6.7rem;
+    padding-left: 0;
+    border-bottom: 0;
+  }
+
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+    padding-top: 0.25rem;
+  }
+
+  .page .chatHeader button {
+    border-radius: var(--radius-button);
+  }
+
+  .page .chatHeader > button:first-child,
+  .page .chatHeader .newChatButton {
+    border: 1px solid var(--mobile-line);
+    background: var(--mobile-glass);
+    color: var(--agent-text);
+    box-shadow: var(--mobile-highlight);
+    -webkit-backdrop-filter: blur(16px) saturate(108%);
+    backdrop-filter: blur(16px) saturate(108%);
+  }
+
+  .page .chatHeader .newChatButton {
+    margin-left: 0.2rem;
+  }
+
+  .page .chatHeader .newChatButton:disabled {
+    border-color: var(--mobile-line);
+    background: var(--mobile-glass-tint);
+    color: var(--agent-text-muted);
+  }
+
+  .page .composer {
+    --composer-bg: var(--mobile-glass-strong);
+    --composer-text: var(--agent-text);
+    --composer-muted: color-mix(in srgb, var(--agent-text-muted) 88%, transparent);
+    --composer-line: var(--mobile-line);
+    --composer-action-bg: var(--agent-ink);
+    --composer-action-text: var(--agent-on-ink);
+    --composer-focus: color-mix(in srgb, var(--agent-ink) 28%, transparent);
+
+    width: calc(100% - var(--mobile-gutter) - var(--mobile-gutter));
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--mobile-line);
+    border-radius: var(--radius-panel);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    background: var(--composer-bg);
+    color: var(--composer-text);
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+    -webkit-backdrop-filter: blur(22px) saturate(116%);
+    backdrop-filter: blur(22px) saturate(116%);
+  }
+
+  .page .composer:focus-within {
+    border-color: var(--composer-focus);
+    outline: 2px solid var(--composer-focus);
+    outline-offset: 2px;
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+  }
+
+  .page .composer textarea {
+    padding: 0.9rem 0.88rem 0.62rem;
+    color: var(--composer-text);
+    caret-color: var(--composer-text);
+    font-size: 0.95rem;
+  }
+
+  .page .composer textarea::placeholder {
+    color: var(--composer-muted);
+  }
+
+  .page .composerFooter {
+    min-height: 3rem;
+    padding: 0.2rem 0.32rem 0.28rem;
+    border-top-color: var(--composer-line);
+    background: color-mix(in srgb, var(--agent-surface) 24%, transparent);
+  }
+
+  .page .toolsTrigger,
+  .page .composerFooter .voiceTrigger,
+  .page .composerFooter .sendButton {
+    border-radius: var(--radius-button);
+  }
+
+  .page .toolsTrigger:enabled:hover,
+  .page .composerFooter .voiceTrigger:enabled:hover {
+    border-color: var(--mobile-line);
+    background: color-mix(in srgb, var(--agent-text) 7%, transparent);
+    color: var(--agent-text);
+  }
+
+  .page .composerFooter .sendButton {
+    border-color: var(--composer-action-bg);
+    background: var(--composer-action-bg);
+    color: var(--composer-action-text);
+  }
+
+  .page .composerFooter .sendButton:disabled {
+    border-color: var(--mobile-line);
+    background: var(--mobile-glass-tint);
+    color: var(--composer-muted);
+  }
+
+  .page .taskControls,
+  .page .detail {
+    border-radius: var(--radius-card);
+  }
+
+  .page .turnNotice,
+  .page .turnError {
+    border-radius: var(--radius-notice);
+  }
+
+  .page .taskControls button,
+  .page .detail button,
+  .page .memorySelection button {
+    border-radius: var(--radius-button);
+  }
+}
+
+@media (max-width: 959px) {
+  :global(:root[data-theme='night']) .page .composer {
+    --composer-bg: color-mix(in srgb, var(--agent-surface-strong) 86%, transparent);
+    --composer-text: var(--agent-text);
+    --composer-muted: var(--agent-text-muted);
+    --composer-line: var(--mobile-line);
+    --composer-action-bg: var(--agent-ink);
+    --composer-action-text: var(--agent-on-ink);
+    --composer-focus: color-mix(in srgb, var(--agent-text) 34%, transparent);
+
+    border-color: var(--mobile-line);
+  }
+}
+
+@media (max-width: 340px) {
+  :global(.app-shell-agent) {
+    --mobile-gutter: 0.875rem;
+  }
+
+  .page .chatHeader {
+    padding-right: 6.3rem;
+  }
+}
+
+@media (max-width: 959px) and (max-height: 600px) {
+  .page .composer {
+    margin-bottom: 0.32rem;
+  }
+
+  .page .composer textarea {
+    padding: 0.68rem 0.78rem 0.42rem;
+  }
+
+  .page .composerFooter {
+    min-height: 2.7rem;
+    padding: 0.08rem 0.28rem 0.16rem;
+  }
+}
+
+/* === 消息流 C：双列气泡 ===
+   用户靠右、流萤靠左；气泡只承载正文，流式状态、来源、记忆和操作
+   始终留在气泡外，避免权限信息被误读成回答内容。 */
+
+.page .messageBubbleTurn {
+  gap: 0.42rem;
+  padding: 1.25rem 1rem 1.1rem;
+}
+
+.page .messageBubbleTurn::before {
+  display: none;
+}
+
+.page .messageBubbleTurn + .messageBubbleTurn {
+  border-top: 0;
+}
+
+.page .messageBubbleTurn .messageUserTurn {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  order: 0;
+  justify-items: end;
+  gap: 0.28rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.page .messageBubbleTurn .messageSenderLabel {
+  display: block;
+  width: auto;
+  height: auto;
+  padding: 0 0.18rem;
+  border: 0;
+  border-radius: var(--radius-none);
+  background: transparent;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.page .messageBubbleTurn .messageUserTurn .messageUserBubble {
+  width: fit-content;
+  max-width: min(86%, 28rem);
+  margin: 0;
+  margin-left: auto;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 20%, var(--agent-line));
+  border-radius: var(--radius-message) var(--radius-message) var(--radius-message-tail)
+    var(--radius-message);
+  background: color-mix(in srgb, var(--agent-accent) 10%, var(--agent-surface));
+  color: var(--agent-text);
+  font-size: 0.86rem;
+  font-weight: 540;
+  line-height: 1.7;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.page .messageBubbleTurn > .turnNotice,
+.page .messageBubbleTurn > .turnError {
+  order: 1;
+  width: fit-content;
+  max-width: 92%;
+  margin: 0.1rem 0 0.2rem;
+  padding: 0.64rem 0.72rem;
+  border-radius: var(--radius-message);
+  background: var(--agent-surface);
+  color: var(--agent-text-muted);
+  font-size: 0.74rem;
+  line-height: 1.65;
+}
+
+.page .messageBubbleTurn > .turnError {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--agent-line));
+  background: color-mix(in srgb, var(--danger-soft) 56%, var(--agent-surface));
+}
+
+.page .messageBubbleTurn > .taskControls {
+  order: 1;
+  align-items: flex-start;
+}
+
+.page .messageBubbleTurn > .taskControls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  line-height: 1;
+}
+
+.page .messageBubbleTurn > .taskControls button svg {
+  display: block;
+  flex: none;
+}
+
+.page .messageBubbleTurn > .taskControls button span {
+  line-height: 1;
+}
+
+.page .messageBubbleTurn .messageAssistantGroup {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  order: 2;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin: 0.08rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.page .messageBubbleTurn .messageAssistantGroup::before {
+  display: none;
+}
+
+.page .messageBubbleTurn .messageAssistantGroup > .messageSenderLabel {
+  align-self: flex-start;
+}
+
+.page .messageAssistantBubble {
+  width: fit-content;
+  max-width: min(92%, 36rem);
+  min-width: 0;
+  padding: 0.76rem 0.84rem;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-message) var(--radius-message) var(--radius-message)
+    var(--radius-message-tail);
+  background: color-mix(in srgb, var(--agent-raised) 88%, transparent);
+  color: var(--agent-text);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
+    0 18px 38px -34px rgb(0 0 0 / 48%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+:global(:root[data-theme='night']) .page .messageAssistantBubble {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
+    0 20px 42px -34px rgb(0 0 0 / 82%);
+}
+
+.page .messageAssistantBubble > p {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--agent-text);
+  font-size: 0.88rem;
+  line-height: 1.82;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.page .messageBubbleTurn > .turnStatus {
+  order: 3;
+  margin: 0;
+  padding: 0 0.2rem;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.62rem;
+  line-height: 1.5;
+}
+
+.page .messageBubbleTurn .messageAssistantGroup > .messageMeta {
+  width: 100%;
+  max-width: min(92%, 36rem);
+  margin-top: 0;
+}
+
+.page .messageBubbleTurn .messageAssistantGroup .messageMeta summary {
+  width: fit-content;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.2rem 0.15rem;
+  color: var(--agent-text-muted);
+  font-size: 0.62rem;
+}
+
+.page .messageBubbleTurn .messageAssistantGroup .sourceContent {
+  margin: 0.1rem 0 0.15rem 0.2rem;
+  padding-left: 0.65rem;
+  border-left: 1px solid var(--agent-line-strong);
+}
+
+.page .messageBubbleTurn > .messageActions {
+  order: 4;
+  width: 100%;
+  margin-top: 0;
+}
+
+.page .messageBubbleTurn > .messageActions summary {
+  width: fit-content;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.2rem;
+  color: var(--agent-text-muted);
+  font-size: 0.62rem;
+}
+
+.page .messageBubbleTurn > .memorySaved {
+  order: 4;
+  margin-left: 0.1rem;
+}
+
+.page .messageBubbleTurn .messageActions summary:focus-visible,
+.page .messageBubbleTurn .messageAssistantGroup .messageMeta summary:focus-visible,
+.page .messageBubbleTurn > .taskControls button:focus-visible {
+  outline: 2px solid var(--agent-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 340px) {
+  .page .messageBubbleTurn {
+    padding-right: 0.72rem;
+    padding-left: 0.72rem;
+  }
+
+  .page .messageBubbleTurn .messageUserTurn .messageUserBubble {
+    max-width: 88%;
+    padding: 0.66rem 0.72rem;
+    border-radius: var(--radius-message) var(--radius-message) var(--radius-message-tail)
+      var(--radius-message);
+    font-size: 0.82rem;
+  }
+
+  .page .messageAssistantBubble {
+    max-width: 94%;
+    padding: 0.68rem 0.72rem;
+    border-radius: var(--radius-message) var(--radius-message) var(--radius-message)
+      var(--radius-message-tail);
+  }
+
+  .page .messageAssistantBubble > p {
+    font-size: 0.84rem;
+    line-height: 1.76;
+  }
+
+  .page .messageBubbleTurn .messageAssistantGroup > .messageMeta {
+    max-width: 94%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page .messageAssistantBubble {
+    transition: none;
+  }
+}
+
+/* === 会话侧栏 C：双行预览行 ===
+   标题与更新时间占首行，最近问题或真实更新时间占次行；
+   选择和管理仍是两个独立按钮，不复用卡片内嵌套交互。 */
+
+.sidebar .sidebarChats {
+  display: grid;
+  gap: 0.42rem;
+  border-top: 0;
+}
+
+.sidebar .sidebarChats > .conversationItemC {
+  min-width: 0;
+  border: 0;
+}
+
+.sidebar .conversationPeriodC {
+  margin: 0.8rem 0 0.35rem;
+  padding: 0 0.55rem;
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.6rem;
+  font-weight: 560;
+  letter-spacing: 0.06em;
+}
+
+.sidebar .conversationRowC {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 4.25rem;
+  grid-template-columns: minmax(0, 1fr) 2.75rem;
+  align-items: stretch;
+  gap: 0.12rem;
+  overflow: hidden;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-row);
+  background: color-mix(in srgb, var(--agent-raised) 72%, transparent);
+}
+
+.sidebar .conversationRowC[data-current='true'] {
+  border-color: color-mix(in srgb, var(--agent-accent) 30%, var(--agent-line));
+  background: color-mix(in srgb, var(--agent-accent) 7%, var(--agent-raised));
+}
+
+.sidebar .conversationOpenC {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 4.25rem;
+  align-content: center;
+  gap: 0.16rem;
+  margin: 0;
+  padding: 0.56rem 0.2rem 0.56rem 0.62rem;
+  border: 0;
+  border-radius: var(--radius-row);
+  background: transparent;
+  color: var(--agent-text);
+  text-align: left;
+}
+
+.sidebar .conversationOpenC[aria-current='page'] {
+  border-radius: var(--radius-row);
+  background: transparent;
+  box-shadow: none;
+  color: var(--agent-text);
+}
+
+.sidebar .conversationOpenC:enabled:hover {
+  background: color-mix(in srgb, var(--agent-text) 3%, transparent);
+}
+
+.sidebar .conversationTopC {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.sidebar .conversationTopC strong,
+.sidebar .conversationPreviewC {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar .conversationTopC strong {
+  font-size: 0.8rem;
+  font-weight: 620;
+  line-height: 1.45;
+}
+
+.sidebar .conversationTopC time {
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.sidebar .conversationPreviewC {
+  color: var(--agent-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.sidebar .conversationActionC {
+  display: grid;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  place-items: center;
+  align-self: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-row);
+  background: transparent;
+  color: var(--agent-text-muted);
+  opacity: 0.68;
+}
+
+.sidebar .conversationRowC:hover .conversationActionC,
+.sidebar .conversationRowC[data-current='true'] .conversationActionC,
+.sidebar .conversationActionC:focus-visible,
+.sidebar .conversationActionC[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.sidebar .conversationActionC:enabled:hover {
+  background: color-mix(in srgb, var(--agent-text) 7%, transparent);
+  color: var(--agent-text);
+}
+
+.sidebar .conversationOpenC:focus-visible,
+.sidebar .conversationActionC:focus-visible {
+  outline: 2px solid var(--agent-focus);
+  outline-offset: -2px;
+}
+
+.sidebar .conversationOpenC:disabled,
+.sidebar .conversationActionC:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+@media (max-width: 340px) {
+  .sidebar .conversationRowC,
+  .sidebar .conversationOpenC {
+    min-height: 4.55rem;
+  }
+
+  .sidebar .conversationRowC {
+    border-radius: var(--radius-row);
+  }
+
+  .sidebar .conversationOpenC,
+  .sidebar .sidebarChats .conversationOpenC[aria-current='page'] {
+    border-radius: var(--radius-row);
+  }
+
+  .sidebar .conversationTopC strong {
+    font-size: 0.82rem;
+  }
+
+  .sidebar .conversationPreviewC {
+    font-size: 0.7rem;
+  }
+
+  .sidebar .conversationTopC time {
+    display: none;
+  }
+}
+
+/* === 会话管理 B：分组玻璃面板 ===
+   普通操作和危险操作各自成组，毛玻璃只作用于组容器；删除仍保留
+   二次确认和原有焦点归还语义。 */
+
+.sidebar .conversationOperationB {
+  display: grid;
+  gap: 0.72rem;
+  padding: 0.55rem 0 0.8rem;
+}
+
+.sidebar .conversationOperationB[data-confirming] {
+  margin-top: auto;
+  padding: 1.1rem;
+  border-radius: var(--radius-sheet) var(--radius-sheet) var(--radius-none) var(--radius-none);
+  background: var(--agent-surface-strong);
+  backdrop-filter: blur(16px);
+  overflow-wrap: anywhere;
+}
+
+.sidebarScroll[data-confirming] {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .operationHeaderB {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+  padding: 0 0.2rem 0.15rem;
+}
+
+.sidebar .operationHeaderB > span {
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.58rem;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+}
+
+.sidebar .conversationOperationB .operationHeaderB h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--agent-text);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar .operationHeaderB small {
+  color: var(--agent-text-muted);
+  font-size: 0.64rem;
+}
+
+.sidebar .operationGroupB {
+  overflow: hidden;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--agent-raised) 82%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.sidebar .operationGroupB > h3 {
+  margin: 0;
+  padding: 0.62rem 0.72rem 0.5rem;
+  border-bottom: 1px solid var(--agent-line);
+  color: var(--agent-text-muted);
+  font-family: var(--font-numeric);
+  font-size: 0.6rem;
+  font-weight: 620;
+}
+
+.sidebar .operationActionB {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.6rem;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.58rem;
+  padding: 0.5rem 0.72rem;
+  border: 0;
+  background: transparent;
+  color: var(--agent-text);
+  text-align: left;
+  transition: background-color 140ms ease;
+}
+
+.sidebar .operationActionB + .operationActionB,
+.sidebar .operationRenameB + .operationActionB {
+  border-top: 1px solid var(--agent-line);
+}
+
+.sidebar .operationActionB:enabled:hover {
+  background: color-mix(in srgb, var(--agent-text) 4%, transparent);
+}
+
+.sidebar .operationActionB:enabled:active {
+  background: color-mix(in srgb, var(--agent-text) 8%, transparent);
+}
+
+.sidebar .operationActionB:disabled,
+.sidebar .operationRenameB button:disabled,
+.sidebar .operationConfirmActionsB button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.sidebar .operationActionIconB {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-tile);
+  background: var(--agent-raised);
+  color: var(--agent-text-muted);
+}
+
+.sidebar .operationActionB > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.sidebar .operationActionB strong,
+.sidebar .operationActionB small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar .operationActionB strong {
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.sidebar .operationActionB small {
+  color: var(--agent-text-muted);
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.sidebar .operationActionB > svg:last-child {
+  color: var(--agent-text-muted);
+  flex-shrink: 0;
+}
+
+.sidebar .operationActionB[data-danger='true'] {
+  color: var(--danger);
+}
+
+.sidebar .operationActionB[data-danger='true'] .operationActionIconB {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--agent-line));
+  background: color-mix(in srgb, var(--danger-soft) 56%, var(--agent-raised));
+  color: var(--danger);
+}
+
+.sidebar .operationActionB[data-danger='true'] small {
+  color: color-mix(in srgb, var(--danger) 72%, var(--agent-text-muted));
+}
+
+.sidebar .operationDangerGroupB {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--agent-line));
+}
+
+.sidebar .operationDangerGroupB > h3 {
+  color: var(--danger);
+}
+
+.sidebar .operationRenameB {
+  display: grid;
+  gap: 0.62rem;
+  padding: 0.72rem;
+  border-bottom: 1px solid var(--agent-line);
+}
+
+.sidebar .operationRenameB label {
+  display: grid;
+  min-width: 0;
+  gap: 0.36rem;
+  color: var(--agent-text-muted);
+  font-size: 0.64rem;
+}
+
+.sidebar .operationRenameB input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.62rem;
+  border: 1px solid var(--agent-line-strong);
+  border-radius: var(--radius-input);
+  background: var(--agent-raised);
+  color: var(--agent-text);
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.sidebar .operationRenameB > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.sidebar .operationRenameB button,
+.sidebar .operationConfirmActionsB button {
+  min-height: 2.75rem;
+  padding: 0.46rem 0.62rem;
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-button);
+  background: var(--agent-raised);
+  color: var(--agent-text);
+  font-size: 0.66rem;
+  font-weight: 650;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.sidebar .operationRenameB button:enabled:active,
+.sidebar .operationConfirmActionsB button:enabled:active {
+  background: color-mix(in srgb, var(--agent-text) 8%, var(--agent-raised));
+}
+
+.sidebar .operationRenameB button[type='submit'] {
+  border-color: var(--agent-ink);
+  background: var(--agent-ink);
+  color: var(--agent-on-ink);
+}
+
+.sidebar .operationDeleteConfirmB {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.82rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--agent-line));
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--danger-soft) 56%, var(--agent-raised));
+}
+
+.sidebar .conversationOperationB .operationDeleteConfirmB h3 {
+  margin: 0;
+  color: var(--agent-text);
+  font-size: 0.82rem;
+}
+
+.sidebar .conversationOperationB .operationDeleteConfirmB p {
+  margin: 0;
+  color: var(--agent-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.58;
+}
+
+.sidebar .operationConfirmActionsB {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.48rem;
+}
+
+.sidebar .operationDangerButtonB {
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+
+.sidebar .operationActionB:focus-visible,
+.sidebar .operationRenameB button:focus-visible,
+.sidebar .operationRenameB input:focus-visible,
+.sidebar .operationConfirmActionsB button:focus-visible {
+  outline: 2px solid var(--agent-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 340px) {
+  .sidebar .operationActionB {
+    min-height: 4rem;
+  }
+
+  .sidebar .operationGroupB {
+    border-radius: var(--radius-card);
+  }
+}
+
+/* === Composer A：Codex 单框悬浮坞 ===
+   语音状态、真实上下文、可增长输入区和工具行共享一层玻璃表面；
+   只有外框承担焦点环，发送动作保留唯一的高对比矩形。 */
+
+@media (max-width: 959px) {
+  .page .composer {
+    --composer-muted: var(--agent-text-muted);
+    --composer-focus: color-mix(in srgb, var(--agent-ink) 42%, transparent);
+
+    width: calc(100% - var(--mobile-gutter) - var(--mobile-gutter));
+    margin-right: auto;
+    margin-bottom: 0.5rem;
+    margin-left: auto;
+    padding: 0.5rem 0.52rem 0.34rem;
+    overflow: hidden;
+    border: 1px solid var(--mobile-line);
+    border-radius: var(--radius-panel);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    background: var(--composer-bg);
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+    -webkit-backdrop-filter: blur(24px) saturate(118%);
+    backdrop-filter: blur(24px) saturate(118%);
+  }
+
+  .page .composer:focus-within {
+    border-color: color-mix(in srgb, var(--agent-ink) 34%, var(--mobile-line));
+    outline: 2px solid var(--composer-focus);
+    outline-offset: 2px;
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+  }
+
+  .page .composer .voiceStatusSlot {
+    width: auto;
+    margin: 0.08rem 0.08rem 0.52rem;
+  }
+
+  .page .composer .voicePanel,
+  .page .composer .voiceToast {
+    border-color: var(--mobile-line);
+    border-radius: var(--radius-control-surface);
+    background: color-mix(in srgb, var(--agent-surface) 82%, transparent);
+    box-shadow: none;
+    color: var(--agent-text);
+  }
+
+  .page .composer .voicePanel button,
+  .page .composer .voiceDismiss {
+    border-color: var(--mobile-line);
+    border-radius: var(--radius-button);
+    background: var(--mobile-glass-strong);
+    color: var(--agent-text);
+  }
+
+  .page .composerContextChip {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0.08rem 0.08rem 0.24rem;
+    padding: 0.22rem 0.22rem 0.22rem 0.32rem;
+    border: 1px solid var(--mobile-line);
+    border-radius: var(--radius-compact-surface);
+    background: color-mix(in srgb, var(--agent-surface) 58%, transparent);
+  }
+
+  .page .composerContextIcon {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: none;
+    place-items: center;
+    border: 1px solid var(--mobile-line);
+    border-radius: var(--radius-circle);
+    background: var(--mobile-glass-strong);
+    color: var(--agent-text);
+  }
+
+  .page .composerContextCopy {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 0.34rem;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .page .composerContextCopy strong {
+    color: var(--agent-text);
+    font-size: 0.74rem;
+    font-weight: 580;
+    line-height: 1.2;
+  }
+
+  .page .composerContextCopy > span,
+  .page .composerContextCopy small {
+    color: var(--agent-text-muted);
+    font-family: var(--font-numeric);
+    font-size: 0.64rem;
+    font-weight: 450;
+    line-height: 1.2;
+  }
+
+  .page .composerContextChip > button {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    margin-left: auto;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-button);
+    background: transparent;
+    color: var(--agent-text-muted);
+  }
+
+  .page .composerContextChip > button:enabled:hover {
+    background: color-mix(in srgb, var(--agent-text) 7%, transparent);
+    color: var(--agent-text);
+  }
+
+  .page .composer textarea {
+    display: block;
+    width: 100%;
+    min-height: 50px;
+    max-height: 168px;
+    overflow-y: hidden;
+    resize: none;
+    padding: 0.66rem 0.64rem 0.46rem;
+    border: 0;
+    border-radius: var(--radius-input);
+    outline: 0;
+    background: transparent;
+    color: var(--composer-text);
+    caret-color: var(--composer-text);
+    font-size: 0.95rem;
+    line-height: 1.48;
+    scrollbar-color: color-mix(in srgb, var(--agent-text) 24%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+
+  .page .composer textarea:focus,
+  .page .composer textarea:focus-visible {
+    outline: 0;
+    box-shadow: none;
+  }
+
+  .page .composer textarea::placeholder {
+    color: var(--composer-muted);
+  }
+
+  .page .composerFooter {
+    min-height: 52px;
+    gap: 0.12rem;
+    margin-top: 0;
+    padding: 0.32rem 0.08rem 0.08rem;
+    border-top: 1px solid var(--composer-line);
+    background: transparent;
+  }
+
+  .page .toolsTrigger,
+  .page .composerFooter .voiceTrigger,
+  .page .composerFooter .sendButton {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    margin: 0;
+    border-radius: var(--radius-button);
+  }
+
+  .page .toolsTrigger,
+  .page .composerFooter .voiceTrigger {
+    border: 0;
+    background: transparent;
+    color: var(--composer-muted);
+  }
+
+  .page .toolsTrigger:enabled:hover,
+  .page .composerFooter .voiceTrigger:enabled:hover {
+    border: 0;
+    background: color-mix(in srgb, var(--agent-text) 7%, transparent);
+    color: var(--agent-text);
+  }
+
+  .page .composerAuthority {
+    display: inline-flex;
+    height: 32px;
+    min-width: 0;
+    max-width: 6rem;
+    align-items: center;
+    justify-content: center;
+    margin-right: auto;
+    padding: 0 0.55rem;
+    overflow: hidden;
+    border: 1px solid var(--mobile-line);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--agent-surface) 56%, transparent);
+    color: var(--composer-muted);
+    font-size: 0.62rem;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page .composerFooter .sendButton {
+    border: 1px solid var(--composer-action-bg);
+    background: var(--composer-action-bg);
+    color: var(--composer-action-text);
+    box-shadow: 0 10px 20px -16px color-mix(in srgb, var(--agent-ink) 72%, transparent);
+  }
+
+  .page .composerFooter .sendButton:enabled:hover {
+    background: color-mix(in srgb, var(--composer-action-bg) 88%, var(--agent-text));
+  }
+
+  .page .composerFooter .sendButton:disabled {
+    border-color: var(--mobile-line);
+    background: var(--mobile-glass-tint);
+    color: var(--composer-muted);
+    box-shadow: none;
+  }
+
+  .page .toolsTrigger:focus-visible,
+  .page .composerFooter .voiceTrigger:focus-visible,
+  .page .composerFooter .sendButton:focus-visible,
+  .page .composerContextChip > button:focus-visible {
+    outline: 2px solid var(--agent-ink);
+    outline-offset: 1px;
+  }
+
+  :global(:root[data-theme='night']) .page .composer {
+    --composer-muted: var(--agent-text-muted);
+    --composer-focus: color-mix(in srgb, var(--agent-text) 38%, transparent);
+
+    background: var(--composer-bg);
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+  }
+
+  :global(:root[data-theme='night']) .page .composer:focus-within {
+    border-color: color-mix(in srgb, var(--agent-text) 34%, var(--mobile-line));
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+  }
+}
+
+@media (max-width: 340px) {
+  .page .composer {
+    padding: 0.44rem 0.42rem 0.28rem;
+  }
+
+  .page .composerContextChip {
+    gap: 0.42rem;
+    padding-left: 0.26rem;
+  }
+
+  .page .composerContextCopy {
+    gap: 0.26rem;
+  }
+
+  .page .composerAuthority {
+    max-width: 5.35rem;
+    padding-right: 0.42rem;
+    padding-left: 0.42rem;
+    font-size: 0.6rem;
+  }
+
+  .page .composer textarea {
+    padding: 0.64rem 0.52rem 0.42rem;
+    font-size: 0.93rem;
+  }
+}
+
+@media (max-width: 959px) and (max-height: 600px) {
+  .page .composer {
+    padding-top: 0.44rem;
+  }
+
+  .page .composer textarea {
+    min-height: 46px;
+    max-height: 128px;
+    padding: 0.56rem 0.56rem 0.36rem;
+  }
+
+  .page .composerFooter {
+    min-height: 50px;
+    padding-top: 0.24rem;
+  }
+}
+
+/* === Codex 命令工作台：桌面端的最终视觉覆盖 ===
+   用版式、编号和连续分隔线建立层次，不再依赖卡片和装饰。
+   手机端继续使用上方已有的紧凑布局。 */
+
+@media (min-width: 960px) {
+  :global(.app-shell-agent) .page {
+    padding-right: max(2rem, calc((100vw - 96rem) / 2));
+    padding-left: max(2rem, calc((100vw - 96rem) / 2));
+  }
+
+  .page .chatHeader {
+    width: 100%;
+    max-width: 96rem;
+    min-height: 4.5rem;
+    margin: 0 auto;
+    padding-right: 8.5rem;
+    padding-left: 0.15rem;
+    border-bottom-color: var(--agent-line-strong);
+  }
+
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+    min-height: 4.5rem;
+    padding-top: 0;
+  }
+
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader::before {
+    display: none;
+  }
+
+  .page .chatHeader > button:first-child {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-button);
+  }
+
+  .page .chatHeaderIdentity {
+    gap: 0.18rem;
+    padding-left: 0.35rem;
+  }
+
+  .page .chatHeader span.chatTitle {
+    font-size: 0.96rem;
+    font-weight: 680;
+  }
+
+  .page .chatHeader span.chatSubtitle {
+    font-size: 0.51rem;
+    letter-spacing: 0.14em;
+  }
+
+  .page .chatHeader .newChatButton {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-button);
+    border-color: var(--agent-line-strong);
+  }
+
+  .page .conversation {
+    padding: 0;
+    scrollbar-gutter: stable;
+  }
+
+  .page .composer {
+    --composer-bg: #171918;
+    --composer-text: #f1f3f1;
+    --composer-muted: #949a96;
+    --composer-line: #303431;
+    --composer-action-bg: #f1f3f1;
+    --composer-action-text: #151716;
+    --composer-focus: #d8ded9;
+
+    width: min(calc(100% - 4rem), 64rem);
+    max-width: 64rem;
+    margin-right: auto;
+    margin-bottom: 0.85rem;
+    margin-left: auto;
+    padding: 1.15rem 1.15rem 0.7rem;
+    border-color: #282c29;
+    border-radius: var(--radius-compact-surface);
+    background: var(--composer-bg);
+    color: var(--composer-text);
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 7%) inset,
+      0 30px 64px -34px rgb(0 0 0 / 78%);
+  }
+
+  .page .composer:focus-within {
+    border-color: #414743;
+    outline: 1px solid var(--composer-focus);
+    outline-offset: 2px;
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 8%) inset,
+      0 34px 72px -34px rgb(0 0 0 / 82%);
+  }
+
+  .page .composer textarea {
+    min-height: 4.8rem;
+    padding: 0.25rem 0.3rem;
+    background: transparent;
+    color: var(--composer-text);
+    caret-color: var(--composer-text);
+    font-size: 1.04rem;
+    line-height: 1.62;
+  }
+
+  .page .composer textarea::placeholder {
+    color: var(--composer-muted);
+  }
+
+  .page .composerFooter {
+    min-height: 3.4rem;
+    border-top-color: var(--composer-line);
+  }
+
+  .page .toolsTrigger,
+  .page .composerFooter .voiceTrigger {
+    color: var(--composer-muted);
+  }
+
+  .page .toolsTrigger:enabled:hover,
+  .page .composerFooter .voiceTrigger:enabled:hover {
+    background: rgb(255 255 255 / 9%);
+    color: var(--composer-text);
+  }
+
+  .page .composerAuthority {
+    color: var(--composer-muted);
+  }
+
+  .page .composerFooter .sendButton {
+    border-color: var(--composer-action-bg);
+    background: var(--composer-action-bg);
+    color: var(--composer-action-text);
+  }
+
+  .page .composerFooter .sendButton:disabled {
+    border-color: transparent;
+    background: transparent;
+    color: var(--composer-muted);
+  }
+}
+
+@media (min-width: 960px) and (max-height: 760px) {
+  .page .composer {
+    width: min(calc(100% - 4rem), 58rem);
+    padding-top: 0.72rem;
+  }
+
+  .page .composer textarea {
+    min-height: 3.5rem;
+  }
+
+  .page .composerFooter {
+    min-height: 2.9rem;
+  }
+}
+
+/* === 宽屏 Codex 工作台：排版取代装饰 ===
+   左侧用大标题和运行读数建立主画面，右侧把任务起点处理成连续命令轨。
+   只改桌面空态的空间组织；手机端、输入浮层和业务交互保持原样。 */
+
+@media (min-width: 960px) {
+  .sidebarOverlay .sidebar {
+    width: min(var(--chat-drawer-width, 21rem), 22rem);
+    margin-left: 0;
+  }
+
+  :global(.app-shell-agent) .page {
+    padding-right: max(2rem, calc((100vw - 92rem) / 2));
+    padding-left: max(2rem, calc((100vw - 92rem) / 2));
+  }
+
+  :global(.app-shell-agent) .app-navigation {
+    top: calc(env(safe-area-inset-top) + 1.9rem);
+    right: max(2rem, calc((100vw - 92rem) / 2));
+  }
+
+  .page .chatHeader {
+    width: 100%;
+    max-width: 92rem;
+    margin: 0 auto;
+    padding-right: 8.5rem;
+  }
+
+  .page .conversation {
+    padding: 0;
+    scrollbar-gutter: stable;
+  }
+
+  .page .composer {
+    width: min(calc(100% - 4rem), 56rem);
+    max-width: 56rem;
+    margin-right: auto;
+    margin-bottom: 0.85rem;
+    margin-left: auto;
+    padding: 1rem 1.1rem 0.6rem;
+  }
+
+  .page .composer textarea {
+    min-height: 3.9rem;
+    padding: 0.2rem 0.28rem;
+    font-size: 1.02rem;
+  }
+
+  .page .composerFooter {
+    min-height: 3.1rem;
+  }
+}
+
+@media (min-width: 960px) and (max-height: 760px) {
+  .page .composer {
+    margin-bottom: 0.5rem;
+    padding-top: 0.78rem;
+    padding-bottom: 0.42rem;
+  }
+
+  .page .composer textarea {
+    min-height: 3.15rem;
+  }
+}
+
+/* === Codex 胆量定稿：让底部输入舱成为页面唯一主角 ===
+   标题用两行强节奏建立峰值，任务退成连续命令清单；
+   输入舱在浅色主题转为深色命令面，在夜间主题保持石墨层级。 */
+
+.page .chatHeader {
+  border-bottom-color: transparent;
+}
+
+.page .composer {
+  --composer-bg: var(--agent-raised);
+  --composer-text: var(--agent-text);
+  --composer-muted: var(--agent-text-muted);
+  --composer-line: var(--agent-line);
+  --composer-action-bg: var(--brand);
+  --composer-action-text: var(--brand-ink);
+  --composer-focus: var(--accent);
+
+  border-color: var(--agent-ink);
+  background: var(--composer-bg);
+  color: var(--composer-text);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 7%) inset,
+    0 24px 54px -30px rgb(0 0 0 / 68%);
+}
+
+.page .composer:focus-within {
+  border-color: var(--agent-ink);
+  outline: 2px solid var(--composer-focus);
+  outline-offset: 3px;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 7%) inset,
+    0 28px 62px -30px rgb(0 0 0 / 74%);
+}
+
+.page .composer textarea {
+  background: transparent;
+  color: var(--composer-text);
+  caret-color: var(--composer-text);
+}
+
+.page .composer textarea::placeholder {
+  color: var(--composer-muted);
+}
+
+.page .composerFooter {
+  border-top-color: var(--composer-line);
+}
+
+.page .toolsTrigger,
+.page .composerFooter .voiceTrigger {
+  color: var(--composer-muted);
+}
+
+.page .toolsTrigger:enabled:hover,
+.page .composerFooter .voiceTrigger:enabled:hover {
+  background: color-mix(in srgb, var(--composer-text) 12%, transparent);
+  color: var(--composer-text);
+}
+
+.page .composerAuthority {
+  color: var(--composer-muted);
+}
+
+.page .composerFooter .sendButton {
+  border-color: var(--composer-action-bg);
+  background: var(--composer-action-bg);
+  color: var(--composer-action-text);
+}
+
+.page .composerFooter .sendButton:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--composer-muted);
+}
+
+:global(:root[data-theme='night']) .page .composer {
+  --composer-bg: var(--agent-surface-strong);
+  --composer-text: var(--agent-text);
+  --composer-muted: var(--agent-text-muted);
+  --composer-line: var(--agent-line-strong);
+  --composer-action-bg: var(--agent-ink);
+  --composer-action-text: var(--agent-on-ink);
+  --composer-focus: var(--agent-text);
+
+  border-color: var(--agent-line-strong);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 5%) inset,
+    0 24px 54px -34px rgb(0 0 0 / 80%);
+}
+
+@media (max-width: 340px) {
+  .page .chatHeader {
+    min-height: 3.15rem;
+  }
+
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+    min-height: 3.65rem;
+    padding-top: 1.2rem;
+  }
+
+  .page .composer {
+    width: calc(100% - 0.8rem);
+  }
+
+  .page .composer textarea {
+    min-height: 3.55rem;
+    padding: 0.82rem 0.82rem 0.58rem;
+    font-size: 0.92rem;
+  }
+
+  .page .composerFooter {
+    min-height: 2.85rem;
+  }
+}
+
+@media (max-height: 600px) {
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+    min-height: 3.55rem;
+    padding-top: 1.08rem;
+  }
+
+  .page .composer {
+    margin-bottom: 0.18rem;
+  }
+
+  .page .composer textarea {
+    min-height: 2.8rem;
+    padding-top: 0.68rem;
+    padding-bottom: 0.44rem;
+  }
+
+  .page .composerFooter {
+    min-height: 2.7rem;
+    padding-top: 0.08rem;
+    padding-bottom: 0.08rem;
+  }
+}
+
+@media (max-height: 600px) and (max-width: 340px) {
+  :global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+    min-height: 3.35rem;
+    padding-top: 0.95rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page .composer {
+    transition: none;
+  }
+}
+
+/* === 手机端圆角玻璃收口 ===
+   同一套左右栅格贯穿页头、任务面板、状态读数和输入舱。玻璃只用来表达
+   表面层级，圆角只使用局部尺度；输入舱保留唯一的深色发送动作和清晰焦点。 */
+
+@media (max-width: 959px) {
+  :global(.app-shell-agent) {
+    --mobile-gutter: 1rem;
+    --mobile-line: color-mix(in srgb, var(--agent-line-strong) 62%, transparent);
+    --mobile-glass: color-mix(in srgb, var(--agent-raised) 78%, transparent);
+    --mobile-glass-strong: color-mix(in srgb, var(--agent-raised) 90%, transparent);
+    --mobile-glass-tint: color-mix(in srgb, var(--agent-surface) 62%, transparent);
+    --mobile-shadow: 0 20px 48px -38px rgb(0 0 0 / 46%);
+    --mobile-highlight: 0 1px 0 rgb(255 255 255 / 58%) inset;
+  }
+
+  :global(:root[data-theme='night']) :global(.app-shell-agent) {
+    --mobile-shadow: 0 22px 52px -34px rgb(0 0 0 / 82%);
+    --mobile-highlight: 0 1px 0 rgb(255 255 255 / 7%) inset;
+  }
+
+  :global(.app-shell-agent) :global(.app-navigation) {
+    right: var(--mobile-gutter);
+  }
+
+  :global(.app-shell-agent) :global(.app-navigation) :global(.view-switch),
+  :global(.app-content-agent) > :global(.active-run-link) {
+    border-color: var(--mobile-line);
+    background: var(--mobile-glass);
+    box-shadow: var(--mobile-highlight);
+    -webkit-backdrop-filter: blur(18px) saturate(112%);
+    backdrop-filter: blur(18px) saturate(112%);
+  }
+
+  :global(.app-shell-agent) :global(.app-navigation) :global(.view-switch) {
+    border-radius: var(--radius-pill);
+  }
+
+  :global(.app-content-agent) > :global(.active-run-link) {
+    margin-right: var(--mobile-gutter);
+    margin-left: var(--mobile-gutter);
+    border-radius: var(--radius-card);
+  }
+
+  .page .chatHeader {
+    width: calc(100% - var(--mobile-gutter) - var(--mobile-gutter));
+    margin-right: auto;
+    margin-left: auto;
+    padding-right: 6.7rem;
+    padding-left: 0;
+    border-bottom: 0;
+  }
+
+  .page .chatHeader button {
+    border-radius: var(--radius-button);
+  }
+
+  .page .chatHeader > button:first-child,
+  .page .chatHeader .newChatButton {
+    border: 1px solid var(--mobile-line);
+    background: var(--mobile-glass);
+    color: var(--agent-text);
+    box-shadow: var(--mobile-highlight);
+    -webkit-backdrop-filter: blur(16px) saturate(108%);
+    backdrop-filter: blur(16px) saturate(108%);
+  }
+
+  .page .chatHeader .newChatButton:disabled {
+    border-color: var(--mobile-line);
+    background: var(--mobile-glass-tint);
+    color: var(--agent-text-muted);
+  }
+
+  .page .composer {
+    --composer-bg: var(--mobile-glass-strong);
+    --composer-text: var(--agent-text);
+    --composer-muted: color-mix(in srgb, var(--agent-text-muted) 88%, transparent);
+    --composer-line: var(--mobile-line);
+    --composer-action-bg: var(--agent-ink);
+    --composer-action-text: var(--agent-on-ink);
+    --composer-focus: color-mix(in srgb, var(--agent-ink) 28%, transparent);
+
+    width: calc(100% - var(--mobile-gutter) - var(--mobile-gutter));
+    margin-right: auto;
+    margin-bottom: 0.5rem;
+    margin-left: auto;
+    padding: 0.6rem 0.68rem 0.44rem;
+    border: 1px solid var(--mobile-line);
+    border-radius: var(--radius-panel);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    background: var(--composer-bg);
+    color: var(--composer-text);
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+    -webkit-backdrop-filter: blur(22px) saturate(116%);
+    backdrop-filter: blur(22px) saturate(116%);
+  }
+
+  .page .composer:focus-within {
+    border-color: var(--composer-focus);
+    outline: 2px solid var(--composer-focus);
+    outline-offset: 2px;
+    box-shadow: var(--mobile-highlight), var(--mobile-shadow);
+  }
+
+  .page .composer textarea {
+    min-height: 4.15rem;
+    padding: 0.9rem 0.84rem 0.62rem;
+    background: transparent;
+    color: var(--composer-text);
+    caret-color: var(--composer-text);
+    font-size: 0.95rem;
+    line-height: 1.62;
+  }
+
+  .page .composer textarea::placeholder {
+    color: var(--composer-muted);
+  }
+
+  .page .composerFooter {
+    min-height: 3rem;
+    margin-top: 0;
+    padding: 0.2rem 0.32rem 0.28rem;
+    border-top-color: var(--composer-line);
+    background: color-mix(in srgb, var(--agent-surface) 24%, transparent);
+  }
+
+  .page .toolsTrigger,
+  .page .composerFooter .voiceTrigger,
+  .page .composerFooter .sendButton {
+    border-radius: var(--radius-button);
+  }
+
+  .page .toolsTrigger,
+  .page .composerFooter .voiceTrigger {
+    border: 0;
+    background: transparent;
+    color: var(--composer-muted);
+  }
+
+  .page .toolsTrigger:enabled:hover,
+  .page .composerFooter .voiceTrigger:enabled:hover {
+    border: 0;
+    background: color-mix(in srgb, var(--agent-text) 7%, transparent);
+    color: var(--agent-text);
+  }
+
+  .page .composerAuthority {
+    color: var(--composer-muted);
+  }
+
+  .page .composerFooter .sendButton {
+    border-color: var(--composer-action-bg);
+    background: var(--composer-action-bg);
+    color: var(--composer-action-text);
+  }
+
+  .page .composerFooter .sendButton:disabled {
+    border-color: var(--mobile-line);
+    background: var(--mobile-glass-tint);
+    color: var(--composer-muted);
+  }
+
+  .page .taskControls,
+  .page .detail {
+    border-radius: var(--radius-card);
+  }
+
+  .page .turnNotice,
+  .page .turnError {
+    border-radius: var(--radius-notice);
+  }
+
+  .toolsSheet {
+    border-top-left-radius: var(--radius-sheet);
+    border-top-right-radius: var(--radius-sheet);
+  }
+
+  .page .taskControls button,
+  .page .detail button,
+  .page .memorySelection button,
+  .page .selectionFieldset,
+  .page .selectionFieldset > button {
+    border-radius: var(--radius-button);
+  }
+}
+
+@media (max-width: 340px) {
+  :global(.app-shell-agent) {
+    --mobile-gutter: 0.875rem;
+  }
+
+  .page .chatHeader {
+    padding-right: 6.3rem;
+  }
+}
+
+@media (max-width: 959px) and (max-height: 600px) {
+  .page .composer {
+    margin-bottom: 0.32rem;
+    padding-top: 0.5rem;
+  }
+
+  .page .composer textarea {
+    min-height: 2.8rem;
+    padding: 0.68rem 0.78rem 0.42rem;
+  }
+
+  .page .composerFooter {
+    min-height: 2.7rem;
+    padding: 0.08rem 0.28rem 0.16rem;
+  }
+}
+.executionSteps {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: grid;
+  gap: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.executionSteps > li {
+  position: relative;
+  padding-left: 1rem;
+}
+.executionSteps > li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.45rem;
+  width: 6px;
+  height: 6px;
+  background: var(--text-muted);
+  border-radius: var(--radius-circle);
+}
+.executionSteps p {
+  margin: 0;
+}
+.sourceContent ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+.sourceContent .sourceItem {
+  max-width: 100%;
+  min-width: 0;
+  background: transparent;
+  padding: 0;
+}
+.inlineSource > summary {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  min-height: 12px;
+  padding: 0;
+  border-radius: var(--radius-circle);
+  background: #dedede;
+  color: #414141;
+  font-size: 0.4rem;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+}
+.inlineSource > summary::-webkit-details-marker {
+  display: none;
+}
+.inlineSource > summary::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+}
+.inlineSource > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.inlineSource[open] {
+  padding-bottom: 0.75rem;
+}
+.inlineSource[open] > strong {
+  display: block;
+  margin-top: 0.75rem;
+}
+.answerToolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.answerToolbar button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.answerToolbar button:hover {
+  background: var(--surface);
+}
+.answerToolbar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.page .composer {
+  position: relative;
+}
+.page .composer .latestOrb {
+  position: absolute;
+  right: 1rem;
+  top: -54px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-circle);
+  background: var(--glass-strong);
+  color: var(--text);
+  box-shadow: 0 4px 16px #0002;
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+}
+.page .composer .latestOrb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.knowledgeSegments {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+}
+
+.sidebar .managementSettings > header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar .managementSettings > header > a {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar .managementSettings > header > button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+.sidebar .managementSettings > header > button[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.sidebar .managementSettings > div:not([hidden]) {
+  display: grid;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--agent-line-strong);
+}
+
+.sidebar .managementSettings > div[hidden] {
+  display: none;
+}
+
+.sidebar .managementSettings > div a {
+  min-height: 44px;
+  font-size: 0.78rem;
+}
+.page .knowledgeSegments button {
+  flex: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.4rem 0.65rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.page .knowledgeSegments button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.page .knowledgeSegments button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.page .knowledgeSegments button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 手机反馈：页头共用对齐行，输入区压缩留白但保留触控范围。 */
+.page .chatHeader {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px 5.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: var(--mobile-gutter, 1rem);
+  padding-left: var(--mobile-gutter, 1rem);
+  min-height: 56px;
+  padding-block: 6px;
+  background: var(--agent-raised);
+  border-bottom: 1px solid var(--agent-line-strong);
+  box-shadow: 0 4px 12px -10px var(--agent-text-muted);
+}
+
+:global(.app-content-agent):not(:has(> :global(.active-run-link))) .page .chatHeader {
+  min-height: 56px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.page .chatHeader > button:first-child,
+.page .chatHeader .newChatButton {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.page .chatHeaderIdentity {
+  width: 100%;
+  min-width: 0;
+  margin-right: 0;
+}
+
+.page .chatHeader .newChatButton {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  justify-self: end;
+}
+
+:global(.app-shell-agent) .page .chatHeader :global(.app-navigation) {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  justify-self: end;
+}
+
+:global(.app-shell-agent) .page .chatHeader :global(.view-switch) {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 0.65rem;
+  font-size: 0.7rem;
+}
+
+@media (max-width: 959px) {
+  .page .composer {
+    width: calc(100% - 2.5rem);
+    padding: 0.2rem 0.4rem 0.2rem;
+  }
+
+  .page .knowledgeSegments {
+    gap: 0.1rem;
+    padding: 0 0.2rem;
+  }
+
+  .page .knowledgeSegments button {
+    min-height: 44px;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.65rem;
+    line-height: 1.2;
+  }
+
+  .page .composer textarea {
+    min-height: 40px;
+    padding: max(0.35rem, calc((40px - 1.2325rem) / 2)) 0.6rem;
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  .page .composerFooter {
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .page .toolsTrigger svg,
+  .page .composerFooter .voiceTrigger svg,
+  .page .composerFooter .sendButton svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .page .composerAuthority {
+    height: 26px;
+    font-size: 0.58rem;
+  }
+
+  .page .composerFooter .sendButton {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    margin-left: auto;
+    border-radius: var(--radius-button);
+    position: relative;
+  }
+
+  .page .composerFooter .sendButton::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
 }

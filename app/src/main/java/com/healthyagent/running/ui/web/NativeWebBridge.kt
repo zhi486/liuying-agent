@@ -6,6 +6,10 @@ import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
 import com.healthyagent.running.BuildConfig
+import com.healthyagent.running.agent.AgentTaskService
+import com.healthyagent.running.agent.cloud.CloudAgentService
+import com.healthyagent.running.agent.memory.MemoryService
+import com.healthyagent.running.agent.memory.MemoryDocumentExport
 import com.healthyagent.running.bridge.BridgeErrorCode
 import com.healthyagent.running.bridge.BridgeSession
 import com.healthyagent.running.coordinator.AppCoordinator
@@ -15,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
@@ -23,10 +28,17 @@ import kotlinx.serialization.json.jsonPrimitive
 class NativeWebBridge(
     private val coordinator: AppCoordinator,
     private val commandDispatcher: RunCommandDispatcher,
+    private val agentTaskService: AgentTaskService,
+    private val memoryService: MemoryService,
     private val scope: CoroutineScope,
+    private val cloudAgentService: CloudAgentService,
+    private val voiceInputService: com.healthyagent.running.agent.voice.VoiceInputService,
+    private val mcpManagementService: com.healthyagent.running.agent.mcp.McpManagementService,
+    private val memoryDocumentExport: MemoryDocumentExport,
 ) {
     private var replyProxy: JavaScriptReplyProxy? = null
     private var snapshotJob: Job? = null
+    private var cloudJob: Job? = null
     private val session = BridgeSession(
         buildId = "${BuildConfig.VERSION_NAME}-${BuildConfig.BUILD_TYPE}",
         snapshotProvider = { coordinator.snapshot.value },
@@ -49,20 +61,41 @@ class NativeWebBridge(
         snapshotJob = scope.launch {
             coordinator.snapshot.drop(1).collect(session::pushSnapshot)
         }
+        cloudJob = scope.launch {
+            cloudAgentService.changes.drop(1).collect {
+                session.pushCloudChanged()
+                delay(100)
+            }
+        }
     }
 
     fun resetDocument() {
+        cloudAgentService.stopSpeech()
+        memoryDocumentExport.reset()
+        cloudAgentService.closeMcpWindows()
+        cloudAgentService.closeStreams()
+        voiceInputService.cancel()
+        mcpManagementService.closeConfiguration()
         replyProxy = null
         session.reset()
+        scope.launch { cloudAgentService.clearPreparation() }
     }
 
     fun detach() {
         snapshotJob?.cancel()
         snapshotJob = null
+        cloudJob?.cancel(); cloudJob = null
         resetDocument()
     }
 
     private suspend fun handleCommand(name: String, body: JsonObject): CommandOutcome = when (name) {
+        "cloud.speak", "cloud.stopSpeech" -> cloudAgentService.handle(name, body)
+        "memory.exportBegin", "memory.exportStatus", "memory.exportCancel" -> memoryDocumentExport.handle(name, body)
+        "mcp.status", "mcp.list", "mcp.detail", "mcp.register", "mcp.configure", "mcp.revokePrivate", "mcp.disable", "mcp.approve", "mcp.discover", "mcp.recover", "mcp.endpoint", "mcp.remove" -> mcpManagementService.handle(name, body)
+        "voice.begin", "voice.status", "voice.finish", "voice.cancel" -> voiceInputService.handle(name, body)
+        "cloud.list", "cloud.configure", "cloud.prepare", "cloud.confirm", "cloud.send", "cloud.chatConsent", "cloud.memoryAuthorization", "cloud.memoryConsent", "cloud.discard", "cloud.recover", "cloud.cancel", "cloud.withdraw", "cloud.newConversation", "cloud.selectConversation", "cloud.renameConversation", "cloud.archiveConversation", "cloud.restoreConversation", "cloud.deleteConversation", "cloud.retryConversationCleanup" -> cloudAgentService.handle(name, body)
+        "agent.submit", "agent.list", "agent.detail", "agent.cancel" -> agentTaskService.handle(name, body)
+        "memory.create", "memory.list", "memory.update", "memory.delete", "memory.preview", "memory.history", "memory.restore", "memory.document" -> memoryService.handle(name, body)
         "device.connect" -> commandDispatcher.connectSensor()
         "device.disconnect" -> commandDispatcher.disconnectSensor()
         "run.start" -> commandDispatcher.startRun()
@@ -72,6 +105,12 @@ class NativeWebBridge(
         "history.query" -> coordinator.queryHistory(
             page = body.getValue("page").jsonPrimitive.int,
             pageSize = body.getValue("pageSize").jsonPrimitive.int,
+        )
+        "history.detail" -> coordinator.queryHistoryDetail(body.getValue("sessionId").jsonPrimitive.content)
+        "history.series" -> coordinator.queryHistorySeries(
+            body.getValue("sessionId").jsonPrimitive.content,
+            body.getValue("offset").jsonPrimitive.int,
+            body.getValue("limit").jsonPrimitive.int,
         )
         "settings.query" -> coordinator.querySettings()
         "settings.configureDeepseek" -> coordinator.requestDeepseekConfiguration()

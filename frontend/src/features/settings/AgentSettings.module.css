@@ -1,0 +1,91 @@
+.page {
+  overflow-wrap: anywhere;
+  padding-bottom: 2rem;
+  line-height: 1.65;
+}
+
+.page h2 {
+  font-size: 1.05rem;
+}
+.page p {
+  color: var(--text-muted);
+}
+.page button {
+  max-width: 100%;
+  padding: 0.7rem 1rem;
+}
+.page button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.notice,
+.noticeSection,
+.usageList li {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--canvas-raised);
+}
+.notice {
+  font-size: 0.85rem;
+}
+.noticeSection h2,
+.usageList h3 {
+  margin: 0 0 0.6rem;
+}
+.noticeSection p:last-child,
+.usageList p:last-child {
+  margin-bottom: 0;
+}
+.usageList {
+  list-style: none;
+  padding: 0;
+}
+.usageList h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.usageList p {
+  font-size: 0.85rem;
+}
+.usageList .amount {
+  font-family: var(--font-numeric);
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+.links {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1.2rem 0;
+}
+.links a {
+  display: flex;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--canvas-raised);
+  color: var(--text);
+  text-decoration: none;
+}
+.links a:hover {
+  background: var(--accent-soft);
+}
+
+.consentCheck {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+  min-height: 2.75rem;
+}
+.consentCheck input {
+  flex: 0 0 1.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: 0.25rem;
+  accent-color: var(--accent);
+}

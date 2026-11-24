@@ -1,6 +1,8 @@
 package com.healthyagent.running.data.repository
 
 import com.healthyagent.running.core.model.RunSession
+import com.healthyagent.running.core.model.RunMetricSample
+import com.healthyagent.running.data.local.RunMetricSampleEntity
 import com.healthyagent.running.core.model.RunState
 import com.healthyagent.running.core.model.RoutePoint
 import com.healthyagent.running.core.model.Split
@@ -33,6 +35,7 @@ class RoomRunRepository(private val dao: RunSessionDao) : RunRepository {
 
     override suspend fun saveSession(session: RunSession) {
         dao.replaceSession(
+            metricSamples = session.metricSamples.mapIndexed { index, sample -> sample.toEntity(session.id, index) },
             session = session.toEntity(),
             splits = session.splits.map { it.toEntity(session.id) },
             routePoints = session.routePoints.mapIndexed { sequence, point ->
@@ -43,6 +46,7 @@ class RoomRunRepository(private val dao: RunSessionDao) : RunRepository {
 
     override suspend fun checkpointSession(session: RunSession) {
         dao.replaceSession(
+            metricSamples = session.metricSamples.mapIndexed { index, sample -> sample.toEntity(session.id, index) },
             session = session.toEntity(),
             splits = session.splits.map { it.toEntity(session.id) },
             routePoints = session.routePoints.mapIndexed { sequence, point ->
@@ -54,6 +58,7 @@ class RoomRunRepository(private val dao: RunSessionDao) : RunRepository {
     override suspend fun getActiveSession(): RunSession? {
         val sessionEntity = dao.getActiveSession() ?: return null
         return sessionEntity.toDomain(
+            metricSamples = dao.getMetricSamples(sessionEntity.id),
             splits = dao.getSplits(sessionEntity.id),
             routePoints = dao.getRoutePoints(sessionEntity.id),
         )
@@ -63,7 +68,7 @@ class RoomRunRepository(private val dao: RunSessionDao) : RunRepository {
         return dao.getAllSessions().map { sessionEntity ->
             val splits = dao.getSplits(sessionEntity.id)
             val routePoints = dao.getRoutePoints(sessionEntity.id)
-            sessionEntity.toDomain(splits = splits, routePoints = routePoints)
+            sessionEntity.toDomain(splits = splits, routePoints = routePoints, metricSamples = dao.getMetricSamples(sessionEntity.id))
         }
     }
 
@@ -81,7 +86,7 @@ class RoomRunRepository(private val dao: RunSessionDao) : RunRepository {
         val sessionEntity = dao.getSession(sessionId) ?: return null
         val splits = dao.getSplits(sessionId)
         val routePoints = dao.getRoutePoints(sessionId)
-        return sessionEntity.toDomain(splits = splits, routePoints = routePoints)
+        return sessionEntity.toDomain(splits = splits, routePoints = routePoints, metricSamples = dao.getMetricSamples(sessionId))
     }
 }
 
@@ -122,6 +127,7 @@ fun RoutePoint.toEntity(sessionId: String, sequence: Int): RoutePointEntity = Ro
 fun RunSessionEntity.toDomain(
     splits: List<SplitEntity>,
     routePoints: List<RoutePointEntity> = emptyList(),
+    metricSamples: List<RunMetricSampleEntity> = emptyList(),
 ): RunSession = RunSession(
     id = id,
     startTimeMillis = startTimeMillis,
@@ -133,6 +139,7 @@ fun RunSessionEntity.toDomain(
     avgPaceSecPerKm = avgPaceSecPerKm,
     splits = splits.map { it.toDomain() },
     routePoints = routePoints.map { it.toDomain() },
+    metricSamples = metricSamples.map { it.toDomain() },
     runState = try {
         RunState.valueOf(state)
     } catch (_: IllegalArgumentException) {
@@ -156,4 +163,14 @@ fun SplitEntity.toDomain(): Split = Split(
     avgCadence = avgCadence?.toInt(),
     avgPaceSecPerKm = avgPaceSecPerKm,
     hrZoneDistribution = null, // Room 不直接存储 Map，MVP 阶段省略
+)
+
+fun RunMetricSample.toEntity(sessionId: String, sequence: Int) = RunMetricSampleEntity(
+    sessionId, sequence, startElapsedSeconds, endElapsedSeconds, segmentId,
+    averagePaceSecPerKm, averageHeartRate, paceValidSeconds, heartRateValidSeconds,
+)
+
+fun RunMetricSampleEntity.toDomain() = RunMetricSample(
+    startElapsedSeconds, endElapsedSeconds, segmentId,
+    averagePaceSecPerKm, averageHeartRate, paceValidSeconds, heartRateValidSeconds,
 )

@@ -20,6 +20,8 @@ class RunSessionManager {
     var currentSession: RunSession? = null
         private set
     private val splitBuffer = mutableListOf<MetricsFrame>()
+    private val metricSampler = FiveSecondMetrics()
+    private var metricSegment = 0
     private var lastSplitKm = 0
     private var totalHrSum = 0L
     private var totalCadenceSum = 0L
@@ -61,6 +63,8 @@ class RunSessionManager {
         reset()
         currentSession = session
         _currentState = session.runState
+        metricSegment = (session.metricSamples.maxOfOrNull { it.segmentId } ?: 0) + 1
+        metricSampler.restart(session.totalDurationSec, metricSegment)
         lastSplitKm = session.splits.maxOfOrNull { it.index } ?: 0
         lastSplitElapsedSeconds = session.splits.sumOf { it.durationSec }
 
@@ -90,6 +94,7 @@ class RunSessionManager {
             cadenceFrameCount++
         }
         currentSession = session.copy(
+            metricSamples = session.metricSamples + metricSampler.add(frame),
             totalDistanceMeters = frame.distanceMeters,
             totalDurationSec = maxOf(session.totalDurationSec, frame.elapsedSeconds),
             avgHeartRate = if (heartRateFrameCount > 0) {
@@ -145,6 +150,7 @@ class RunSessionManager {
     /** 暂停 */
     fun pause() {
         if (_currentState == RunState.RUNNING) {
+            flushMetricSamples()
             _currentState = RunState.PAUSED
             currentSession = currentSession?.copy(runState = RunState.PAUSED)
         }
@@ -153,6 +159,8 @@ class RunSessionManager {
     /** 恢复 */
     fun resume() {
         if (_currentState == RunState.PAUSED) {
+            metricSegment++
+            metricSampler.restart(currentSession?.totalDurationSec ?: 0L, metricSegment)
             _currentState = RunState.RUNNING
             currentSession = currentSession?.copy(runState = RunState.RUNNING)
         }
@@ -162,6 +170,7 @@ class RunSessionManager {
      * 结束会话，返回完整的 RunSession（含所有 split 和平均指标）
      */
     fun finishSession(): RunSession? {
+        flushMetricSamples()
         _currentState = RunState.FINISHED
         val session = currentSession ?: return null
 
@@ -188,6 +197,8 @@ class RunSessionManager {
 
     /** 重置（为新会话做准备） */
     fun reset() {
+        metricSegment = 0
+        metricSampler.restart(0, 0)
         currentSession = null
         splitBuffer.clear()
         lastSplitKm = 0
@@ -221,5 +232,11 @@ class RunSessionManager {
             avgPaceSecPerKm = splitPace,
             hrZoneDistribution = null,
         )
+    }
+
+    private fun flushMetricSamples() {
+        currentSession = currentSession?.let { session ->
+            session.copy(metricSamples = session.metricSamples + metricSampler.finish(session.totalDurationSec))
+        }
     }
 }

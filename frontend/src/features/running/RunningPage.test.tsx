@@ -1,12 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useBridgeStore } from '../../bridge/bridgeStore';
 import * as bridgeStore from '../../bridge/bridgeStore';
 import type { AppSnapshot, ResultPayload } from '../../bridge/contract';
 import { formatPace } from './formatters';
 import { RunningPage } from './RunningPage';
+
+type BridgeStatus = 'unavailable' | 'connecting' | 'ready' | 'error';
 
 const baseSnapshot: AppSnapshot = {
   dataQuality: { gps: 'waiting', heartRate: 'waiting' },
@@ -82,10 +84,11 @@ function createSnapshot(overrides: Partial<AppSnapshot> = {}): AppSnapshot {
   return { ...baseSnapshot, ...overrides };
 }
 
-function renderRunning(snapshot?: AppSnapshot) {
-  useBridgeStore.setState(
-    snapshot ? { status: 'ready', snapshot } : { status: 'unavailable', snapshot: null },
-  );
+function renderRunning(
+  snapshot?: AppSnapshot,
+  status: BridgeStatus = snapshot ? 'ready' : 'unavailable',
+) {
+  useBridgeStore.setState(snapshot ? { status, snapshot } : { status, snapshot: null });
   return render(
     <MemoryRouter>
       <RunningPage />
@@ -93,7 +96,34 @@ function renderRunning(snapshot?: AppSnapshot) {
   );
 }
 
+function RunReviewProbe() {
+  const state = useLocation().state as { runId?: string } | null;
+  return <p data-testid="run-review-id">{state?.runId ?? 'none'}</p>;
+}
+
 describe('跑步页真实数据', () => {
+  it('完成后再次进入显示准备页，新的运动仍展示结果且不发送运动命令', () => {
+    localStorage.removeItem('liuying.completedRun.dismissed');
+    const command = vi.spyOn(bridgeStore, 'sendNativeCommand');
+    const snapshot = createSnapshot({
+      session: { ...baseSnapshot.session, id: 'completed-one', state: 'finished' },
+    });
+    const first = renderRunning(snapshot);
+    fireEvent.click(screen.getByRole('button', { name: /^完成$/ }));
+    expect(command).not.toHaveBeenCalled();
+    first.unmount();
+    const second = renderRunning(snapshot);
+    expect(screen.getByTestId('running-readiness-console')).toBeVisible();
+    second.unmount();
+    const third = renderRunning({
+      ...snapshot,
+      session: { ...snapshot.session, id: 'completed-two' },
+    });
+    expect(screen.getByTestId('running-finished-scorecard')).toBeVisible();
+    third.unmount();
+    localStorage.removeItem('liuying.completedRun.dismissed');
+  });
+
   it('定位与心率同时停更仍显示手环已连接且保留安全提示', () => {
     renderRunning(
       createSnapshot({
@@ -104,9 +134,9 @@ describe('跑步页真实数据', () => {
         safetyState: { level: 'warning', message: '请留意身体感受' },
       }),
     );
-    expect(screen.getByText('定位暂未更新')).toBeVisible();
-    expect(screen.getByText('心率暂未更新')).toBeVisible();
-    expect(screen.getByText('Keep B5 已连接')).toBeVisible();
+    expect(screen.getByText('定位延迟')).toBeVisible();
+    expect(screen.getByText('心率延迟')).toBeVisible();
+    expect(screen.getByLabelText('Keep B5 已连接')).toBeVisible();
     expect(screen.getByText('请留意身体感受')).toBeVisible();
     expect(screen.queryByRole('meter')).not.toBeInTheDocument();
   });
@@ -118,14 +148,114 @@ describe('跑步页真实数据', () => {
         dataQuality: { gps: 'waiting', heartRate: 'waiting' },
       }),
     );
-    expect(screen.getByText('等待定位')).toBeVisible();
-    expect(screen.getByText('等待心率')).toBeVisible();
+    expect(screen.getByText('定位等待')).toBeVisible();
+    expect(screen.getByText('心率等待')).toBeVisible();
     expect(screen.queryByText('定位暂未更新')).not.toBeInTheDocument();
+  });
+
+  it('跑中采用 A 夜色驾驶舱，并用真实快照填充全部主读数', () => {
+    renderRunning(
+      createSnapshot({
+        session: {
+          id: 'run-cockpit',
+          state: 'running',
+          startedAt: '2026-10-28T01:00:00Z',
+          targetPaceSecPerKm: 360,
+          targetDistanceMeters: 5_000,
+        },
+        metrics: {
+          ...baseSnapshot.metrics,
+          heartRate: 148,
+          paceSecPerKm: 372,
+          cadence: 172,
+          distanceMeters: 2_410,
+          elapsedSeconds: 756,
+          hrZone: 'z3',
+          isDataFresh: true,
+        },
+        dataQuality: { gps: 'fresh', heartRate: 'fresh' },
+        latestCoachMessage: {
+          id: 'coach-1',
+          priority: 'coach',
+          text: '配速比目标慢 12 秒，保持呼吸。',
+          timestampMillis: 1_761_613_956_000,
+        },
+      }),
+    );
+
+    expect(screen.getByTestId('running-active-console')).toBeVisible();
+    expect(screen.getByText('6:12')).toBeVisible();
+    expect(screen.getByText('2.41')).toBeVisible();
+    expect(screen.getByText('148')).toBeVisible();
+    expect(screen.getByText('172')).toBeVisible();
+    expect(screen.getByText('12:36')).toBeVisible();
+    expect(screen.getByText('配速 6:00')).toBeVisible();
+    expect(screen.getByText('距离 5 km')).toBeVisible();
+    expect(screen.getByText('比目标慢 12 秒')).toBeVisible();
+    expect(screen.getByText('配速比目标慢 12 秒，保持呼吸。')).toBeVisible();
+    expect(screen.getByRole('button', { name: '暂停' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '结束' })).toBeVisible();
+  });
+
+  it('原生命中暂停态保留读数并把主操作切为继续', () => {
+    renderRunning(
+      createSnapshot({
+        session: { ...baseSnapshot.session, state: 'paused' },
+        metrics: { ...baseSnapshot.metrics, paceSecPerKm: 360, distanceMeters: 1_000 },
+        dataQuality: { gps: 'fresh', heartRate: 'waiting' },
+      }),
+    );
+
+    expect(screen.getByText('已暂停')).toBeVisible();
+    expect(screen.getByText('6:00')).toBeVisible();
+    expect(screen.getByRole('button', { name: '继续' })).toBeVisible();
+  });
+
+  it('A 控制坞只派发真实的暂停、继续和确认结束命令', async () => {
+    const send = vi.spyOn(bridgeStore, 'sendNativeCommand').mockResolvedValue({
+      status: 'accepted',
+      data: null,
+    });
+    const running = createSnapshot({
+      session: { ...baseSnapshot.session, id: 'run-commands', state: 'running' },
+    });
+    renderRunning(running);
+
+    fireEvent.click(screen.getByRole('button', { name: '暂停' }));
+    await waitFor(() => expect(send).toHaveBeenCalledWith('run.pause', {}));
+
+    act(() => {
+      useBridgeStore.setState({
+        status: 'ready',
+        snapshot: { ...running, revision: 2, session: { ...running.session, state: 'paused' } },
+      });
+    });
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+    await waitFor(() => expect(send).toHaveBeenCalledWith('run.resume', {}));
+
+    act(() => {
+      useBridgeStore.setState({ status: 'ready', snapshot: running });
+    });
+    fireEvent.click(screen.getByRole('button', { name: '结束' }));
+    fireEvent.click(screen.getByRole('button', { name: '确认结束' }));
+    await waitFor(() => expect(send).toHaveBeenCalledWith('run.stop', {}));
+    expect(send).toHaveBeenCalledTimes(3);
   });
 
   beforeEach(() => {
     vi.restoreAllMocks();
     useBridgeStore.setState({ status: 'unavailable', snapshot: null });
+  });
+
+  it('跑前页使用 B 仪表结构，并保留定位、手环、安全与双圆动作', () => {
+    renderRunning(createSnapshot());
+
+    expect(screen.getByTestId('running-readiness-console')).toBeVisible();
+    expect(screen.getByText('0.00')).toBeVisible();
+    expect(screen.getByRole('list', { name: '跑前检查' }).children).toHaveLength(3);
+    expect(screen.getByTestId('running-connect-orb')).toHaveAttribute('aria-label', '连接手环');
+    expect(screen.getByTestId('running-start-orb')).toHaveAttribute('aria-label', '开始跑步');
+    expect(screen.getByText('开跑后由手机 GPS 记录距离和路线。')).toBeVisible();
   });
 
   it('开跑前只派发手环连接且等待期间防重复点击，不虚报连接成功', async () => {
@@ -146,6 +276,40 @@ describe('跑步页真实数据', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '连接手环' })).toBeEnabled());
     expect(screen.queryByRole('button', { name: '手环已连接' })).not.toBeInTheDocument();
     expect(screen.getByText('Keep B5 未连接，可仅用手机 GPS')).toBeVisible();
+  });
+
+  it('跑后复盘链接携带当前 runId 打开聊天', () => {
+    const snapshot = createSnapshot({
+      session: {
+        id: 'run-review',
+        state: 'finished',
+        startedAt: '2026-09-01T11:30:00Z',
+        targetPaceSecPerKm: null,
+        targetDistanceMeters: null,
+      },
+      completedRun: {
+        endedAt: '2026-09-01T12:00:00Z',
+        distanceMeters: 5_000,
+        durationSeconds: 1_800,
+        averagePaceSecPerKm: 360,
+        averageHeartRate: 140,
+        averageCadence: 170,
+      },
+      persistenceState: 'saved',
+    });
+    useBridgeStore.setState({ status: 'ready', snapshot });
+
+    render(
+      <MemoryRouter initialEntries={['/run']}>
+        <Routes>
+          <Route path="/run" element={<RunningPage />} />
+          <Route path="/agent" element={<RunReviewProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: '让流萤复盘本次跑步' }));
+    expect(screen.getByTestId('run-review-id')).toHaveTextContent('run-review');
   });
 
   it.each([
@@ -189,12 +353,26 @@ describe('跑步页真实数据', () => {
 
     expect(screen.getByText('交互预览，不代表设备数据')).toBeVisible();
     expect(screen.getByText('交互预览不提供设备目标。')).toBeVisible();
+    expect(screen.getByText('交互预览不接收设备安全状态。')).toBeVisible();
+    expect(screen.getAllByText('示例').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('正常')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '进入交互预览' }));
 
     expect(screen.getByText('跑步交互预览')).toBeVisible();
     expect(screen.queryByText('6:02')).not.toBeInTheDocument();
     expect(screen.getAllByText('--').length).toBeGreaterThan(2);
+  });
+
+  it('跑步服务异常时显示异常状态，不把未知安全状态写成正常', () => {
+    renderRunning(undefined, 'error');
+
+    expect(screen.getByText('跑步服务连接失败')).toBeVisible();
+    expect(screen.getByText('服务异常')).toBeVisible();
+    expect(screen.getByText('安全状态暂时无法读取。')).toBeVisible();
+    expect(screen.getByText('待读取')).toBeVisible();
+    expect(screen.queryByText('正常')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '等待跑步服务' })).toBeDisabled();
   });
 
   it('结束确认框锁定焦点，支持 Escape 关闭并恢复触发按钮焦点', () => {
@@ -279,8 +457,8 @@ describe('跑步页真实数据', () => {
       }),
     );
 
-    expect(screen.getByText('手机 GPS 已连接')).toBeVisible();
-    expect(screen.getByText('Keep B5 未连接，可仅用手机 GPS')).toBeVisible();
+    expect(screen.getByLabelText('手机 GPS 已连接')).toBeVisible();
+    expect(screen.getByLabelText('Keep B5 未连接，可仅用手机 GPS')).toBeVisible();
   });
 
   it('展示 Keep B5 真实名称与电量，不覆盖 GPS 主源', () => {
@@ -439,6 +617,10 @@ describe('跑步页真实数据', () => {
     expect(screen.getByText('137 bpm')).toBeVisible();
     expect(screen.getByText('169 spm')).toBeVisible();
     expect(screen.getByText('已同步，包含路线')).toBeVisible();
+    expect(screen.getByRole('link', { name: '让流萤复盘本次跑步' })).toHaveAttribute(
+      'href',
+      '/agent',
+    );
     expect(screen.getByRole('link', { name: '查看记录' })).toHaveAttribute('href', '/history');
     expect(screen.getByRole('link', { name: '查看本次总结' })).toHaveAttribute(
       'href',
@@ -475,6 +657,7 @@ describe('跑步页真实数据', () => {
 
     expect(screen.queryByRole('link', { name: '查看记录' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '查看本次总结' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '让流萤复盘本次跑步' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: actionText })).toBeDisabled();
   });
 

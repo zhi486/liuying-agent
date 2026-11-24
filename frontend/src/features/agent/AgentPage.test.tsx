@@ -6,6 +6,11 @@ import { useBridgeStore } from '../../bridge/bridgeStore';
 import { AgentPage } from './AgentPage';
 
 const send = vi.hoisted(() => vi.fn());
+const cloudList = vi.hoisted(() => ({
+  commandId: '33333333-3333-4333-8333-333333333333',
+  configured: false,
+  chatAuthorized: false,
+}));
 vi.mock('../../bridge/bridgeStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../bridge/bridgeStore')>()),
   sendNativeCommand: (name: string, body: unknown) =>
@@ -13,10 +18,12 @@ vi.mock('../../bridge/bridgeStore', async (importOriginal) => ({
       ? Promise.resolve({
           status: 'accepted',
           data: {
-            commandId: '33333333-3333-4333-8333-333333333333',
-            configured: false,
+            commandId: cloudList.commandId,
+            configured: cloudList.configured,
             configuring: false,
-            origin: null,
+            origin: cloudList.configured ? 'https://agent.example.com' : null,
+            chatAuthorized: cloudList.chatAuthorized,
+            conversationId: cloudList.configured ? id : undefined,
             items: [],
           },
         })
@@ -41,7 +48,12 @@ const detail = {
 };
 const cancelled = {
   ...detail,
-  task: { ...summary, status: 'cancelled', reason: null, updatedAtMillis: 2000 },
+  task: {
+    ...summary,
+    status: 'cancelled',
+    reason: null,
+    updatedAtMillis: 2000,
+  },
   actions: [...detail.actions, { sequence: 1, kind: 'cancelled', createdAtMillis: 2000 }],
 };
 const accepted = (data: unknown) => ({ status: 'accepted', data });
@@ -58,16 +70,24 @@ const mount = () =>
       <AgentPage />
     </MemoryRouter>,
   );
-const openAccount = () => fireEvent.click(screen.getByRole('button', { name: '打开侧边栏' }));
+const openAccount = () => {
+  fireEvent.click(screen.getByRole('button', { name: '打开侧边栏' }));
+  fireEvent.click(screen.getByRole('button', { name: '设置与管理' }));
+};
+const openTools = () => {
+  fireEvent.click(screen.getByRole('button', { name: '更多输入选项' }));
+};
 const openReference = () => {
-  fireEvent.click(screen.getByLabelText('更多输入选项'));
-  fireEvent.click(screen.getByText('本次参考'));
+  openTools();
+  fireEvent.click(screen.getByText(/^本次参考/));
 };
 const waitForTasks = () =>
   waitFor(() => expect(send.mock.calls.some(([name]) => name === 'agent.list')).toBe(true));
 
 beforeEach(() => {
   send.mockReset();
+  cloudList.configured = false;
+  cloudList.chatAuthorized = false;
   useBridgeStore.setState({ status: 'ready', snapshot: null });
   send.mockResolvedValue(accepted(page()));
 });
@@ -94,7 +114,9 @@ it('选中并核对记忆后仅保存仍只保存问题，不携带记忆或上�
   });
   mount();
   await waitForTasks();
-  fireEvent.change(screen.getByLabelText('给流萤的消息'), { target: { value: '今晚轻松跑' } });
+  fireEvent.change(screen.getByLabelText('给流萤的消息'), {
+    target: { value: '今晚轻松跑' },
+  });
   openReference();
   fireEvent.click(screen.getByRole('button', { name: '选择本次记忆' }));
   fireEvent.click(await screen.findByLabelText(/偏好晚跑/));
@@ -103,7 +125,10 @@ it('选中并核对记忆后仅保存仍只保存问题，不携带记忆或上�
   fireEvent.click(screen.getByRole('button', { name: '仅保存' }));
   await screen.findByText(/已保存到本机，可在账户详情查看/);
   const submitted = send.mock.calls.find(([name]) => name === 'agent.submit')![1];
-  expect(submitted).toEqual({ clientRequestId: expect.any(String), prompt: '今晚轻松跑' });
+  expect(submitted).toEqual({
+    clientRequestId: expect.any(String),
+    prompt: '今晚轻松跑',
+  });
   expect(screen.getByRole('button', { name: '在线执行' })).toBeDisabled();
   expect(
     send.mock.calls.every(([name]) =>
@@ -115,12 +140,16 @@ it('选中并核对记忆后仅保存仍只保存问题，不携带记忆或上�
 it('两种入口明确分开，在线未配置时连点不发送也不降级保存', async () => {
   mount();
   await waitForTasks();
-  fireEvent.change(screen.getByLabelText('给流萤的消息'), { target: { value: '今晚轻松跑' } });
-  expect(screen.getByRole('button', { name: '仅保存' })).toBeEnabled();
+  fireEvent.change(screen.getByLabelText('给流萤的消息'), {
+    target: { value: '今晚轻松跑' },
+  });
   const online = screen.getByRole('button', { name: '在线执行' });
   expect(online).toBeDisabled();
+  openTools();
+  expect(screen.getByRole('button', { name: '仅保存' })).toBeEnabled();
   expect(online).toHaveAccessibleDescription('需单独配置在线 Agent');
   expect(online).toHaveAccessibleDescription('需单独配置在线 Agent');
+  fireEvent.keyDown(window, { key: 'Escape' });
   fireEvent.click(online);
   fireEvent.click(online);
   expect(send.mock.calls.map(([name]) => name)).toEqual(['agent.list']);
@@ -129,7 +158,7 @@ it('两种入口明确分开，在线未配置时连点不发送也不降级保�
 });
 
 it.each(['unavailable', 'ready', 'error'] as const)(
-  '%s 时查看上传说明不提交，草稿保留且本机入口状态正确',
+  '%s 时用户须知移到设置且不提交，草稿与本机入口状态正确',
   async (status) => {
     useBridgeStore.setState({ status, snapshot: null });
     mount();
@@ -138,13 +167,9 @@ it.each(['unavailable', 'ready', 'error'] as const)(
     fireEvent.change(input, { target: { value: '先记下来' } });
     const before = send.mock.calls.length;
     openReference();
-    const disclosure = screen.getByText('在线执行会上传什么？');
-    fireEvent.click(disclosure);
-    expect(disclosure.closest('details')).toHaveAttribute('open');
-    expect(screen.getByText(/每次执行都需你确认/)).toBeVisible();
-    expect(screen.getByText(/输入中包含的个人信息也会随文字发送/)).toBeVisible();
-    fireEvent.click(disclosure);
-    expect(disclosure.closest('details')).not.toHaveAttribute('open');
+    const disclosure = screen.getByRole('link', { name: '查看用户须知' });
+    expect(disclosure).toHaveAttribute('href', '/settings/notices');
+    expect(screen.queryByText('在线执行会上传什么？')).not.toBeInTheDocument();
     expect(input).toHaveValue('先记下来');
     expect(send).toHaveBeenCalledTimes(before);
     expect(screen.getByRole('button', { name: '在线执行' })).toBeDisabled();
@@ -157,8 +182,10 @@ it.each(['unavailable', 'ready', 'error'] as const)(
 it('未接原生时不读写任务，不展示假任务', () => {
   useBridgeStore.setState({ status: 'unavailable', snapshot: null });
   mount();
+  openTools();
   expect(screen.getByRole('button', { name: '仅保存' })).toBeDisabled();
   expect(send).not.toHaveBeenCalled();
+  fireEvent.keyDown(window, { key: 'Escape' });
   openAccount();
   expect(screen.getByText(/请在手机 App 内保存和查看任务/)).toBeVisible();
 });
@@ -179,38 +206,147 @@ it('首页只保留对话操作，低频管理入口集中在账户详情', () =
   expect(screen.queryByRole('button', { name: '配置在线 Agent' })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: '管理长期记忆' })).not.toBeInTheDocument();
   openAccount();
-  expect(screen.getByRole('link', { name: '管理长期记忆' })).toHaveAttribute('href', '/memories');
+  fireEvent.click(screen.getByRole('button', { name: '展开设置入口' }));
+  expect(screen.getByRole('link', { name: '长期记忆' })).toHaveAttribute('href', '/memories');
   expect(screen.getByRole('link', { name: '跑步记录' })).toHaveAttribute('href', '/history');
-  expect(screen.getByRole('link', { name: '运动与语音设置' })).toHaveAttribute('href', '/settings');
+  expect(screen.getByRole('link', { name: '设置' })).toHaveAttribute('href', '/settings');
   expect(screen.getByRole('button', { name: '配置在线 Agent' })).toBeInTheDocument();
+});
+
+it('空态任务起点只起草并聚焦，不发送在线命令', async () => {
+  mount();
+  await waitForTasks();
+  const input = screen.getByLabelText('给流萤的消息');
+  const before = send.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: /复盘一次跑步/ }));
+  expect(input).toHaveValue('请带我复盘最近一次跑步，说明数据能支持的结论和不足，不做医学诊断。');
+  expect(input).toHaveFocus();
+  expect(send).toHaveBeenCalledTimes(before);
+  expect(
+    send.mock.calls.some(([name]) =>
+      ['cloud.prepare', 'cloud.send', 'agent.submit'].includes(name),
+    ),
+  ).toBe(false);
+});
+
+it('Enter 与发送按钮走同一条在线发送路径，组合输入不误发', async () => {
+  cloudList.configured = true;
+  send.mockImplementation(async (name: string) =>
+    name === 'cloud.prepare'
+      ? { status: 'rejected', error: { code: 'INTERNAL_ERROR', message: '合成失败' } }
+      : accepted(page()),
+  );
+  mount();
+  await waitForTasks();
+  const input = screen.getByLabelText('给流萤的消息');
+  expect(input).toHaveAttribute('rows', '1');
+  fireEvent.change(input, { target: { value: '今晚怎么跑' } });
+  const online = screen.getByRole('button', { name: '在线执行' });
+  await waitFor(() => expect(online).toBeEnabled());
+
+  expect(fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })).toBe(true);
+  expect(fireEvent.keyDown(input, { key: 'Enter', isComposing: true })).toBe(true);
+  expect(send.mock.calls.some(([name]) => name === 'cloud.prepare')).toBe(false);
+
+  expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+  await waitFor(() =>
+    expect(send.mock.calls.filter(([name]) => name === 'cloud.prepare')).toHaveLength(1),
+  );
+  await waitFor(() => expect(online).toBeEnabled());
+  fireEvent.click(online);
+  await waitFor(() =>
+    expect(send.mock.calls.filter(([name]) => name === 'cloud.prepare')).toHaveLength(2),
+  );
+});
+
+it('输入框按内容自动增高、达到上限滚动，清空后恢复单行', async () => {
+  mount();
+  await waitForTasks();
+  const input = screen.getByLabelText('给流萤的消息');
+  let scrollHeight = 84;
+  Object.defineProperty(input, 'scrollHeight', {
+    configurable: true,
+    get: () => scrollHeight,
+  });
+  const computedStyle = vi
+    .spyOn(window, 'getComputedStyle')
+    .mockReturnValue({ maxHeight: '120px' } as CSSStyleDeclaration);
+
+  try {
+    fireEvent.change(input, { target: { value: '第一行\n第二行' } });
+    expect(input.style.height).toBe('84px');
+    expect(input.style.overflowY).toBe('hidden');
+
+    scrollHeight = 240;
+    fireEvent.change(input, { target: { value: '长草稿'.repeat(20) } });
+    expect(input.style.height).toBe('120px');
+    expect(input.style.overflowY).toBe('auto');
+
+    scrollHeight = 72;
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.style.height).toBe('72px');
+    expect(input.style.overflowY).toBe('hidden');
+  } finally {
+    computedStyle.mockRestore();
+  }
 });
 
 it('图标顶栏打开抽屉，Esc 关闭后焦点回到入口', () => {
   useBridgeStore.setState({ status: 'unavailable', snapshot: null });
   mount();
   const trigger = screen.getByRole('button', { name: '打开侧边栏' });
+  const lines = [...trigger.querySelectorAll('.menu-glyph > span')];
   expect(trigger.textContent).toBe('');
   fireEvent.click(trigger);
   expect(screen.getByRole('dialog', { name: '流萤' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '关闭侧边栏' })).toHaveFocus();
+  expect(screen.getByRole('button', { name: '关闭侧边栏' })).toBe(trigger);
+  expect([...trigger.querySelectorAll('.menu-glyph > span')]).toEqual(lines);
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(screen.queryByRole('dialog', { name: '流萤' })).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();
 });
 
-it('麦克风和发送为图标，低频保存藏在加号菜单', () => {
+it('麦克风和发送为图标，低频保存藏在加号工具面板', () => {
   useBridgeStore.setState({ status: 'unavailable', snapshot: null });
   mount();
   expect(screen.getByRole('button', { name: '语音输入' }).textContent).toBe('');
   expect(screen.getByRole('button', { name: '在线执行' })).toHaveTextContent('在线执行');
-  const menu = screen.getByLabelText('更多输入选项');
-  expect(menu.closest('details')).not.toHaveAttribute('open');
-  fireEvent.click(menu);
-  expect(menu.closest('details')).toHaveAttribute('open');
+  const trigger = screen.getByRole('button', { name: '更多输入选项' });
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(trigger);
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('dialog', { name: '输入选项' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '仅保存' })).toBeInTheDocument();
 });
 
-it('输入聚焦或软键盘改变视口时滚动完整输入区，失焦与卸载不再滚动', () => {
+it('输入工具面板通过 body Portal 呈现，Esc 关闭并归还焦点', () => {
+  useBridgeStore.setState({ status: 'unavailable', snapshot: null });
+  mount();
+  const trigger = screen.getByRole('button', { name: '更多输入选项' });
+  fireEvent.click(trigger);
+  const dialog = screen.getByRole('dialog', { name: '输入选项' });
+  expect(dialog.parentElement?.parentElement).toBe(document.body);
+  const close = screen.getByRole('button', { name: '关闭输入选项' });
+  expect(close).toHaveFocus();
+  fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+  expect(dialog).toContainElement(document.activeElement as HTMLElement);
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: '输入选项' })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+it('输入工具面板支持背景关闭，关闭后焦点仍回到加号', () => {
+  useBridgeStore.setState({ status: 'unavailable', snapshot: null });
+  mount();
+  const trigger = screen.getByRole('button', { name: '更多输入选项' });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('button', { name: '关闭输入选项背景' }));
+  expect(screen.queryByRole('dialog', { name: '输入选项' })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+it('输入聚焦及视口变化不再滚动整页，保留草稿与焦点', () => {
   useBridgeStore.setState({ status: 'unavailable', snapshot: null });
   const scroll = vi.fn();
   const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
@@ -221,17 +357,15 @@ it('输入聚焦或软键盘改变视口时滚动完整输入区，失焦与卸�
   try {
     const mounted = mount();
     const input = screen.getByLabelText('给流萤的消息');
+    fireEvent.change(input, { target: { value: '保留的草稿' } });
     act(() => input.focus());
-    expect(scroll).toHaveBeenCalledWith({ block: 'center' });
-    scroll.mockClear();
     fireEvent(window, new Event('resize'));
-    expect(scroll).toHaveBeenCalledTimes(1);
-    act(() => input.blur());
-    fireEvent(window, new Event('resize'));
-    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue('保留的草稿');
     mounted.unmount();
     fireEvent(window, new Event('resize'));
-    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).not.toHaveBeenCalled();
   } finally {
     if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original);
     else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
@@ -241,10 +375,13 @@ it('输入聚焦或软键盘改变视口时滚动完整输入区，失焦与卸�
 it('真实空态与保存后本机记录，不生成助手回复', async () => {
   mount();
   await waitForTasks();
-  fireEvent.change(screen.getByLabelText('给流萤的消息'), { target: { value: '今晚轻松跑' } });
+  fireEvent.change(screen.getByLabelText('给流萤的消息'), {
+    target: { value: '今晚轻松跑' },
+  });
   send.mockImplementation(async (name: string) =>
     accepted(name === 'agent.submit' ? detail : page([summary])),
   );
+  openTools();
   fireEvent.click(screen.getByRole('button', { name: '仅保存' }));
   await screen.findByText(/已保存到本机，可在账户详情查看/);
   expect(screen.getByLabelText('给流萤的消息')).toHaveValue('');
@@ -270,14 +407,17 @@ it('保存结果未知保留草稿，连点只保存一次，手动重试复用�
         })
       : Promise.resolve(accepted(page())),
   );
-  fireEvent.change(screen.getByLabelText('给流萤的消息'), { target: { value: '今晚轻松跑' } });
+  fireEvent.change(screen.getByLabelText('给流萤的消息'), {
+    target: { value: '今晚轻松跑' },
+  });
+  openTools();
   const save = screen.getByRole('button', { name: '仅保存' });
-  fireEvent.click(save);
   fireEvent.click(save);
   expect(send.mock.calls.filter(([name]) => name === 'agent.submit')).toHaveLength(1);
   await act(async () => reject(new Error('结果未知')));
   expect(screen.getByLabelText('给流萤的消息')).toHaveValue('今晚轻松跑');
   send.mockResolvedValue(accepted(detail));
+  openTools();
   fireEvent.click(screen.getByRole('button', { name: '仅保存' }));
   await screen.findByText(/已保存到本机，可在账户详情查看/);
   const attempts = send.mock.calls.filter(([name]) => name === 'agent.submit');
@@ -290,13 +430,19 @@ it('修改草稿后不误用旧幂等键，空白和超长输入不保存', asyn
   send.mockRejectedValue(new Error('保存失败'));
   const field = screen.getByLabelText('给流萤的消息');
   fireEvent.change(field, { target: { value: '  ' } });
+  openTools();
   expect(screen.getByRole('button', { name: '仅保存' })).toBeDisabled();
+  fireEvent.keyDown(window, { key: 'Escape' });
   fireEvent.change(field, { target: { value: '字'.repeat(2001) } });
+  openTools();
   expect(screen.getByRole('button', { name: '仅保存' })).toBeDisabled();
+  fireEvent.keyDown(window, { key: 'Escape' });
   fireEvent.change(field, { target: { value: '第一次' } });
+  openTools();
   fireEvent.click(screen.getByRole('button', { name: '仅保存' }));
   await screen.findByRole('alert');
   fireEvent.change(field, { target: { value: '第二次' } });
+  openTools();
   fireEvent.click(screen.getByRole('button', { name: '仅保存' }));
   await waitFor(() =>
     expect(send.mock.calls.filter(([name]) => name === 'agent.submit')).toHaveLength(2),
@@ -389,7 +535,10 @@ it('保存失败会关闭被中断的详情，旧详情晚到不留下永久加�
   fireEvent.click(await screen.findByRole('button', { name: '查看任务：今晚轻松跑' }));
   expect(screen.getByText('正在读取任务详情…')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: '关闭侧边栏' }));
-  fireEvent.change(screen.getByLabelText('给流萤的消息'), { target: { value: '新任务' } });
+  fireEvent.change(screen.getByLabelText('给流萤的消息'), {
+    target: { value: '新任务' },
+  });
+  openTools();
   fireEvent.click(screen.getByRole('button', { name: '仅保存' }));
   await screen.findByRole('alert');
   await act(async () => resolveDetail(accepted(detail)));

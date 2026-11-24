@@ -1,0 +1,19 @@
+.page {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-bottom: 2rem;
+  line-height: 1.8;
+}
+.noticeSection {
+  margin: 0 0 1.8rem;
+}
+.noticeSection h2 {
+  font-size: 1rem;
+  margin: 0 0 0.6rem;
+  color: var(--text);
+}
+.noticeSection p {
+  margin: 0.6rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}

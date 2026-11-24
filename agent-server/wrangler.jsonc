@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "liuying-agent",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  // 本地可测试维护宿主；实际 Cron 启用须另行验收和授权。
+  "triggers": { "crons": [] },
+  "secrets": { "required": ["DEEPSEEK_API_KEY", "BAIDU_ASR_API_KEY", "BAIDU_ASR_SECRET_KEY", "FUN_ASR_API_KEY"] },
+  "vars": { "FUN_ASR_WORKSPACE_ID": "", "FUN_ASR_REGION": "cn-beijing", "FUN_ASR_VOCABULARY_ID": "" },
+  "durable_objects": { "bindings": [{ "name": "AGENT_RUNTIME", "class_name": "LiuyingAgentRuntime" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiuyingAgentRuntime"] }],
+  // 仅本地占位，真实部署必须另行批准并提供生产绑定。
+  "d1_databases": [{ "binding": "DB", "database_name": "liuying-agent-local-only",
+    "database_id": "00000000-0000-4000-8000-000000000000", "migrations_dir": "migrations", "remote": false }],
+  "rules": [{ "type": "Data", "globs": ["**/*.bin"], "fallthrough": false }],
+  "build": { "command": "node --experimental-strip-types tools/token-count/prepare-worker-assets.ts" },
+  "observability": { "enabled": true, "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": false }, "traces": { "enabled": true } }
+}

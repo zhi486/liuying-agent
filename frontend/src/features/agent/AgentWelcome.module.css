@@ -1,0 +1,216 @@
+.welcome {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: min(100%, 38rem);
+  min-height: 0;
+  margin-inline: auto;
+  padding: var(--space-6) var(--space-4);
+  gap: var(--space-5);
+  color: var(--agent-text);
+}
+
+.intro {
+  margin-bottom: auto;
+}
+
+.intro h1 {
+  max-width: 15ch;
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.intro p {
+  max-width: 32ch;
+  margin: var(--space-2) 0 0;
+  color: var(--agent-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.prompts {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.prompts > button {
+  display: grid;
+  width: 100%;
+  min-height: max(44px, 3.4rem);
+  grid-template-columns: 1.5rem minmax(0, 1fr) 1.1rem;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--agent-line);
+  border-radius: var(--radius-card);
+  background: var(--agent-raised);
+  color: var(--agent-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.prompts > button:hover {
+  border-color: var(--agent-accent);
+  background: var(--agent-surface);
+}
+
+.prompts > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.promptIcon {
+  color: var(--agent-accent);
+}
+
+.promptCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.promptCopy strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.promptCopy small {
+  color: var(--agent-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.promptArrow {
+  color: var(--agent-text-muted);
+}
+
+.statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.62rem;
+  line-height: 1.5;
+}
+
+.statusLabel {
+  color: var(--agent-text-muted);
+}
+
+.status strong {
+  font-weight: 500;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-circle);
+  background: var(--agent-line-strong);
+}
+
+.dot[data-tone='good'],
+.dot[data-tone='active'] {
+  background: var(--agent-accent);
+}
+
+/* 按聊天区域的实际剩余高度收拢空态，键盘出现时仍把输入区留在原位。 */
+@container (max-height: 450px) {
+  .welcome {
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+  }
+
+  .intro h1 {
+    font-size: 1.25rem;
+  }
+
+  .intro p {
+    display: none;
+  }
+
+  .prompts > button {
+    min-height: 44px;
+    padding-block: var(--space-2);
+  }
+
+  .promptCopy small {
+    display: none;
+  }
+}
+
+@container (max-height: 310px) {
+  .welcome {
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+  }
+
+  .intro h1 {
+    max-width: none;
+    font-size: 1rem;
+  }
+
+  .statuses {
+    display: none;
+  }
+}
+
+@container (max-height: 220px) {
+  .intro {
+    display: none;
+  }
+}
+
+@container (max-height: 170px) {
+  .prompts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  .prompts > button {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 0;
+    padding: var(--space-2) var(--space-1);
+    text-align: center;
+  }
+
+  .promptIcon,
+  .promptArrow {
+    display: none;
+  }
+
+  .promptCopy strong {
+    font-size: 0.7rem;
+  }
+}
+
+@media (min-width: 960px) {
+  .welcome {
+    max-width: 60rem;
+    padding-inline: var(--space-8);
+  }
+
+  .prompts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .prompts > button {
+    min-height: 6rem;
+    grid-template-columns: 1fr auto;
+  }
+
+  .promptIcon {
+    grid-column: 1 / -1;
+  }
+}

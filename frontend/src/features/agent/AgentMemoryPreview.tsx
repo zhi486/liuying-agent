@@ -4,6 +4,7 @@ import { memoryPreviewSchema, type MemoryRecord } from '../../bridge/memories';
 import { useMemories } from '../memory/useMemories';
 import styles from './AgentPage.module.css';
 import type { SelectedMemoryRef } from '../../bridge/cloudAgent';
+import { ChoiceInput } from '../../design-system/ChoiceInput';
 
 type Props = {
   status: 'unavailable' | 'connecting' | 'ready' | 'error';
@@ -128,8 +129,7 @@ function MemorySelection({ status, prompt, onSelectionChange }: Props) {
             {memories.page?.items.map((memory) => (
               <li key={memory.id}>
                 <label>
-                  <input
-                    type="checkbox"
+                  <ChoiceInput
                     checked={selected.some((item) => item.id === memory.id)}
                     disabled={
                       pending ||

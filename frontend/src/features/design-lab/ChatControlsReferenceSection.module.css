@@ -1,0 +1,161 @@
+.phone {
+  min-height: 640px;
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+.phone button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.phone svg {
+  flex: none;
+}
+.meta {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+}
+.message {
+  margin: 1.5rem 0 1rem 1.25rem;
+  padding: 0.8rem;
+  background: var(--surface);
+  border-radius: 20px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+.phone .more {
+  align-self: flex-start;
+  border-radius: 50%;
+}
+.menu {
+  padding: 1rem 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.sheet {
+  margin-top: auto;
+  background: var(--glass-strong);
+  backdrop-filter: blur(16px);
+  padding: 1rem;
+  border-radius: 24px 24px 0 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.sheet header,
+.menu header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.messages {
+  height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+.messages > p {
+  padding: 0.8rem;
+  margin-top: 0.75rem;
+}
+.phone .jumpOrb {
+  position: absolute;
+  right: 0.5rem;
+  top: 290px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--glass-strong);
+  box-shadow: 0 4px 16px #0002;
+}
+.phone .unread {
+  align-self: center;
+  margin-top: 0.75rem;
+  padding: 0.7rem 1rem;
+  background: var(--glass-strong);
+  border-radius: 20px;
+}
+.unread span {
+  display: grid;
+  text-align: left;
+}
+.unread small {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+.phone .jumpBar {
+  width: 100%;
+  margin-top: auto;
+  background: transparent;
+  color: var(--accent);
+}
+.composer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem;
+  margin-top: auto;
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.phone .segments button {
+  border-radius: 999px;
+  font-size: 0.7rem;
+}
+.phone button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.catalogue {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.phone .catalogue button {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+  padding: 0.8rem;
+  min-height: 70px;
+}
+.catalogue span {
+  flex: 1;
+  min-width: 0;
+}
+.catalogue small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  margin-top: 0.3rem;
+}
+.directoryTrigger {
+  width: 100%;
+}
+.directory {
+  margin-top: 1rem;
+}
+.wizard {
+  margin-top: 1rem;
+  flex: 1;
+}
+.wizard h4 {
+  font-size: 1rem;
+}

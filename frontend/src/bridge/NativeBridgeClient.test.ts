@@ -13,15 +13,27 @@ describe('原生 Bridge 客户端', () => {
     };
     const onReady = vi.fn();
     const onSnapshot = vi.fn();
+    const onCloudChanged = vi.fn();
     const client = new NativeBridgeClient(port, {
       onReady,
       onSnapshot,
+      onCloudChanged,
       onError: vi.fn(),
     });
 
     client.start();
     const hello = webToNativeEnvelopeSchema.parse(JSON.parse(posted[0]));
     expect(hello.type).toBe('hello');
+    const notification = () =>
+      emit(port, {
+        contractVersion: 1,
+        type: 'event',
+        id: crypto.randomUUID(),
+        sentAt: new Date().toISOString(),
+        payload: { name: 'cloud.changed' },
+      });
+    notification();
+    expect(onCloudChanged).not.toHaveBeenCalled();
 
     const snapshot = createSnapshot(1);
     emit(port, {
@@ -47,6 +59,8 @@ describe('原生 Bridge 客户端', () => {
       },
     });
     expect(onReady).toHaveBeenCalledWith(snapshot);
+    notification();
+    expect(onCloudChanged).toHaveBeenCalledTimes(1);
 
     const commandPromise = client.sendCommand('run.start', {});
     const command = webToNativeEnvelopeSchema.parse(JSON.parse(posted[1]));
@@ -73,6 +87,8 @@ describe('原生 Bridge 客户端', () => {
     expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({ revision: 2 }));
 
     client.dispose();
+    notification();
+    expect(onCloudChanged).toHaveBeenCalledTimes(1);
   });
 
   it('严格按结果 envelope id 关联乱序的 accepted 与 rejected', async () => {
@@ -127,6 +143,28 @@ describe('原生 Bridge 客户端', () => {
 
       await vi.advanceTimersByTimeAsync(10_000);
 
+      await rejection;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      client.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('目录发现等待原生响应至 40 秒并清理定时器', async () => {
+    vi.useFakeTimers();
+    const { client } = prepareReadyClient();
+    try {
+      const command = client.sendCommand('mcp.discover', {
+        id: crypto.randomUUID(),
+        revision: crypto.randomUUID(),
+        identityToken: 'synthetic',
+        confirmed: true,
+      });
+      const rejection = expect(command).rejects.toThrow('原生命令响应超时');
+      await vi.advanceTimersByTimeAsync(39_999);
+      expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
       await rejection;
       expect(vi.getTimerCount()).toBe(0);
     } finally {

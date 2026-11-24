@@ -47,7 +47,7 @@ class BridgeSessionTest {
             decoded.envelope.payload.getValue("helloId").jsonPrimitive.content,
         )
         assertEquals(
-            listOf("snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1", "deepseek-companion.v1"),
+            listOf("snapshot.v1", "history.pagination", "settings.v1", "heart-rate-alerts.v1", "data-quality.v1", "deepseek-companion.v1", "agent.tasks.v1", "memory.v1", "agent.cloud.tasks.v1"),
             decoded.envelope.payload.getValue("capabilities").jsonArray.map {
                 it.jsonPrimitive.content
             },
@@ -191,4 +191,15 @@ class BridgeSessionTest {
     }
 
     private fun fixture(path: String): String = checkNotNull(javaClass.getResource(path)).readText()
+
+    @Test fun 云任务更新通知不携正文且握手失效后停止发送() = runTest {
+        session.pushCloudChanged(); assertTrue(sentMessages.isEmpty())
+        session.onMessage(fixture("/v1/fixtures/valid/hello.json"))
+        session.pushCloudChanged()
+        val decoded = BridgeCodec.decode(sentMessages.last()) as BridgeDecodeResult.Accepted
+        assertEquals(BridgeMessageType.EVENT, decoded.envelope.type)
+        assertEquals("{\"name\":\"cloud.changed\"}", decoded.envelope.payload.toString())
+        val count = sentMessages.size
+        session.reset(); session.pushCloudChanged(); assertEquals(count, sentMessages.size)
+    }
 }

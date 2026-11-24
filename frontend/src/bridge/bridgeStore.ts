@@ -8,6 +8,7 @@ type BridgeStatus = 'unavailable' | 'connecting' | 'ready' | 'error';
 interface BridgeState {
   status: BridgeStatus;
   snapshot: AppSnapshot | null;
+  cloudRevision: number;
   setState: (state: Pick<BridgeState, 'status' | 'snapshot'>) => void;
 }
 
@@ -17,6 +18,7 @@ const initialStatus: BridgeStatus =
 export const useBridgeStore = create<BridgeState>((set) => ({
   status: initialStatus,
   snapshot: null,
+  cloudRevision: 0,
   setState: (state) => set(state),
 }));
 
@@ -40,6 +42,9 @@ export function connectNativeBridge(): () => void {
     },
     onError: () => {
       useBridgeStore.getState().setState({ status: 'error', snapshot: null });
+    },
+    onCloudChanged: () => {
+      useBridgeStore.setState((state) => ({ cloudRevision: state.cloudRevision + 1 }));
     },
   });
   activeClient = client;

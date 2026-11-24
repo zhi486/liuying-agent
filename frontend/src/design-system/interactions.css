@@ -1,0 +1,244 @@
+.menu-glyph {
+  display: inline-block;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  transition: opacity var(--motion-check) var(--ease-out);
+}
+.menu-glyph > span {
+  position: absolute;
+  top: 11px;
+  left: 2px;
+  width: 20px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  transition:
+    transform var(--motion-menu) var(--ease-out),
+    opacity var(--motion-check) var(--ease-out);
+}
+.menu-glyph > span:first-child {
+  transform: translateY(-6px);
+}
+.menu-glyph > span:last-child {
+  transform: translateY(6px);
+}
+.menu-glyph[data-open='true'] > span:first-child {
+  transform: rotate(45deg);
+}
+.menu-glyph[data-open='true'] > span:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.menu-glyph[data-open='true'] > span:last-child {
+  transform: rotate(-45deg);
+}
+
+.choice-control {
+  display: inline-grid;
+  position: relative;
+  flex: none;
+  width: var(--choice-size);
+  height: var(--control-min);
+  align-items: center;
+  vertical-align: middle;
+}
+.choice-control[data-kind='switch'] {
+  width: var(--switch-width);
+}
+/* 原生输入负责焦点、键盘和表单语义，视觉层不截获事件。 */
+.choice-control > input[type='checkbox'] {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  opacity: 0;
+  z-index: 1;
+  cursor: pointer;
+}
+.choice-visual {
+  display: grid;
+  width: var(--choice-size);
+  height: var(--choice-size);
+  place-items: center;
+  border: 1px solid var(--text-faint);
+  border-radius: var(--radius-choice);
+  background: var(--surface);
+  color: var(--accent-ink);
+  pointer-events: none;
+  transition:
+    background-color var(--motion-check),
+    border-color var(--motion-check);
+}
+.choice-visual > svg {
+  width: 18px;
+  height: 18px;
+}
+.choice-visual > svg :is(path, polyline) {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.choice-control[data-interacted='true'] .choice-visual > svg :is(path, polyline) {
+  transition: stroke-dashoffset var(--motion-check) var(--ease-out);
+}
+.choice-control > input:checked + .choice-visual {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.choice-control > input:checked + .choice-visual > svg :is(path, polyline) {
+  stroke-dashoffset: 0;
+}
+.choice-control > input:focus-visible + .choice-visual {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.choice-control > input:disabled {
+  cursor: not-allowed;
+}
+.choice-control > input:disabled + .choice-visual {
+  opacity: 0.45;
+}
+.choice-control[data-kind='switch'] .choice-visual {
+  display: block;
+  position: relative;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  border-radius: var(--radius-pill);
+}
+.choice-control[data-kind='switch'] .choice-visual::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: var(--switch-thumb);
+  height: var(--switch-thumb);
+  border-radius: var(--radius-circle);
+  background: var(--text-muted);
+  transform: translateX(0);
+  transition: transform var(--motion-switch) cubic-bezier(0.2, 0.8, 0.3, 1.08);
+}
+.choice-control[data-kind='switch'] > input:checked + .choice-visual::after {
+  background: var(--accent-ink);
+  transform: translateX(var(--switch-travel));
+}
+.choice-control[data-kind='switch'][data-spring] > input + .choice-visual::after {
+  animation: switch-return var(--motion-switch) var(--ease-out);
+}
+.choice-control[data-kind='switch'][data-spring='arrive'] > input:checked + .choice-visual::after {
+  animation-name: switch-arrive;
+}
+@keyframes switch-arrive {
+  0% {
+    scale: 1;
+  }
+  34% {
+    scale: 1.48 0.74;
+  }
+  64% {
+    scale: 0.84 1.16;
+  }
+  82% {
+    scale: 1.08 0.94;
+  }
+  100% {
+    scale: 1;
+  }
+}
+@keyframes switch-return {
+  0% {
+    scale: 1;
+  }
+  34% {
+    scale: 1.48 0.74;
+  }
+  64% {
+    scale: 0.84 1.16;
+  }
+  82% {
+    scale: 1.08 0.94;
+  }
+  100% {
+    scale: 1;
+  }
+}
+.press-ripple {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* 新对话只裁剪浏览器的新快照，旧画面保持原位，不叠加默认交叉淡出。 */
+html[data-new-chat-reveal]::view-transition-group(root),
+html[data-new-chat-reveal]::view-transition-old(root),
+html[data-new-chat-reveal]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-new-chat-reveal]::view-transition-new(root) {
+  clip-path: circle(0px at 0 0);
+}
+
+html[data-new-chat-reveal] .app-shell-agent {
+  transition: none;
+}
+.press-ripple > span {
+  position: absolute;
+  border-radius: var(--radius-circle);
+  background: currentColor;
+  opacity: 0.14;
+  animation: ripple-spread var(--motion-ripple) var(--ease-out) both;
+}
+.press-ripple[data-released='true'] {
+  animation: ripple-release var(--motion-ripple-fade) ease-out both;
+}
+@keyframes ripple-spread {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes ripple-release {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-glyph,
+  .menu-glyph > span,
+  .choice-control .choice-visual,
+  .choice-control .choice-visual > svg :is(path, polyline) {
+    transition: none !important;
+  }
+  .choice-control[data-kind='switch'] > input + .choice-visual::after,
+  .press-ripple {
+    animation: none !important;
+    transition: none;
+  }
+  .press-ripple {
+    display: none;
+  }
+}
+html[data-motion='reduced'] .menu-glyph,
+html[data-motion='reduced'] .menu-glyph > span,
+html[data-motion='off'] .menu-glyph > span,
+html[data-motion='reduced'] .choice-control .choice-visual,
+html[data-motion='reduced'] .choice-control .choice-visual > svg :is(path, polyline) {
+  transition: none !important;
+}
+html[data-motion='reduced'] .choice-control[data-kind='switch'] > input + .choice-visual::after {
+  animation: none;
+  transition: none;
+}
+html[data-motion='reduced'] .press-ripple,
+html[data-motion='off'] .press-ripple {
+  display: none;
+}

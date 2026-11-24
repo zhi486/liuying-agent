@@ -1,0 +1,38 @@
+{
+  "found": {
+    "call": { "id": "search_1", "name": "memory.search", "args": { "query": "夜跑" } },
+    "observation": { "status": "found", "items": [{ "id": "11111111-1111-4111-8111-111111111111", "version": 1, "content": "我喜欢夜跑" }] }
+  },
+  "empty": {
+    "call": { "id": "search_1", "name": "memory.search", "args": { "query": "夜跑" } },
+    "observation": { "status": "found", "items": [] }
+  },
+  "saved": {
+    "call": { "id": "save_1", "name": "memory.upsert", "args": { "category": "preference", "evidence": "我喜欢夜跑", "target": null } },
+    "observation": { "status": "saved", "memory": { "id": "11111111-1111-4111-8111-111111111111", "version": 1, "content": "我喜欢夜跑" }, "replayed": false }
+  },
+  "replayed": {
+    "call": { "id": "save_1", "name": "memory.upsert", "args": { "category": "preference", "evidence": "我喜欢夜跑", "target": null } },
+    "observation": { "status": "saved", "memory": { "id": "11111111-1111-4111-8111-111111111111", "version": 1, "content": "我喜欢夜跑" }, "replayed": true }
+  },
+  "updated": {
+    "call": { "id": "save_2", "name": "memory.upsert", "args": { "category": "preference", "evidence": "我喜欢夜跑", "target": { "id": "11111111-1111-4111-8111-111111111111", "version": 1 } } },
+    "observation": { "status": "saved", "memory": { "id": "11111111-1111-4111-8111-111111111111", "version": 2, "content": "我喜欢夜跑" }, "replayed": false }
+  },
+  "sensitive": {
+    "call": { "id": "save_1", "name": "memory.upsert", "args": { "category": "preference", "evidence": "我喜欢夜跑", "target": null } },
+    "observation": { "status": "rejected", "reason": "sensitive_content" }
+  },
+  "revoked": {
+    "call": { "id": "search_1", "name": "memory.search", "args": { "query": "夜跑" } },
+    "observation": { "status": "rejected", "reason": "consent_required" }
+  },
+  "storage": {
+    "call": { "id": "save_1", "name": "memory.upsert", "args": { "category": "preference", "evidence": "我喜欢夜跑", "target": null } },
+    "observation": { "status": "unconfirmed", "reason": "unavailable" }
+  },
+  "invalid": {
+    "call": { "id": "save_1", "name": "memory.upsert", "args": { "category": "preference", "evidence": "我喜欢夜跑", "target": null } },
+    "observation": { "status": "unconfirmed", "reason": "invalid_response" }
+  }
+}

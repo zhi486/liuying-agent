@@ -26,10 +26,42 @@ class BridgeCodecValidFixtureTest(private val resource: String) {
         @Parameterized.Parameters(name = "{0}")
         fun fixtures() = listOf(
             "/v1/fixtures/valid/hello.json",
+            "/v1/fixtures/valid/command.mcp-status.json",
+            "/v1/fixtures/valid/command.mcp-list.json",
+            "/v1/fixtures/valid/command.mcp-detail.json",
+            "/v1/fixtures/valid/command.mcp-register.json",
+            "/v1/fixtures/valid/command.mcp-configure.json",
+            "/v1/fixtures/valid/command.mcp-revokePrivate.json",
+            "/v1/fixtures/valid/command.mcp-disable.json",
+            "/v1/fixtures/valid/command.mcp-approve.json",
+            "/v1/fixtures/valid/command.mcp-discover.json",
+            "/v1/fixtures/valid/command.mcp-recover.json",
+            "/v1/fixtures/valid/command.mcp-endpoint.json",
+            "/v1/fixtures/valid/command.mcp-remove.json",
+            "/v1/fixtures/valid/command.memory-create.json",
+            "/v1/fixtures/valid/command.memory-list.json",
+            "/v1/fixtures/valid/command.memory-update.json",
+            "/v1/fixtures/valid/command.memory-delete.json",
+            "/v1/fixtures/valid/command.memory-preview.json",
+            "/v1/fixtures/valid/command.memory-history.json",
+            "/v1/fixtures/valid/command.memory-restore.json",
+            "/v1/fixtures/valid/command.memory-document.json",
+            "/v1/fixtures/valid/command.memory-exportBegin.json",
+            "/v1/fixtures/valid/command.memory-exportStatus.json",
+            "/v1/fixtures/valid/command.memory-exportCancel.json",
+            "/v1/fixtures/valid/command.cloud-memory-authorization.json",
+            "/v1/fixtures/valid/command.cloud-memory-consent.json",
+            "/v1/fixtures/valid/command.cloud-prepare-mcp.json",
+            "/v1/fixtures/valid/command.agent-submit.json",
+            "/v1/fixtures/valid/command.agent-list.json",
+            "/v1/fixtures/valid/command.agent-detail.json",
+            "/v1/fixtures/valid/command.agent-cancel.json",
             "/v1/fixtures/valid/ready.json",
             "/v1/fixtures/valid/snapshot.json",
             "/v1/fixtures/valid/command.run-start.json",
             "/v1/fixtures/valid/command.history-query.json",
+            "/v1/fixtures/valid/command.history-detail.json",
+            "/v1/fixtures/valid/command.history-series.json",
             "/v1/fixtures/valid/command.settings-query.json",
             "/v1/fixtures/valid/command.settings-configure-deepseek.json",
             "/v1/fixtures/valid/command.settings-update.json",
@@ -56,17 +88,50 @@ class BridgeCodecInvalidFixtureTest(private val resource: String) {
         @Parameterized.Parameters(name = "{0}")
         fun fixtures() = listOf(
             "/v1/fixtures/invalid/missing-contract-version.json",
+            "/v1/fixtures/invalid/cloud-mcp-forged-authority.json",
+            "/v1/fixtures/invalid/mcp-web-secret.json",
+            "/v1/fixtures/invalid/mcp-unconfirmed-discovery.json",
+            "/v1/fixtures/invalid/mcp-duplicate-grant.json",
+            "/v1/fixtures/invalid/mcp-private-endpoint.json",
+            "/v1/fixtures/invalid/mcp-unconfirmed-removal.json",
+            "/v1/fixtures/invalid/mcp-missing-private-context.json",
+            "/v1/fixtures/invalid/mcp-changed-endpoint-secret.json",
             "/v1/fixtures/invalid/unknown-envelope-type.json",
             "/v1/fixtures/invalid/unsupported-version.json",
             "/v1/fixtures/invalid/invalid-command-payload.json",
             "/v1/fixtures/invalid/noncanonical-uuid.json",
             "/v1/fixtures/invalid/invalid-uuid-variant.json",
             "/v1/fixtures/invalid/unknown-nested-field.json",
+            "/v1/fixtures/invalid/unconfirmed-memory-restore.json",
+            "/v1/fixtures/invalid/memory-document-owner.json",
+            "/v1/fixtures/invalid/memory-export-target.json",
+            "/v1/fixtures/invalid/string-memory-consent.json",
         ).map { arrayOf(it) }
     }
 }
 
 class BridgeCodecTest {
+    @Test fun `序列分页拒绝越界和字符串数字`() {
+        val base = checkNotNull(javaClass.getResource("/v1/fixtures/valid/command.settings-query.json")).readText()
+            .replace("settings.query", "history.series")
+        fun message(body: String) = base.replace("\"body\": {}", "\"body\": $body")
+        assertTrue(BridgeCodec.decode(message("""{"sessionId":"run-1","offset":0,"limit":300}""")) is BridgeDecodeResult.Accepted)
+        for (body in listOf(
+            """{"sessionId":"run-1","offset":-1,"limit":300}""",
+            """{"sessionId":"run-1","offset":0,"limit":301}""",
+            """{"sessionId":"run-1","offset":"0","limit":300}""",
+            """{"sessionId":"run-1","offset":0,"limit":0}""",
+        )) assertTrue(BridgeCodec.decode(message(body)) is BridgeDecodeResult.Rejected)
+    }
+    @Test fun `详情命令校验记录标识与额外字段`() {
+        val base = checkNotNull(javaClass.getResource("/v1/fixtures/valid/command.settings-query.json")).readText()
+            .replace("settings.query", "history.detail")
+        fun message(body: String) = base.replace("\"body\": {}", "\"body\": $body")
+        assertTrue(BridgeCodec.decode(message("""{"sessionId":"run-1"}""")) is BridgeDecodeResult.Accepted)
+        for (body in listOf("{}", """{"sessionId":" "}""", """{"sessionId":"run-1","extra":1}""")) {
+            assertTrue(BridgeCodec.decode(message(body)) is BridgeDecodeResult.Rejected)
+        }
+    }
     @Test fun `DeepSeek配置命令只接受空body且配置状态必须是布尔`() {
         val command = checkNotNull(javaClass.getResource("/v1/fixtures/valid/command.settings-query.json")).readText()
             .replace("settings.query", "settings.configureDeepseek")

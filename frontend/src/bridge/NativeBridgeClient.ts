@@ -17,6 +17,7 @@ export interface NativeBridgeCallbacks {
   onReady(snapshot: AppSnapshot): void;
   onSnapshot(snapshot: AppSnapshot): void;
   onError(): void;
+  onCloudChanged?(): void;
 }
 
 export class NativeBridgeClient {
@@ -74,10 +75,13 @@ export class NativeBridgeClient {
     } as WebToNativeEnvelope;
 
     return new Promise<ResultPayload>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingCommands.delete(commandId);
-        reject(new Error('原生命令响应超时'));
-      }, 10_000);
+      const timeout = setTimeout(
+        () => {
+          this.pendingCommands.delete(commandId);
+          reject(new Error('原生命令响应超时'));
+        },
+        name === 'mcp.discover' ? 40_000 : 10_000,
+      );
       this.pendingCommands.set(commandId, { resolve, reject, timeout });
 
       try {
@@ -119,6 +123,8 @@ export class NativeBridgeClient {
         this.acceptResult(envelope);
         break;
       case 'event':
+        if (this.activeHelloId && envelope.payload.name === 'cloud.changed')
+          this.callbacks.onCloudChanged?.();
         break;
     }
   }

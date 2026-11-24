@@ -1,7 +1,7 @@
 .card {
-  margin-top: 2rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--line);
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 6px solid var(--canvas-raised);
 }
 .cardHeader {
   display: flex;
@@ -25,9 +25,9 @@
   display: flex;
   align-items: baseline;
   gap: 0.7rem;
-  margin: 1.5rem 0 2rem;
+  margin: 0.75rem 0 1rem;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 .stats > span:first-child {
@@ -35,7 +35,7 @@
 }
 .stats strong {
   color: var(--text);
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 500;
 }
 .chart {
@@ -48,6 +48,11 @@
   fill: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+.interactiveChart {
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
 }
 .grid {
   stroke: var(--line);
@@ -62,9 +67,17 @@
 .zoneStrip {
   display: flex;
   overflow: hidden;
-  height: 7px;
+  height: 12px;
   margin: 0.75rem 0 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-control-surface);
+}
+.zoneStrip span {
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  font-size: 8px;
+  line-height: 12px;
+  color: #142b48;
 }
 .coverage,
 .notice {
@@ -76,17 +89,19 @@
   margin-top: 2rem;
 }
 .dialog {
+  position: fixed;
+  inset: 42px 0 0;
   color: var(--text);
   background: var(--canvas);
   border: none;
-  border-radius: 22px 22px 0 0;
+  border-radius: var(--radius-dialog) var(--radius-dialog) var(--radius-none) var(--radius-none);
   box-sizing: border-box;
   width: min(100%, 560px);
   max-width: 100%;
-  height: calc(100dvh - 42px);
-  max-height: calc(100dvh - 42px);
-  padding: 82px 22px max(28px, env(safe-area-inset-bottom));
-  margin: auto auto 0;
+  height: auto;
+  max-height: none;
+  padding: 14px 22px max(28px, env(safe-area-inset-bottom));
+  margin: 0 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -94,12 +109,14 @@
   background: rgb(0 0 0 / 52%);
 }
 .close {
-  position: absolute;
+  position: sticky;
   top: 14px;
-  right: 14px;
+  z-index: 2;
+  display: block;
+  margin: 0 -8px 24px auto;
   width: 44px;
   height: 44px;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   border: none;
   background: var(--canvas-raised);
   color: var(--text-muted);
@@ -160,7 +177,7 @@
 .bar {
   display: block;
   height: 9px;
-  border-radius: 20px;
+  border-radius: var(--radius-panel);
   min-width: 9px;
   max-width: calc(100% - 3.6em);
   flex-shrink: 0;
@@ -186,7 +203,7 @@
   padding: 9px 10px;
   background: var(--canvas-raised);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-inset);
   font-variant-numeric: tabular-nums;
 }
 .explanation {
@@ -211,4 +228,30 @@
   .dialog .stats strong {
     font-size: 1.25rem;
   }
+}
+.metricTabs {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.2rem;
+  margin-top: 1rem;
+  border-radius: var(--radius-control-surface);
+  background: var(--surface);
+}
+.metricTabs button {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.metricTabs button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.metricTabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }

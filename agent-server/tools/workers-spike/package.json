@@ -1,0 +1,10 @@
+{
+  "name": "liuying-workers-disposable-spike",
+  "private": true,
+  "type": "module",
+  "description": "一次性本地可行性探针，不是生产运行时",
+  "dependencies": {
+    "@cloudflare/workers-types": "5.20260915.1",
+    "@huggingface/tokenizers": "0.2.0"
+  }
+}

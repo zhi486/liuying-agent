@@ -1,12 +1,28 @@
+import type { McpCommandBodies } from './mcp';
+
 export type CommandName =
+  | 'cloud.speak'
+  | 'cloud.stopSpeech'
+  | keyof McpCommandBodies
   | 'voice.begin'
   | 'voice.status'
   | 'voice.finish'
   | 'voice.cancel'
   | 'cloud.list'
+  | 'cloud.newConversation'
+  | 'cloud.selectConversation'
+  | 'cloud.renameConversation'
+  | 'cloud.archiveConversation'
+  | 'cloud.restoreConversation'
+  | 'cloud.deleteConversation'
+  | 'cloud.retryConversationCleanup'
   | 'cloud.configure'
   | 'cloud.prepare'
   | 'cloud.confirm'
+  | 'cloud.send'
+  | 'cloud.chatConsent'
+  | 'cloud.memoryAuthorization'
+  | 'cloud.memoryConsent'
   | 'cloud.discard'
   | 'cloud.recover'
   | 'cloud.cancel'
@@ -16,6 +32,12 @@ export type CommandName =
   | 'memory.update'
   | 'memory.delete'
   | 'memory.preview'
+  | 'memory.history'
+  | 'memory.restore'
+  | 'memory.document'
+  | 'memory.exportBegin'
+  | 'memory.exportStatus'
+  | 'memory.exportCancel'
   | 'agent.submit'
   | 'agent.list'
   | 'agent.detail'
@@ -217,55 +239,67 @@ export interface HelloPayload {
 export interface ReadyPayload {
   helloId: string;
   buildId: string;
-  capabilities:
-    | [
-        'snapshot.v1',
-        'history.pagination',
-        'settings.v1',
-        'heart-rate-alerts.v1',
-        'data-quality.v1',
-        'deepseek-companion.v1',
-      ]
-    | [
-        'snapshot.v1',
-        'history.pagination',
-        'settings.v1',
-        'heart-rate-alerts.v1',
-        'data-quality.v1',
-        'deepseek-companion.v1',
-        'agent.tasks.v1',
-        'memory.v1',
-        'agent.cloud.tasks.v1',
-      ];
+  capabilities: [
+    'snapshot.v1',
+    'history.pagination',
+    'settings.v1',
+    'heart-rate-alerts.v1',
+    'data-quality.v1',
+    'deepseek-companion.v1',
+    'agent.tasks.v1',
+    'memory.v1',
+    'agent.cloud.tasks.v1',
+  ];
   snapshot: AppSnapshot;
 }
 
-export interface CommandBodyMap {
+export interface CommandBodyMap extends McpCommandBodies {
+  'cloud.speak': { requestId: string };
+  'cloud.stopSpeech': Record<string, never>;
   'voice.begin': { sessionId: string; approved: true };
   'voice.status': { sessionId: string };
   'voice.finish': { sessionId: string };
   'voice.cancel': { sessionId: string };
   'cloud.list': Record<string, never>;
+  'cloud.newConversation': Record<string, never>;
+  'cloud.selectConversation': { conversationId: string | null };
+  'cloud.renameConversation': { conversationId: string; title: string };
+  'cloud.archiveConversation': { conversationId: string | null };
+  'cloud.restoreConversation': { conversationId: string | null };
+  'cloud.deleteConversation': { conversationId: string | null; confirmed: true };
+  'cloud.retryConversationCleanup': Record<string, never>;
   'cloud.configure': Record<string, never>;
   'cloud.prepare': {
     prompt: string;
+    conversationId?: string;
+    mcpServices?: string[];
     memoryRefs: { id: string; version: number }[];
     knowledge?: {
       version: 'curated_knowledge_v1';
-      library: 'health' | 'firefly';
+      library: 'health' | 'firefly' | 'both';
       allowSpoilers: boolean;
     };
   };
   'cloud.confirm': { token: string; approved: true };
+  'cloud.send': { token: string };
+  'cloud.chatConsent': { identityToken: string; enabled: boolean };
+  'cloud.memoryAuthorization': Record<string, never>;
+  'cloud.memoryConsent': { identityToken: string; enabled: boolean; factsAllowed?: boolean };
   'cloud.discard': { token: string };
   'cloud.recover': { requestId: string };
   'cloud.cancel': { requestId: string };
   'cloud.withdraw': { requestId: string };
   'memory.create': { memoryId: string; content: string };
   'memory.list': { offset: number; limit: number };
+  'memory.document': { offset: number; limit: number };
+  'memory.exportBegin': { exportId: string; confirmed: true };
+  'memory.exportStatus': { exportId: string };
+  'memory.exportCancel': { exportId: string };
   'memory.update': { memoryId: string; version: number; content: string };
   'memory.delete': { memoryId: string; version: number; confirmed: true };
   'memory.preview': { memoryRefs: { id: string; version: number }[] };
+  'memory.history': { memoryId: string; offset: number; limit: number };
+  'memory.restore': { memoryId: string; version: number; targetVersion: number; confirmed: true };
   'agent.submit': { clientRequestId: string; prompt: string };
   'agent.list': { offset: number; limit: number };
   'agent.detail': { taskId: string };
@@ -290,6 +324,7 @@ export type CommandPayload<T extends CommandName = CommandName> = T extends Comm
   : never;
 
 export type AppEventPayload =
+  | { name: 'cloud.changed' }
   | {
       name: 'permission.result';
       requestId: string;

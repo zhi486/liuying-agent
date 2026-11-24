@@ -1,5 +1,10 @@
 package com.healthyagent.running.bridge
 
+import com.healthyagent.running.agent.AgentCommands
+import com.healthyagent.running.agent.cloud.CloudAgentCommands
+import com.healthyagent.running.agent.memory.MemoryCommands
+import com.healthyagent.running.agent.memory.MemoryExportCommands
+
 import java.time.Instant
 import java.util.UUID
 import kotlinx.serialization.Serializable
@@ -93,6 +98,9 @@ object BridgeCodec {
                 "heart-rate-alerts.v1",
                 "data-quality.v1",
                 "deepseek-companion.v1",
+                "agent.tasks.v1",
+                "memory.v1",
+                "agent.cloud.tasks.v1",
             ),
         )
         validateSnapshotValue(value.snapshot)
@@ -182,6 +190,13 @@ object BridgeCodec {
         val body = payload.getValue("body").jsonObject
 
         when (name) {
+            "mcp.status", "mcp.list", "mcp.detail", "mcp.register", "mcp.configure", "mcp.revokePrivate", "mcp.disable", "mcp.approve", "mcp.discover", "mcp.recover", "mcp.endpoint", "mcp.remove" -> com.healthyagent.running.agent.mcp.McpManagementCommands.validate(name, body)
+            "voice.begin", "voice.status", "voice.finish", "voice.cancel" -> com.healthyagent.running.agent.voice.VoiceInputService.validate(name, body)
+            "cloud.speak", "cloud.stopSpeech" -> CloudAgentCommands.validate(name, body)
+            "cloud.list", "cloud.configure", "cloud.prepare", "cloud.confirm", "cloud.send", "cloud.chatConsent", "cloud.memoryAuthorization", "cloud.memoryConsent", "cloud.discard", "cloud.recover", "cloud.cancel", "cloud.withdraw", "cloud.newConversation", "cloud.selectConversation", "cloud.renameConversation", "cloud.archiveConversation", "cloud.restoreConversation", "cloud.deleteConversation", "cloud.retryConversationCleanup" -> CloudAgentCommands.validate(name, body)
+            "agent.submit", "agent.list", "agent.detail", "agent.cancel" -> AgentCommands.decode(name, body)
+            "memory.exportBegin", "memory.exportStatus", "memory.exportCancel" -> MemoryExportCommands.decode(name, body)
+            "memory.create", "memory.list", "memory.update", "memory.delete", "memory.preview", "memory.history", "memory.restore", "memory.document" -> MemoryCommands.decode(name, body)
             "device.connect",
             "device.disconnect",
             "run.start",
@@ -200,6 +215,18 @@ object BridgeCodec {
                 require(pageSize in 1..100)
             }
 
+            "history.detail" -> {
+                requireExactKeys(body, setOf("sessionId"))
+                val id = body.requiredString("sessionId")
+                require(id.isNotBlank() && id.length <= 128 && id == id.trim())
+            }
+            "history.series" -> {
+                requireExactKeys(body, setOf("sessionId", "offset", "limit"))
+                val id = body.requiredString("sessionId")
+                require(id.isNotBlank() && id.length <= 128 && id == id.trim())
+                require(body.getValue("offset").nonNegativeIntOrNull() != null)
+                require(body.getValue("limit").positiveIntOrNull()?.let { it <= 300 } == true)
+            }
             "settings.update" -> validateSettingsUpdate(body)
             "permission.request" -> {
                 requireExactKeys(body, setOf("kind"))
@@ -251,6 +278,7 @@ object BridgeCodec {
 
     private fun validateEvent(payload: JsonObject) {
         when (payload.requiredString("name")) {
+            "cloud.changed" -> requireExactKeys(payload, setOf("name"))
             "permission.result" -> {
                 requireExactKeys(payload, setOf("name", "requestId", "kind", "granted"))
                 requireCanonicalUuidV4(payload.requiredString("requestId"))

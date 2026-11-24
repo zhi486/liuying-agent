@@ -1,0 +1,121 @@
+.reading > section {
+  margin: 1.4rem 0;
+}
+.reading .summary {
+  color: var(--accent);
+  font-size: 0.72rem;
+}
+.search {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.6rem;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  outline-offset: 3px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+.search svg {
+  flex-shrink: 0;
+}
+.categories {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+.categories button[aria-pressed='true'],
+.process button[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+button.question {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  padding: 0.6rem 0;
+}
+.question span {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.question svg {
+  flex-shrink: 0;
+}
+.question small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+.services {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+.services li {
+  margin: 0.7rem 0 1.2rem;
+}
+.serviceDetail {
+  font-size: 0.75rem;
+}
+.serviceDetail dl {
+  margin: 0.7rem 0;
+}
+.serviceDetail dl div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.serviceDetail dd {
+  margin: 0;
+  color: var(--accent);
+}
+.empty {
+  padding: 2rem 0;
+}
+.empty svg {
+  color: var(--accent);
+  margin-bottom: 0.7rem;
+}
+.process {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+  margin: 1.4rem 0;
+}
+.process button {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+}
+.process span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--canvas);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.stepBody {
+  min-height: 10rem;
+  padding: 0.5rem 0;
+}

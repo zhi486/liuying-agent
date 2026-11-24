@@ -1,0 +1,155 @@
+.page {
+  min-width: 0;
+  padding-bottom: 2rem;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+.page p,
+.page small {
+  color: var(--text-muted);
+}
+.notice {
+  font-size: 0.8rem;
+  margin: 0 0 1rem;
+}
+.overview {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: var(--radius-card);
+  background: var(--accent-soft);
+}
+.overview > span,
+.overview small {
+  font-size: 0.75rem;
+}
+.overview > strong {
+  font-size: 1.75rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.listHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.page h2 {
+  min-width: 0;
+  font-size: 1rem;
+}
+.page button {
+  min-height: 44px;
+  min-width: 44px;
+  border: 0;
+  border-radius: var(--radius-button);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.page button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.page button:hover {
+  background: var(--accent-soft);
+}
+.refresh {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.tabs {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.2rem;
+  margin: 0.5rem 0;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.tabs button {
+  flex: 1;
+  padding: 0.5rem;
+  background: transparent;
+  font-size: 0.85rem;
+}
+.tabs button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.usageList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.usageList li {
+  min-width: 0;
+  margin: 0.35rem 0;
+}
+.page .row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) 14px;
+  width: 100%;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 0;
+  background: transparent;
+  text-align: left;
+}
+.copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+.copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 550;
+}
+.copy small {
+  font-size: 0.7rem;
+}
+.value {
+  display: grid;
+  gap: 0.2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.value small {
+  font-size: 0.65rem;
+}
+.detail {
+  padding: 0.8rem;
+  border-radius: var(--radius-tile);
+  background: var(--surface);
+  font-size: 0.8rem;
+}
+.detail p {
+  margin: 0.4rem 0;
+}
+.detail .fullTitle {
+  color: var(--text);
+}
+.detail .amount {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 350px) {
+  .page .row {
+    grid-template-columns: minmax(0, 1fr) 14px;
+  }
+  .value {
+    grid-row: 2;
+    text-align: left;
+  }
+  .row > svg {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

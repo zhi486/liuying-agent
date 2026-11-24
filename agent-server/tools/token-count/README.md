@@ -1,0 +1,60 @@
+# 独立 token 计数验证工具
+
+这是独立的离线 Python 参考工具，**不承担生产请求计数，也没有证明与在线 API 账单完全一致**。不读取 API key，不发送模型请求。采用固定版本 DeepSeek V4.1 官方 `encoding.py` 与模型词表，先渲染完整消息/工具模板，再调用 `tokenizers` 编码，不能将请求 JSON 直接分词。
+
+2026-09-16 新增的生产 JS 工厂位于 `src/token-count/`，由本工具独立对照验证；尚未接入 DO/云端/手机。`verify-assets.ts` 是不下载的只读门禁，后端 `corepack pnpm check` 会先执行，再运行 Node/Workers 类型检查与差分测试。它采用 TypeScript 以复用强类型生产 profile；首次资源准备仍需显式运行下述命令。
+
+## 已有验证
+
+2026-10-30 新增按需 `knowledge_search` 工具支持，六个固定工具目录可同时计数。实际适配器两轮合成请求的完整模板及生产 token 数与独立 Python 参考一致，未刷新固定 golden。工作树可通过 `TOKEN_REFERENCE_PYTHON` 环境变量指定已有、依赖版本符合锁定要求的解释器；未设置时仍使用本目录 `.venv/Scripts/python.exe`。这只影响 Node 测试参考进程，不影响生产计数或供应商调用。
+
+2026-10-19 第五十八批补充严格流式信封：stream:true 时必须携带且仅携带 stream_options:{include_usage:true}；非流式不接受该字段。两种传输信封不改变消息／工具模板，七组固定样本的完整模板、独立Python token ID哈希和生产JS BPE数一致，固定资源及预期没有改写。Python17项通过；这只是离线参考，不是在线供应商账单精度验收。流式适配器接线及Workers证据见[受控交接](../../../docs/handoffs/2026-10-18-mcp-controlled-acceptance.md)第五十八批。
+
+2026-10-18 第二十五批增加固定 `mcp_call` 工具的独立参考兼容。插件目录放在用户消息，`argumentsJson` 作为字符串保留小数及嵌套数据；不把远端 schema 直接放进固定工具模板。`test/mcp-model-tools.test.ts` 对实际适配器导出的两轮合成请求，逐一比较 JS 渲染模板和 BPE token 数与独立 Python 官方参考；16 项既有 Python 测试仍通过。此结果不代表供应商账单或真实插件／手机验收；既有 workerd 长文本固定旧预期仍失败，不因新工具通过就宣称全量运行时全绿。
+
+16 项 Python 测试、7 组固定样本。三组由真实 `src/deepseek.ts` 适配器导出的虚构请求，分别为 **347 / 421 / 512 input tokens**；它们使用简短测试 system 文本，不代表真实用户请求或生产整段系统提示的用量。
+
+`golden.json` 是直接调用已校验官方参考源码生成后保存的固定样本，不由待测函数在测试时计算预期值；比较 token 数、prompt UTF-8 SHA-256、token IDs 的 little-endian uint32 字节 SHA-256。生产协议发生变化时，测试会重新导出请求与固定结果比较。不要为了让测试变绿而自动刷新这些预期。
+
+## Windows 准备（首次联网，仅下载公开资源）
+
+在本目录执行，需要 Node 22.22.2；`python` 需为真正的 Python 3.10+ x64，而非 Windows Store 占位命令：
+
+```powershell
+node prepare-assets.mjs
+python -m venv .venv
+& '.venv/Scripts/python.exe' -m pip --isolated install --disable-pip-version-check --no-deps --require-hashes --only-binary=:all: -r requirements-win.txt
+```
+
+已经有 `.venv` 时不要重建。依赖只装入工具虚拟环境，不修改系统 Python 或后端 Node 包。当前固定 wheel 为 Windows x64；其他平台应另行固定并核验同版 wheel，不要直接取消哈希限制。
+
+`prepare-assets.mjs` 使用 `assets.lock.json` 的固定提交、大小及 SHA-256；只下载约 6.4 MB 的词表和约 37 KB 编码参考，不下载模型权重。相同文件跳过下载，已有异文拒绝覆盖，文件创建使用独占模式。`.assets/` 与 `.venv/` 不提交 Git。下载的 DeepSeek 资源按原 MIT 许可证使用，原文见 `LICENSE.deepseek`。
+
+## 离线运行
+
+```powershell
+& '.venv/Scripts/python.exe' -B -m unittest -v
+& '.venv/Scripts/python.exe' -B count_tokens.py --self-test
+& '.venv/Scripts/python.exe' -B count_tokens.py --request 'D:/local/request.json'
+```
+
+也可使用 `--stdin` 接收 UTF-8 JSON。生产虚构请求导出：
+
+```powershell
+node --experimental-strip-types production-fixtures.mjs
+```
+
+导出只在真实适配器的计数预检中捕获 JSON 并停止；测试 transport 禁止联网。用户自行提供的请求文件不要加入 Git；默认输出只有版本、输入 token 数、是否超过 20,000 上限及内容摘要哈希，不输出原提示词或 token IDs。哈希也不要当作绝对匿名数据公开。
+
+## 支持范围与失败规则
+
+- 必须是当前后端形状的完整请求：`model=deepseek-flash`、`thinking.type=disabled`、`stream=false`、`max_tokens=1..1600`、`messages`、`tools`，拒绝未知顶层字段。
+- 只支持首条 system、用户文字、assistant 工具调用、对应工具结果；工具为 `runs_list` / `runs_summary` / `memory_search` / `memory_upsert`，不支持图片、命名空间、思考内容、JSON 输出格式或任意新协议字段。2026-10-17 的记忆工具适配只完成本地合成验证，不能由此推断线上已开放记忆权限。
+- 记忆工具的空目标与带整数版本的嵌套目标，已通过实际模型适配器导出请求，与锁定的官方 Python 模板、计数和完整 token ID 对照；四个工具并存也有覆盖。生产 JS 仅接受固定工具 schema，独立参考不与 JS 共用模板；既有 golden 不因本次扩展刷新。
+- 拒绝重复 JSON 键、NaN/Infinity、无效 UTF-8、孤立代理字符、超过 64 KiB 输入和不完整工具历史。图片特殊标记也拒绝；普通角色标记按官方参考处理。
+- `add_special_tokens=False`，防止重复添加已经存在于模板中的 BOS/EOS。超过 20,000 token 仍报告实际数量并返回 `withinInputLimit=false`，不截断输入伪造合格结果。
+- 缺少资源、哈希/依赖版本错误、输入不支持或固定对照不一致时，命令非零退出；不输出用户内容或第三方异常堆栈。
+
+返回的 `assurance=local_reference_only` 是硬边界：即使全部本地样本通过，也尚未认证线上模板、供应商隐藏处理或 Workers 的 CPU/内存成本。下一阶段需经授权以虚构输入核对真实 `usage.prompt_tokens`，版本/别名变化后重新认证；不要把字符估算或安全系数冒充精确计数。
+
+上游来源：[官方编码参考](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/encoding/encoding.py)、[官方词表](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/tokenizer.json)。完整来源哈希见 `assets.lock.json`。
